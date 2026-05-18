@@ -1,5 +1,6 @@
 import { DiaryForm } from "@/components/diaries/diary-form";
 import { DiaryList } from "@/components/diaries/diary-list";
+import { RecordingWorkspace } from "@/components/recorder/recording-workspace";
 import { createClient } from "@/lib/supabase/server";
 import type { Diary } from "@/types/database";
 
@@ -35,6 +36,18 @@ export default async function DiariesPage() {
             </p>
           </div>
           <DiaryForm />
+        </section>
+
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+              音声を録音
+            </h2>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              録音して文字起こしできます（最大3分・日記未保存）。
+            </p>
+          </div>
+          <RecordingWorkspace />
         </section>
 
         {fetchError && (
