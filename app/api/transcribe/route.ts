@@ -68,6 +68,25 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("OpenAI transcription failed:", error);
 
+    if (error instanceof OpenAI.APIError) {
+      if (error.status === 429) {
+        return NextResponse.json(
+          {
+            error:
+              "OpenAI の利用上限に達しています。platform.openai.com の Billing で残高・プランを確認してください。",
+          },
+          { status: 429 },
+        );
+      }
+
+      if (error.status === 401) {
+        return NextResponse.json(
+          { error: "OpenAI API キーが無効です。.env.local を確認してください。" },
+          { status: 401 },
+        );
+      }
+    }
+
     return NextResponse.json(
       { error: "文字起こしの処理に失敗しました。" },
       { status: 500 },

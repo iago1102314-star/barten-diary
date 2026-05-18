@@ -1,6 +1,7 @@
 "use client";
 
 import { GeneratedDiaryCards } from "@/components/diary-ai/generated-diary-cards";
+import { SaveAiDiaryButton } from "@/components/diary-ai/save-ai-diary-button";
 import type { GenerateDiaryStatus } from "@/hooks/use-generate-diary";
 import type { GeneratedDiary } from "@/lib/ai/types";
 import { MIN_TRANSCRIPT_LENGTH } from "@/lib/ai/validate-transcript";
@@ -30,7 +31,7 @@ export function DiaryGenerationPanel({
           AI日記を生成
         </p>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          文字起こしからタイトル・本文・マスターの一言を作成します（まだ保存しません）。
+          文字起こしからタイトル・本文・マスターの一言を作成し、Supabase に保存できます。
         </p>
       </div>
 
@@ -74,6 +75,7 @@ export function DiaryGenerationPanel({
             AI日記の生成が完了しました
           </p>
           <GeneratedDiaryCards diary={result} />
+          <SaveAiDiaryButton diary={result} transcript={transcript} />
         </div>
       )}
     </div>

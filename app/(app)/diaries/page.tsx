@@ -9,7 +9,7 @@ export default async function DiariesPage() {
 
   const { data, error } = await supabase
     .from("diaries")
-    .select("id, title, body, created_at")
+    .select("id, title, body, transcript, master_comment, created_at")
     .order("created_at", { ascending: false });
 
   const fetchError = error?.message ?? null;
@@ -20,7 +20,7 @@ export default async function DiariesPage() {
 
   const diaries = (data ?? []) as Pick<
     Diary,
-    "id" | "title" | "body" | "created_at"
+    "id" | "title" | "body" | "transcript" | "master_comment" | "created_at"
   >[];
 
   return (
@@ -44,7 +44,7 @@ export default async function DiariesPage() {
               音声を録音
             </h2>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              録音して文字起こしできます（最大3分・日記未保存）。
+              録音・文字起こし・AI日記生成・保存ができます（最大3分）。
             </p>
           </div>
           <RecordingWorkspace />
@@ -56,8 +56,9 @@ export default async function DiariesPage() {
             className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
           >
             日記の取得に失敗しました。Supabase SQL Editor で{" "}
-            <code className="text-xs">002_diaries_grants.sql</code>{" "}
-            を実行してください（テーブル権限不足の可能性があります）。
+            <code className="text-xs">002_diaries_grants.sql</code> または{" "}
+            <code className="text-xs">003_add_ai_diary_columns.sql</code>{" "}
+            の実行を確認してください。
           </p>
         )}
 
