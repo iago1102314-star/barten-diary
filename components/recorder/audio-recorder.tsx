@@ -150,6 +150,14 @@ function RecorderStatusBanner({
     );
   }
 
+  if (status === "paused") {
+    return (
+      <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+        一時停止中
+      </p>
+    );
+  }
+
   if (status === "stopped") {
     return (
       <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">

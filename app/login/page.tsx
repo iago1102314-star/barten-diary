@@ -21,25 +21,25 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-16">
-      <div className="w-full max-w-sm space-y-8">
-        <header className="space-y-2 text-center">
-          <p className="text-sm font-medium tracking-wide text-zinc-500 uppercase">
-            バーテン日記
+      <div className="w-full max-w-sm space-y-8 text-center">
+        <header className="space-y-3">
+          <p className="text-[11px] tracking-[0.35em] text-stone-600 uppercase">
+            back bar
           </p>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-            ログイン
+          <h1 className="text-lg font-light tracking-wide text-stone-300">
+            扉を開ける
           </h1>
-          <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-            Google アカウントでサインインしてください。
+          <p className="text-sm leading-relaxed text-stone-500">
+            静かなカウンターへ。
           </p>
         </header>
 
         {showAuthError && (
           <p
             role="alert"
-            className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+            className="rounded-xl border border-red-900/40 bg-red-950/20 px-4 py-3 text-sm text-red-300/80"
           >
-            ログインに失敗しました。もう一度お試しください。
+            入れませんでした。もう一度お試しください。
           </p>
         )}
 

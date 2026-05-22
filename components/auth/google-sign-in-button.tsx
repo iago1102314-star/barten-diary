@@ -28,10 +28,10 @@ export function GoogleSignInButton() {
       type="button"
       onClick={handleSignIn}
       disabled={loading}
-      className="flex h-12 w-full items-center justify-center gap-3 rounded-full border border-zinc-200 bg-white px-6 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+      className="mx-auto flex h-11 items-center justify-center gap-3 rounded-full border border-stone-700/50 bg-stone-900/60 px-8 text-sm text-stone-400 transition-colors hover:border-stone-600 hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-50"
     >
       <GoogleIcon />
-      {loading ? "リダイレクト中…" : "Google でログイン"}
+      {loading ? "…" : "入店する"}
     </button>
   );
 }

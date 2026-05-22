@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const MAX_DURATION_MS = 3 * 60 * 1000;
 
-export type RecorderStatus = "idle" | "recording" | "stopped" | "error";
+export type RecorderStatus =
+  | "idle"
+  | "recording"
+  | "paused"
+  | "stopped"
+  | "error";
 
 type UseRecorderState = {
   status: RecorderStatus;
@@ -13,7 +18,15 @@ type UseRecorderState = {
   audioUrl: string | null;
   elapsedMs: number;
   mimeType: string | null;
+  canPauseRecording: boolean;
 };
+
+export function canPauseRecorder(recorder: MediaRecorder): boolean {
+  return (
+    typeof recorder.pause === "function" &&
+    typeof recorder.resume === "function"
+  );
+}
 
 function getSupportedMimeType(): string | undefined {
   const candidates = [
@@ -43,6 +56,7 @@ export function useRecorder() {
     audioUrl: null,
     elapsedMs: 0,
     mimeType: null,
+    canPauseRecording: false,
   });
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -50,19 +64,66 @@ export function useRecorder() {
   const chunksRef = useRef<Blob[]>([]);
   const audioUrlRef = useRef<string | null>(null);
   const startTimeRef = useRef<number>(0);
+  const totalPausedMsRef = useRef<number>(0);
+  const pauseStartedAtRef = useRef<number | null>(null);
+  const remainingMaxDurationMsRef = useRef<number>(MAX_DURATION_MS);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const maxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const clearTimers = useCallback(() => {
+  const getActiveElapsedMs = useCallback(() => {
+    return Math.min(
+      Date.now() - startTimeRef.current - totalPausedMsRef.current,
+      MAX_DURATION_MS,
+    );
+  }, []);
+
+  const clearElapsedTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+  }, []);
+
+  const clearMaxDurationTimer = useCallback(() => {
     if (maxDurationTimerRef.current) {
       clearTimeout(maxDurationTimerRef.current);
       maxDurationTimerRef.current = null;
     }
   }, []);
+
+  const clearTimers = useCallback(() => {
+    clearElapsedTimer();
+    clearMaxDurationTimer();
+  }, [clearElapsedTimer, clearMaxDurationTimer]);
+
+  const startElapsedTimer = useCallback(() => {
+    clearElapsedTimer();
+    timerRef.current = setInterval(() => {
+      setState((prev) => ({
+        ...prev,
+        elapsedMs: getActiveElapsedMs(),
+      }));
+    }, 200);
+  }, [clearElapsedTimer, getActiveElapsedMs]);
+
+  const startMaxDurationTimer = useCallback(() => {
+    clearMaxDurationTimer();
+    maxDurationTimerRef.current = setTimeout(() => {
+      if (mediaRecorderRef.current?.state === "paused") {
+        try {
+          mediaRecorderRef.current.resume();
+        } catch {
+          // resume failure is handled by stop attempt below
+        }
+      }
+      if (
+        mediaRecorderRef.current?.state === "recording" ||
+        mediaRecorderRef.current?.state === "paused"
+      ) {
+        mediaRecorderRef.current.stop();
+      }
+    }, remainingMaxDurationMsRef.current);
+  }, [clearMaxDurationTimer]);
 
   const revokeAudioUrl = useCallback(() => {
     if (audioUrlRef.current) {
@@ -90,6 +151,9 @@ export function useRecorder() {
     stopMediaTracks();
     chunksRef.current = [];
     revokeAudioUrl();
+    totalPausedMsRef.current = 0;
+    pauseStartedAtRef.current = null;
+    remainingMaxDurationMsRef.current = MAX_DURATION_MS;
 
     setState({
       status: "idle",
@@ -98,14 +162,79 @@ export function useRecorder() {
       audioUrl: null,
       elapsedMs: 0,
       mimeType: null,
+      canPauseRecording: false,
     });
   }, [clearTimers, revokeAudioUrl, stopMediaTracks]);
 
   const stop = useCallback(() => {
-    if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.stop();
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
+
+    if (recorder.state === "recording" || recorder.state === "paused") {
+      recorder.stop();
     }
   }, []);
+
+  const pause = useCallback((): boolean => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state !== "recording") {
+      return false;
+    }
+
+    if (!canPauseRecorder(recorder)) {
+      return false;
+    }
+
+    try {
+      const elapsed = getActiveElapsedMs();
+      remainingMaxDurationMsRef.current = Math.max(
+        0,
+        MAX_DURATION_MS - elapsed,
+      );
+      pauseStartedAtRef.current = Date.now();
+      clearTimers();
+      recorder.pause();
+      setState((prev) => ({
+        ...prev,
+        status: "paused",
+        elapsedMs: elapsed,
+      }));
+      return true;
+    } catch {
+      pauseStartedAtRef.current = null;
+      return false;
+    }
+  }, [clearTimers, getActiveElapsedMs]);
+
+  const resume = useCallback((): boolean => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state !== "paused") {
+      return false;
+    }
+
+    if (!canPauseRecorder(recorder)) {
+      return false;
+    }
+
+    try {
+      if (pauseStartedAtRef.current !== null) {
+        totalPausedMsRef.current +=
+          Date.now() - pauseStartedAtRef.current;
+        pauseStartedAtRef.current = null;
+      }
+
+      recorder.resume();
+      startElapsedTimer();
+      startMaxDurationTimer();
+      setState((prev) => ({
+        ...prev,
+        status: "recording",
+      }));
+      return true;
+    } catch {
+      return false;
+    }
+  }, [startElapsedTimer, startMaxDurationTimer]);
 
   const start = useCallback(async () => {
     if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
@@ -130,6 +259,11 @@ export function useRecorder() {
 
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
+      totalPausedMsRef.current = 0;
+      pauseStartedAtRef.current = null;
+      remainingMaxDurationMsRef.current = MAX_DURATION_MS;
+
+      const supportsPause = canPauseRecorder(recorder);
 
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -140,6 +274,7 @@ export function useRecorder() {
       recorder.onerror = () => {
         clearTimers();
         stopMediaTracks();
+        pauseStartedAtRef.current = null;
         setState((prev) => ({
           ...prev,
           status: "error",
@@ -159,10 +294,17 @@ export function useRecorder() {
         const audioUrl = URL.createObjectURL(blob);
         audioUrlRef.current = audioUrl;
 
-        const elapsedMs = Math.min(
-          Date.now() - startTimeRef.current,
-          MAX_DURATION_MS,
-        );
+        const elapsedMs =
+          pauseStartedAtRef.current !== null
+            ? Math.min(
+                pauseStartedAtRef.current -
+                  startTimeRef.current -
+                  totalPausedMsRef.current,
+                MAX_DURATION_MS,
+              )
+            : getActiveElapsedMs();
+
+        pauseStartedAtRef.current = null;
 
         setState({
           status: "stopped",
@@ -171,26 +313,16 @@ export function useRecorder() {
           audioUrl,
           elapsedMs,
           mimeType: recordedMimeType,
+          canPauseRecording: false,
         });
 
         mediaRecorderRef.current = null;
       };
 
       startTimeRef.current = Date.now();
-
       recorder.start(250);
-
-      timerRef.current = setInterval(() => {
-        const elapsed = Date.now() - startTimeRef.current;
-        setState((prev) => ({
-          ...prev,
-          elapsedMs: Math.min(elapsed, MAX_DURATION_MS),
-        }));
-      }, 200);
-
-      maxDurationTimerRef.current = setTimeout(() => {
-        stop();
-      }, MAX_DURATION_MS);
+      startElapsedTimer();
+      startMaxDurationTimer();
 
       setState({
         status: "recording",
@@ -199,10 +331,12 @@ export function useRecorder() {
         audioUrl: null,
         elapsedMs: 0,
         mimeType: recorder.mimeType || mimeType || null,
+        canPauseRecording: supportsPause,
       });
     } catch (err) {
       clearTimers();
       stopMediaTracks();
+      pauseStartedAtRef.current = null;
 
       const message =
         err instanceof DOMException && err.name === "NotAllowedError"
@@ -216,9 +350,18 @@ export function useRecorder() {
         audioUrl: null,
         elapsedMs: 0,
         mimeType: null,
+        canPauseRecording: false,
       });
     }
-  }, [clearTimers, reset, revokeAudioUrl, stop, stopMediaTracks]);
+  }, [
+    clearTimers,
+    getActiveElapsedMs,
+    reset,
+    revokeAudioUrl,
+    startElapsedTimer,
+    startMaxDurationTimer,
+    stopMediaTracks,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -240,6 +383,8 @@ export function useRecorder() {
     formatElapsed,
     start,
     stop,
+    pause,
+    resume,
     reset,
   };
 }

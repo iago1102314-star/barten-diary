@@ -31,8 +31,9 @@ export function SaveAiDiaryButton({
 
     startTransition(async () => {
       const result = await saveAiDiary({
-        title: diary.title,
+        bottleTag: diary.bottleTag,
         diary: diary.diary,
+        drinkNote: diary.drinkNote,
         masterComment: diary.masterComment,
         transcript,
       });

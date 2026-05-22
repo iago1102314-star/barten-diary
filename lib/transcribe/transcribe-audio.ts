@@ -29,7 +29,7 @@ export async function transcribeAudio(
     throw new Error(
       "error" in data && data.error
         ? data.error
-        : "文字起こしに失敗しました。",
+        : "声を聴き取れませんでした。",
     );
   }
 

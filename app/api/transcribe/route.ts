@@ -1,4 +1,6 @@
+import { refineTranscript } from "@/lib/transcribe/refine-transcript";
 import { getAudioExtension } from "@/lib/transcribe/get-audio-extension";
+import { WHISPER_INITIAL_PROMPT } from "@/lib/transcribe/whisper-context";
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
@@ -62,9 +64,12 @@ export async function POST(request: Request) {
       file: uploadFile,
       model: "whisper-1",
       language: "ja",
+      prompt: WHISPER_INITIAL_PROMPT,
     });
 
-    return NextResponse.json({ transcript: transcription.text });
+    const refined = await refineTranscript(openai, transcription.text);
+
+    return NextResponse.json({ transcript: refined });
   } catch (error) {
     console.error("OpenAI transcription failed:", error);
 
@@ -88,7 +93,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      { error: "文字起こしの処理に失敗しました。" },
+      { error: "声を聴き取れませんでした。" },
       { status: 500 },
     );
   }

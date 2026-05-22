@@ -27,7 +27,11 @@ export function RecordingWorkspace() {
 
   const handleGenerateDiary = useCallback(() => {
     if (!transcription.transcript) return;
-    void diaryGeneration.generate(transcription.transcript);
+    void diaryGeneration.generate(
+      transcription.transcript,
+      "master",
+      new Date().toISOString(),
+    );
   }, [transcription.transcript, diaryGeneration]);
 
   return (

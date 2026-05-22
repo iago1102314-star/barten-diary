@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "バーテン日記",
-  description: "バーテンダーの日記アプリ",
+  title: "back bar",
+  description: "深夜のバーで、夜の記録を残す",
 };
 
 export default function RootLayout({
@@ -27,7 +27,9 @@ export default function RootLayout({
       lang="ja"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col bg-stone-950 text-stone-200">
+        {children}
+      </body>
     </html>
   );
 }
