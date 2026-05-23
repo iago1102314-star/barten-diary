@@ -27,6 +27,12 @@ export function useGenerateDiary() {
     setError(null);
   }, []);
 
+  const injectDevResult = useCallback((diary: GeneratedDiary) => {
+    setResult(diary);
+    setStatus("success");
+    setError(null);
+  }, []);
+
   const generate = useCallback(
     async (
       transcript: string,
@@ -66,6 +72,7 @@ export function useGenerateDiary() {
     result,
     error,
     generate,
+    injectDevResult,
     reset,
   };
 }

@@ -65,6 +65,7 @@ export type SaveAiDiaryInput = {
 
 export type SaveAiDiaryResult = {
   success?: boolean;
+  diaryId?: string;
   error?: string;
 };
 
@@ -125,13 +126,21 @@ export async function saveAiDiary(
         }
       : baseRow;
 
-  const { error } = await supabase.from("diaries").insert(rowWithContinued);
+  const inserted = await supabase
+    .from("diaries")
+    .insert(rowWithContinued)
+    .select("id")
+    .single();
 
-  if (error) {
-    console.error("Failed to save AI diary:", error.message);
+  if (inserted.error) {
+    console.error("Failed to save AI diary:", inserted.error.message);
 
-    if (isContinuedFromColumnMissing(error.message)) {
-      const legacy = await supabase.from("diaries").insert(baseRow);
+    if (isContinuedFromColumnMissing(inserted.error.message)) {
+      const legacy = await supabase
+        .from("diaries")
+        .insert(baseRow)
+        .select("id")
+        .single();
 
       if (legacy.error) {
         console.error("Failed legacy save after continued_from missing:", legacy.error.message);
@@ -140,10 +149,10 @@ export async function saveAiDiary(
 
       revalidatePath("/diaries");
       revalidatePath("/memories");
-      return { success: true };
+      return { success: true, diaryId: legacy.data.id };
     }
 
-    if (isDrinkNoteColumnMissing(error.message)) {
+    if (isDrinkNoteColumnMissing(inserted.error.message)) {
       return {
         error:
           "酒の余韻用のDB設定が未完了です。Supabase の SQL Editor で supabase/migrations/004_add_drink_note.sql を実行してください。",
@@ -155,7 +164,7 @@ export async function saveAiDiary(
 
   revalidatePath("/diaries");
   revalidatePath("/memories");
-  return { success: true };
+  return { success: true, diaryId: inserted.data.id };
 }
 
 export type UpdateDiaryBodyState = {

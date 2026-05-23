@@ -3,6 +3,10 @@
 import { useGenerateDiary } from "@/hooks/use-generate-diary";
 import { useRecorder } from "@/hooks/use-recorder";
 import { validateTranscriptInput } from "@/lib/ai/security/validate-input";
+import { isDevShortcutEnabled } from "@/lib/dev/is-dev-shortcut-enabled";
+import { simulateNight } from "@/lib/dev/simulate-night";
+import type { FakeNightId } from "@/lib/dev/fake-nights";
+import type { Drink } from "@/lib/drinks/drink-catalog";
 import type { DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
 import { transcribeAudio } from "@/lib/transcribe/transcribe-audio";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -37,6 +41,7 @@ export function useNightSession() {
   const [continuedFrom, setContinuedFrom] = useState<ContinuedFromBottle | null>(
     null,
   );
+  const [isDevSimulated, setIsDevSimulated] = useState(false);
   const pipelineLock = useRef(false);
   const inflightGenerationKeyRef = useRef<string | null>(null);
 
@@ -73,6 +78,7 @@ export function useNightSession() {
     setSelectedCategoryId(null);
     setSelectedDrinkId(null);
     setContinuedFrom(null);
+    setIsDevSimulated(false);
   }, [recorder, generation, resetListenFailure]);
 
   const selectCategory = useCallback(
@@ -148,8 +154,41 @@ export function useNightSession() {
     setTranscript(null);
     setRecordedAt(null);
     setListenFailureVisible(false);
+    setIsDevSimulated(false);
     setPhase("idle");
   }, [recorder, generation]);
+
+  const simulateDevNight = useCallback(
+    (patternId?: FakeNightId): Drink | null => {
+      if (!isDevShortcutEnabled()) return null;
+
+      const simulated = simulateNight({ patternId });
+
+      pipelineLock.current = false;
+      inflightGenerationKeyRef.current = generationKey(
+        simulated.transcript,
+        simulated.recordedAt,
+      );
+      recorder.reset();
+      generation.injectDevResult(simulated.record);
+
+      setSelectedCategoryId(simulated.fake.categoryId);
+      setSelectedDrinkId(simulated.fake.drinkId);
+      setContinuedFrom(null);
+      resetListenFailure();
+      setTranscript(simulated.transcript);
+      setRecordedAt(simulated.recordedAt);
+      setIsDevSimulated(true);
+      setPhase("accepted");
+
+      queueMicrotask(() => {
+        setPhase("revealed");
+      });
+
+      return simulated.drink;
+    },
+    [recorder, generation, resetListenFailure],
+  );
 
   const runTranscribePipeline = useCallback(
     async (blob: Blob, mimeType: string) => {
@@ -194,6 +233,7 @@ export function useNightSession() {
 
   useEffect(() => {
     if (phase !== "accepted") return;
+    if (isDevSimulated) return;
     if (!transcript || !selectedCategoryId) return;
 
     const endedAt = recordedAt ?? new Date().toISOString();
@@ -213,6 +253,7 @@ export function useNightSession() {
       });
   }, [
     phase,
+    isDevSimulated,
     transcript,
     selectedCategoryId,
     selectedDrinkId,
@@ -228,6 +269,7 @@ export function useNightSession() {
 
   return {
     phase,
+    isDevSimulated,
     listenFailureCount,
     listenFailureVisible,
     transcript,
@@ -245,6 +287,7 @@ export function useNightSession() {
     resumeSpeaking,
     retrySpeaking,
     abandonNightWithoutRecord,
+    simulateDevNight,
     elapsedMs: recorder.elapsedMs,
     recorderStatus: recorder.status,
   };

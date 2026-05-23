@@ -1,6 +1,9 @@
 /** 導入フロー用アセットパス（public/assets/） */
 export const ENTRANCE_ASSETS = {
+  /** 入店前 — 雨の路地（入口） */
   start: "/assets/start/rain-alley.webp",
+  /** 見送り後 — 夜が終わった帰り道 */
+  afterNight: "/assets/alley/after-night.webp",
   counterBack: "/assets/bar/counter-back.webp",
   counterFront: "/assets/bar/counter-front.webp",
   masterIdle: "/assets/master/master-idle.webp",
