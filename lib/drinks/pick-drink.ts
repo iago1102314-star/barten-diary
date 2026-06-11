@@ -8,6 +8,9 @@ import { drinkHasImage } from "@/lib/entrance/drink-image-path";
 
 const DEFAULT_TIME_ZONE = "Asia/Tokyo";
 
+/** heavy + 画像あり — Old Fashioned / 山崎 12年 を半々 */
+const HEAVY_VISUAL_DRINK_IDS = ["old-fashioned", "yamazaki-12"] as const satisfies readonly DrinkId[];
+
 function getSelectableDrinks(categoryId: DrinkCategoryId): Drink[] {
   const category = DRINK_CATEGORIES.find((c) => c.id === categoryId);
   return category?.drinks ?? [];
@@ -68,6 +71,15 @@ export function pickDrink(
     const visualPool = pool.filter((d) => drinkHasImage(d.id));
     if (visualPool.length > 0) {
       pool = visualPool;
+    }
+  }
+
+  if (options.imageOnly && categoryId === "heavy") {
+    const heavyPair = HEAVY_VISUAL_DRINK_IDS.map((id) =>
+      pool.find((d) => d.id === id),
+    ).filter((d): d is Drink => d !== undefined);
+    if (heavyPair.length === 2) {
+      return heavyPair[Math.random() < 0.5 ? 0 : 1]!;
     }
   }
 

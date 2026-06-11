@@ -24,7 +24,7 @@ export const DRINK_CATEGORIES: DrinkCategory[] = [
   {
     id: "heavy",
     label: "少し濃いめで",
-    description: "重めの感情。愚痴。疲れ。人間関係。深夜。",
+    description: "疲れ。愚痴。",
     drinks: [
       {
         id: "old-fashioned",
@@ -45,8 +45,8 @@ export const DRINK_CATEGORIES: DrinkCategory[] = [
   },
   {
     id: "clear",
-    label: "少し整理したくて",
-    description: "内省。恋愛。思考整理。開発。ぼんやり不安。",
+    label: "整理したくて",
+    description: "思考整理。内省。",
     drinks: [
       {
         id: "koshu",
@@ -72,8 +72,8 @@ export const DRINK_CATEGORIES: DrinkCategory[] = [
   },
   {
     id: "glow",
-    label: "まだ余韻が残ってて",
-    description: "嬉しさ。楽しかった日。帰り道。デート。",
+    label: "余韻が残ってて",
+    description: "嬉しさ。楽しかった日。",
     drinks: [
       {
         id: "bellini",
@@ -94,8 +94,8 @@ export const DRINK_CATEGORIES: DrinkCategory[] = [
   },
   {
     id: "sleepless",
-    label: "今夜は眠れそうになくて",
-    description: "深夜。雨。眠れない。少し孤独。",
+    label: "眠れそうになくて",
+    description: "孤独。不安。",
     drinks: [
       {
         id: "irish-coffee",
@@ -122,7 +122,7 @@ export const DRINK_CATEGORIES: DrinkCategory[] = [
   {
     id: MASTER_DELEGATE_CATEGORY_ID,
     label: "マスターに任せる",
-    description: "カテゴリ外。季節。気まぐれ。常連向け。",
+    description: "おすすめの一杯。",
     drinks: [
       {
         id: "guinness",

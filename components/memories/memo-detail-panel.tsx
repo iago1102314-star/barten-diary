@@ -7,11 +7,16 @@ import { useCallback, useState } from "react";
 
 type MemoDetailPanelProps = {
   diary: DiaryListRow;
+  onPersisted?: () => void;
 };
 
-export function MemoDetailPanel({ diary }: MemoDetailPanelProps) {
+export function MemoDetailPanel({ diary, onPersisted }: MemoDetailPanelProps) {
   const [editing, setEditing] = useState(false);
   const closeEditor = useCallback(() => setEditing(false), []);
+  const handleSaved = useCallback(() => {
+    setEditing(false);
+    onPersisted?.();
+  }, [onPersisted]);
 
   if (editing) {
     return (
@@ -19,7 +24,7 @@ export function MemoDetailPanel({ diary }: MemoDetailPanelProps) {
         diaryId={diary.id}
         initialBody={diary.body}
         onCancel={closeEditor}
-        onSaved={closeEditor}
+        onSaved={handleSaved}
       />
     );
   }

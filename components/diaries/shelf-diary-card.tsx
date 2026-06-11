@@ -39,7 +39,7 @@ export function ShelfDiaryCard({
       : shelf.shelfWineNote;
 
   return (
-    <article className="night-glow rounded-xl border border-stone-800/50 bg-stone-950/35 px-5 py-8 sm:px-6 sm:py-9">
+    <article className="night-glow night-rise rounded-xl border border-stone-800/50 bg-stone-950/35 px-5 py-8 sm:px-6 sm:py-9">
       <header className="flex items-start justify-between gap-4">
         <p className="font-mono text-[12px] tracking-[0.1em] text-amber-200/70">
           {shelf.bottleTag}
@@ -55,7 +55,7 @@ export function ShelfDiaryCard({
       </header>
 
       <div className="mt-8 text-left">
-        <p className="whitespace-pre-wrap text-[14px] leading-[2] tracking-[0.02em] text-stone-300/85">
+        <p className="font-serif-jp whitespace-pre-wrap text-[15px] leading-[2.1] tracking-[0.05em] text-stone-300/88">
           {bodyText}
         </p>
         {compact && preview?.isTruncated && id && (

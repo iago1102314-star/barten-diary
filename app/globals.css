@@ -5,27 +5,302 @@
   --foreground: #e8e0d4;
   --bar-amber: #c9a66b;
   --bar-glow: rgba(201, 166, 107, 0.08);
+  --stage-aspect-w: 1536;
+  --stage-aspect-h: 2560;
+
+  /* 文学的な声 — 明朝（システム明朝を主に、webフォントは差し替え可） */
+  --font-serif-jp:
+    "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", "YuMincho",
+    "Noto Serif JP", serif;
+  /* UI ラベル — 落ち着いたゴシック */
+  --font-ui-jp:
+    var(--font-geist-sans), "Hiragino Kaku Gothic ProN", "Yu Gothic",
+    "Noto Sans JP", system-ui, sans-serif;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-ui-jp);
+  --font-serif: var(--font-serif-jp);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-ui-jp);
   background-image:
     radial-gradient(ellipse 80% 50% at 50% -20%, var(--bar-glow), transparent),
     radial-gradient(ellipse 60% 40% at 80% 100%, rgba(40, 30, 20, 0.4), transparent);
   min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 縦型スマホ枠 — 高さを画面に合わせ、比率 1536:2560 を維持 */
+.stage-viewport {
+  display: flex;
+  height: 100dvh;
+  width: 100vw;
+  justify-content: center;
+  overflow: hidden;
+  background: #000;
+}
+
+.stage {
+  position: relative;
+  height: 100dvh;
+  width: calc(100dvh * var(--stage-aspect-w) / var(--stage-aspect-h));
+  flex-shrink: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.stage.vignette::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 115% 85% at 50% 42%,
+    transparent 38%,
+    rgba(0, 0, 0, 0.32) 78%,
+    rgba(0, 0, 0, 0.58) 100%
+  );
+}
+
+.stage.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 26;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  animation: grain-shift 0.6s steps(3) infinite;
+}
+
+/* 看板・灯りの不規則明滅 */
+.animate-flicker {
+  animation: flicker 6s ease-in-out infinite;
+}
+
+@keyframes flicker {
+  0%,
+  100% {
+    opacity: 0.88;
+  }
+  12% {
+    opacity: 1;
+  }
+  28% {
+    opacity: 0.72;
+  }
+  44% {
+    opacity: 0.95;
+  }
+  61% {
+    opacity: 0.78;
+  }
+  79% {
+    opacity: 1;
+  }
+}
+
+/* 世界観の声 — 明朝。タイトル・セリフ・記録本文に */
+.font-serif-jp {
+  font-family: var(--font-serif-jp);
+  font-feature-settings: "palt";
 }
 
 .night-glow {
   box-shadow:
     0 0 0 1px rgba(120, 90, 50, 0.06),
     0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+/* ───────────────────────────────────────────
+   演出レイヤー — 夜気・グレイン・灯りの揺らぎ
+   ─────────────────────────────────────────── */
+
+/* 画面の縁を落とすヴィネット（没入感・業務アプリ感の除去） */
+.scene-vignette {
+  background:
+    radial-gradient(
+      ellipse 120% 80% at 50% 38%,
+      transparent 42%,
+      rgba(0, 0, 0, 0.28) 78%,
+      rgba(0, 0, 0, 0.55) 100%
+    );
+}
+
+/* 上方からの暖色光（ランタン・棚灯りの空気） */
+.scene-amber-air {
+  background:
+    radial-gradient(
+      ellipse 90% 55% at 50% -8%,
+      rgba(201, 166, 107, 0.14),
+      transparent 60%
+    );
+}
+
+/* フィルムグレイン — 微細なノイズで質感を足す */
+.scene-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  animation: grain-shift 1.6s steps(3) infinite;
+}
+
+@keyframes grain-shift {
+  0% {
+    transform: translate(0, 0);
+  }
+  33% {
+    transform: translate(-4%, 3%);
+  }
+  66% {
+    transform: translate(3%, -2%);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+/* ランタンの灯りのゆらぎ */
+.animate-lantern-flicker {
+  animation: lantern-flicker 5.5s ease-in-out infinite;
+}
+
+@keyframes lantern-flicker {
+  0%,
+  100% {
+    opacity: 0.96;
+    filter: brightness(1);
+  }
+  18% {
+    opacity: 1;
+    filter: brightness(1.06);
+  }
+  42% {
+    opacity: 0.9;
+    filter: brightness(0.96);
+  }
+  63% {
+    opacity: 0.99;
+    filter: brightness(1.03);
+  }
+  81% {
+    opacity: 0.93;
+    filter: brightness(0.98);
+  }
+}
+
+/* 静かに息づく（録音中・生成中の気配） */
+.animate-ambient-breathe {
+  animation: ambient-breathe 4.2s ease-in-out infinite;
+}
+
+@keyframes ambient-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.12);
+  }
+}
+
+/* 灯りの脈動（光源グロウ） */
+.lamp-pulse {
+  animation: lamp-pulse var(--lamp-speed, 6s) ease-in-out infinite;
+}
+
+@keyframes lamp-pulse {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scale(1);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  55% {
+    opacity: 0.7;
+    transform: scale(0.98);
+  }
+  78% {
+    opacity: 0.92;
+    transform: scale(1.02);
+  }
+}
+
+/* 遠景の霧が横にたゆたう */
+.fog-drift {
+  animation: fog-drift 26s ease-in-out infinite alternate;
+}
+
+@keyframes fog-drift {
+  from {
+    transform: translateX(-6%) scale(1.05);
+    opacity: 0.5;
+  }
+  to {
+    transform: translateX(6%) scale(1.12);
+    opacity: 0.8;
+  }
+}
+
+/* マスターが黙って息づく */
+.master-breathe {
+  animation: master-breathe 7s ease-in-out infinite;
+  transform-origin: 50% 100%;
+}
+
+@keyframes master-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-0.6%) scale(1.006);
+  }
+}
+
+/* 記録が静かに立ち上がる（閲覧画面・サーバー側でも使える純CSS） */
+.night-rise {
+  animation: night-rise 0.95s both cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes night-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-grain,
+  .animate-lantern-flicker,
+  .animate-ambient-breathe,
+  .lamp-pulse,
+  .fog-drift,
+  .master-breathe {
+    animation: none;
+  }
+
+  .night-rise {
+    animation: none;
+  }
 }

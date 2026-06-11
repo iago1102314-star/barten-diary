@@ -2,16 +2,28 @@
 
 import { saveAiDiary } from "@/app/(app)/diaries/actions";
 import { CounterScene } from "@/components/entrance/counter-scene";
-import { DevSkipNightButton } from "@/components/entrance/dev-skip-night-button";
+import { DrinkServedPanel } from "@/components/entrance/drink-served-panel";
+import { MasterHeadDevTapZone } from "@/components/entrance/master-head-dev-tap";
+import { EnteringReveal } from "@/components/entrance/entering-reveal";
+import { EntryFadeOutScreen } from "@/components/entrance/entry-fade-out-screen";
+import { GeneratingPanel } from "@/components/entrance/generating-panel";
 import { LeavingScreen } from "@/components/entrance/leaving-screen";
+import { MasterMoodPromptPanel } from "@/components/entrance/master-mood-prompt-panel";
+import { MasterOnBlackScreen } from "@/components/entrance/master-on-black-screen";
 import { MasterLine } from "@/components/entrance/master-line";
-import { MoodSelectPanel } from "@/components/entrance/mood-select-panel";
+import { MemoriesScreen } from "@/components/entrance/memories-screen";
+import { MoodSelectScene } from "@/components/entrance/mood-select-scene";
 import { NightAlleyScreen } from "@/components/entrance/night-alley-screen";
 import { NightEntryScreen } from "@/components/entrance/night-entry-screen";
 import { PastBottlePanel } from "@/components/entrance/past-bottle-panel";
 import { RecordingPanel } from "@/components/entrance/recording-panel";
 import { SceneFrame } from "@/components/entrance/scene-frame";
 import { useBarAudio } from "@/hooks/use-bar-audio";
+import {
+  BAR_AUDIO_LEVELS,
+  BAR_AUDIO_TIMING,
+} from "@/lib/entrance/audio-levels";
+import type { CameraPose } from "@/lib/entrance/counter-camera-poses";
 import { useNightSession } from "@/hooks/use-night-session";
 import {
   isReturningVisitor,
@@ -33,13 +45,17 @@ import { parseBottleTag } from "@/lib/bottle-tag/parse-bottle-tag";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
 import { pickCounterFarewellLine } from "@/lib/night/counter-farewell-lines";
+import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type EntranceState =
   | "entry"
-  | "fadeIn"
-  | "counterIntro"
+  | "memories"
+  | "entryFadeOut"
+  | "masterOnBlack"
+  | "counterReveal"
+  | "moodPrompt"
   | "moodSelect"
   | "pastBottleSelect"
   | "decliningNight"
@@ -51,11 +67,38 @@ type EntranceState =
   | "leaving"
   | "alley";
 
-const FIRST_VISIT_INTRO_MS = 1400;
-const RETURNING_INTRO_MS = 700;
-const FADE_MS = 650;
-const DECLINE_FADE_MS = 650;
-const COUNTER_FAREWELL_MS = 1400;
+const DECLINE_FADE_MS = 800;
+const COUNTER_FAREWELL_MS = 2000;
+
+const sceneExit = {
+  exit: { opacity: 0, filter: "blur(10px)" },
+  transition: { duration: 1.2 },
+} as const;
+
+const COUNTER_SCENE_STATES = new Set<EntranceState>([
+  "counterReveal",
+  "moodPrompt",
+  "moodSelect",
+  "pastBottleSelect",
+  "decliningNight",
+  "unheldNight",
+  "drinkServed",
+  "recording",
+  "processing",
+  "counterFarewell",
+]);
+
+/** 路地の環境音を鳴らすシーン（それ以外は店内＝outside 停止） */
+const OUTSIDE_AMBIENT_STATES = new Set<EntranceState>([
+  "entry",
+  "memories",
+  "leaving",
+  "alley",
+]);
+
+function getSceneMotionKey(state: EntranceState): string {
+  return COUNTER_SCENE_STATES.has(state) ? "counter" : state;
+}
 
 export function EntranceFlow() {
   const session = useNightSession();
@@ -70,7 +113,6 @@ export function EntranceFlow() {
   const [alleyOutcome, setAlleyOutcome] = useState<NightAlleyOutcome | null>(
     null,
   );
-  const introTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const declineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const counterFarewellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -82,12 +124,13 @@ export function EntranceFlow() {
   const leaveAnimationDoneRef = useRef(false);
   const backgroundWorkRef = useRef<BackgroundWorkState>("idle");
   const savedDiaryIdRef = useRef<string | null>(null);
+  const [moodCameraPose, setMoodCameraPose] = useState<CameraPose>("neutral");
+  const moodSelectVisitedRef = useRef(false);
 
   const drinkImageSrc = getDrinkImagePath(pickedDrink?.id);
 
   const clearTimers = useCallback(() => {
     for (const ref of [
-      introTimerRef,
       fadeTimerRef,
       declineTimerRef,
       counterFarewellTimerRef,
@@ -106,6 +149,8 @@ export function EntranceFlow() {
     leaveAnimationDoneRef.current = false;
     backgroundWorkRef.current = "idle";
     savedDiaryIdRef.current = null;
+    moodSelectVisitedRef.current = false;
+    setMoodCameraPose("neutral");
     setCounterFarewellLine(null);
     setAlleyOutcome(null);
   }, []);
@@ -117,7 +162,8 @@ export function EntranceFlow() {
     setPastMasterLine(null);
     resetNightRefs();
     setEntranceState("entry");
-    audio.setRainVolume(0.35);
+    audio.stopJazz();
+    audio.startOutside(BAR_AUDIO_LEVELS.outside.alley);
   }, [clearTimers, session, audio, resetNightRefs]);
 
   const attemptGoToAlley = useCallback(() => {
@@ -149,31 +195,28 @@ export function EntranceFlow() {
   }, []);
 
   useEffect(() => {
-    if (entranceState === "entry") {
-      audio.startRain(0.35);
+    if (entranceState === "entry" || entranceState === "memories") {
+      audio.startOutside(BAR_AUDIO_LEVELS.outside.alley);
+      return;
+    }
+
+    if (!OUTSIDE_AMBIENT_STATES.has(entranceState)) {
+      audio.stopOutside();
     }
   }, [entranceState, audio]);
 
-  useEffect(() => () => clearTimers(), [clearTimers]);
+  useEffect(() => {
+    if (entranceState === "moodSelect") {
+      setMoodCameraPose("pondering");
+    }
+  }, [entranceState]);
 
   useEffect(() => {
-    if (entranceState !== "counterIntro") return;
+    if (entranceState !== "drinkServed") return;
+    audio.playGlassSlide();
+  }, [entranceState, audio]);
 
-    const introMs = isReturningVisitor()
-      ? RETURNING_INTRO_MS
-      : FIRST_VISIT_INTRO_MS;
-
-    introTimerRef.current = setTimeout(() => {
-      setEntranceState("moodSelect");
-    }, introMs);
-
-    return () => {
-      if (introTimerRef.current) {
-        clearTimeout(introTimerRef.current);
-        introTimerRef.current = null;
-      }
-    };
-  }, [entranceState]);
+  useEffect(() => () => clearTimers(), [clearTimers]);
 
   useEffect(() => {
     if (session.phase === "recording" && entranceState !== "recording") {
@@ -219,8 +262,9 @@ export function EntranceFlow() {
     setEntranceState("counterFarewell");
 
     counterFarewellTimerRef.current = setTimeout(() => {
-      audio.setRainVolume(0.32);
       audio.playDoor();
+      audio.stopJazz();
+      audio.startOutside(BAR_AUDIO_LEVELS.outside.leaving);
       setEntranceState("leaving");
     }, COUNTER_FAREWELL_MS);
   }, [session.phase, session.isDevSimulated, audio]);
@@ -308,14 +352,37 @@ export function EntranceFlow() {
 
   const handleEnterCounter = () => {
     resetNightRefs();
-    audio.playBell();
-    audio.playDoor();
-    audio.setRainVolume(0.18);
-    setEntranceState("fadeIn");
+    void audio.warmUp();
+    audio.stopOutside();
+    setEntranceState("entryFadeOut");
+  };
 
+  const handleEntryFadeComplete = () => {
+    setEntranceState("masterOnBlack");
     fadeTimerRef.current = setTimeout(() => {
-      setEntranceState("counterIntro");
-    }, FADE_MS);
+      fadeTimerRef.current = null;
+      audio.playDoor();
+    }, BAR_AUDIO_TIMING.doorDelayAfterEntryFadeMs);
+  };
+
+  const handleMasterGreetingComplete = () => {
+    audio.startJazz(
+      BAR_AUDIO_LEVELS.jazz.counter,
+      BAR_AUDIO_TIMING.jazzEntryFadeMs,
+    );
+    setEntranceState("counterReveal");
+  };
+
+  const handleCounterRevealComplete = () => {
+    setEntranceState("moodPrompt");
+  };
+
+  const handleOpenMemories = () => {
+    setEntranceState("memories");
+  };
+
+  const handleBackToEntry = () => {
+    setEntranceState("entry");
   };
 
   const handleMoodSelect = (categoryId: DrinkCategoryId, drink: Drink) => {
@@ -367,8 +434,9 @@ export function EntranceFlow() {
     declineTimerRef.current = setTimeout(() => {
       farewellStartedRef.current = true;
       leaveAnimationDoneRef.current = false;
-      audio.setRainVolume(0.32);
       audio.playDoor();
+      audio.stopJazz();
+      audio.startOutside(BAR_AUDIO_LEVELS.outside.leaving);
       setEntranceState("leaving");
     }, DECLINE_FADE_MS);
   };
@@ -379,22 +447,74 @@ export function EntranceFlow() {
   };
 
   if (entranceState === "entry") {
-    return <NightEntryScreen onEnterCounter={handleEnterCounter} />;
+    return (
+      <AnimatePresence mode="wait">
+        <motion.div key="entry" {...sceneExit}>
+          <NightEntryScreen
+            onEnterCounter={handleEnterCounter}
+            onOpenMemories={handleOpenMemories}
+          />
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
+
+  if (entranceState === "memories") {
+    return (
+      <AnimatePresence mode="wait">
+        <motion.div key="memories" {...sceneExit}>
+          <MemoriesScreen onBack={handleBackToEntry} />
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
+
+  if (entranceState === "entryFadeOut") {
+    return (
+      <EntryFadeOutScreen onFadeComplete={handleEntryFadeComplete} />
+    );
+  }
+
+  if (entranceState === "masterOnBlack") {
+    return (
+      <MasterOnBlackScreen
+        returning={isReturningVisitor()}
+        onComplete={handleMasterGreetingComplete}
+      />
+    );
   }
 
   if (entranceState === "leaving") {
-    return <LeavingScreen onComplete={handleLeavingComplete} />;
+    return (
+      <AnimatePresence mode="wait">
+        <motion.div key="leaving" {...sceneExit}>
+          <LeavingScreen onComplete={handleLeavingComplete} />
+        </motion.div>
+      </AnimatePresence>
+    );
   }
 
   if (entranceState === "alley" && alleyOutcome) {
     return (
-      <NightAlleyScreen outcome={alleyOutcome} onDismiss={resetToAlley} />
+      <AnimatePresence mode="wait">
+        <motion.div key="alley" {...sceneExit}>
+          <NightAlleyScreen outcome={alleyOutcome} onDismiss={resetToAlley} />
+        </motion.div>
+      </AnimatePresence>
     );
   }
 
+  const drinkOnCounter =
+    entranceState === "drinkServed" ||
+    entranceState === "recording" ||
+    entranceState === "processing" ||
+    entranceState === "counterFarewell";
+
+  const showDrinkImage = drinkOnCounter;
+
   const showCounter =
-    entranceState === "fadeIn" ||
-    entranceState === "counterIntro" ||
+    entranceState === "counterReveal" ||
+    entranceState === "moodPrompt" ||
     entranceState === "moodSelect" ||
     entranceState === "pastBottleSelect" ||
     entranceState === "decliningNight" ||
@@ -404,52 +524,76 @@ export function EntranceFlow() {
     entranceState === "processing" ||
     entranceState === "counterFarewell";
 
-  const showDrinkImage =
-    entranceState !== "fadeIn" &&
-    entranceState !== "counterIntro" &&
-    entranceState !== "moodSelect" &&
-    entranceState !== "pastBottleSelect";
+  const reduceCounterGpuLoad =
+    entranceState === "moodSelect" || entranceState === "pastBottleSelect";
 
   return (
-    <div className="space-y-4">
-      {showCounter && (
-        <SceneFrame className="rounded-xl">
-          <CounterScene
-            drinkImageSrc={showDrinkImage ? drinkImageSrc : null}
-            priority={
-              entranceState === "fadeIn" || entranceState === "counterIntro"
-            }
-          />
+    <AnimatePresence mode="wait">
+      <motion.div key={getSceneMotionKey(entranceState)} {...sceneExit}>
+        {showCounter && (
+          <SceneFrame atmosphere={!reduceCounterGpuLoad}>
+            <CounterScene
+              drinkImageSrc={showDrinkImage ? drinkImageSrc : null}
+              drinkName={pickedDrink?.name ?? null}
+              drinkNote={pickedDrink?.note ?? null}
+              moodCategoryId={session.selectedCategoryId}
+              drinkOnCounter={drinkOnCounter && Boolean(drinkImageSrc)}
+              priority={entranceState === "counterReveal"}
+              settle={entranceState !== "counterReveal"}
+              reduceGpuLoad={reduceCounterGpuLoad}
+              cameraPose={
+                entranceState === "moodSelect" ||
+                entranceState === "pastBottleSelect"
+                  ? moodCameraPose
+                  : "neutral"
+              }
+              masterMode={
+                entranceState === "recording" ? "talking" : "idle"
+              }
+            />
 
-          <div
-            className={`pointer-events-none absolute inset-0 z-20 bg-black transition-opacity duration-500 ${
-              entranceState === "fadeIn" ||
-              entranceState === "decliningNight" ||
-              entranceState === "unheldNight"
-                ? "opacity-100"
-                : "opacity-0"
-            }`}
-          />
+            {entranceState === "counterReveal" && (
+              <EnteringReveal onComplete={handleCounterRevealComplete} />
+            )}
 
-          <div className="pointer-events-none absolute inset-0 z-30 flex flex-col">
+            <MasterHeadDevTapZone onTripleTap={handleDevSkipNight} />
+
+            <div
+              className={`pointer-events-none absolute inset-0 z-20 bg-black transition-opacity duration-[800ms] ${
+                entranceState === "decliningNight" ||
+                entranceState === "unheldNight"
+                  ? "opacity-100"
+                  : "opacity-0"
+              }`}
+            />
+
+            <div className="pointer-events-none absolute inset-0 z-30 flex flex-col">
+            {entranceState === "moodPrompt" && (
+              <div className="pointer-events-auto absolute inset-0">
+                <MasterMoodPromptPanel
+                  onComplete={() => setEntranceState("moodSelect")}
+                />
+              </div>
+            )}
+
+            {entranceState === "moodSelect" && (
+              <div className="pointer-events-auto absolute inset-0">
+                <MoodSelectScene
+                  skipCurtainEntrance={moodSelectVisitedRef.current}
+                  onCurtainEntranceComplete={() => {
+                    moodSelectVisitedRef.current = true;
+                  }}
+                  onSelectionStart={() => setMoodCameraPose("neutral")}
+                  onSelect={handleMoodSelect}
+                  onPastBottle={handlePastBottleOpen}
+                  onDecline={handleDeclineNight}
+                />
+              </div>
+            )}
+
             <div className="flex-1" />
 
             <div className="pointer-events-auto space-y-5 px-5 pb-[12%] pt-4">
-              {entranceState === "counterIntro" && (
-                <MasterLine>……いらっしゃい。</MasterLine>
-              )}
-
-              {entranceState === "moodSelect" && (
-                <>
-                  <MoodSelectPanel
-                    onSelect={handleMoodSelect}
-                    onPastBottle={handlePastBottleOpen}
-                    onDecline={handleDeclineNight}
-                  />
-                  <DevSkipNightButton onSkip={handleDevSkipNight} />
-                </>
-              )}
-
               {entranceState === "pastBottleSelect" && (
                 <PastBottlePanel
                   onSelect={handlePastBottleSelect}
@@ -467,34 +611,25 @@ export function EntranceFlow() {
               )}
 
               {entranceState === "drinkServed" && (
-                <div className="space-y-5">
-                  {pastMasterLine && <MasterLine>{pastMasterLine}</MasterLine>}
-                  <div className="flex justify-center pt-2">
-                    <button
-                      type="button"
-                      onClick={handleSip}
-                      className="rounded-full border border-stone-700/50 bg-stone-950/55 px-9 py-2.5 text-sm tracking-wide text-stone-200/90 backdrop-blur-sm transition-colors hover:border-stone-600/60"
-                    >
-                      口をつける
-                    </button>
-                  </div>
-                </div>
+                <DrinkServedPanel
+                  pastMasterLine={pastMasterLine}
+                  onSip={handleSip}
+                />
               )}
 
               {entranceState === "recording" && (
-                <>
-                  <RecordingPanel
-                    listenFailureCount={session.listenFailureCount}
-                    listenFailureVisible={session.listenFailureVisible}
-                    onFinish={handleFinishTalk}
-                    onRetrySpeaking={() => void session.retrySpeaking()}
-                    onLeaveWithoutRecord={handleLeaveWithoutRecord}
-                    onPauseSpeaking={() => session.pauseSpeaking()}
-                    onResumeSpeaking={() => session.resumeSpeaking()}
-                  />
-                  <DevSkipNightButton onSkip={handleDevSkipNight} />
-                </>
+                <RecordingPanel
+                  listenFailureCount={session.listenFailureCount}
+                  listenFailureVisible={session.listenFailureVisible}
+                  onFinish={handleFinishTalk}
+                  onRetrySpeaking={() => void session.retrySpeaking()}
+                  onLeaveWithoutRecord={handleLeaveWithoutRecord}
+                  onPauseSpeaking={() => session.pauseSpeaking()}
+                  onResumeSpeaking={() => session.resumeSpeaking()}
+                />
               )}
+
+              {entranceState === "processing" && <GeneratingPanel />}
 
               {entranceState === "counterFarewell" && counterFarewellLine && (
                 <MasterLine>{counterFarewellLine}</MasterLine>
@@ -502,7 +637,8 @@ export function EntranceFlow() {
             </div>
           </div>
         </SceneFrame>
-      )}
-    </div>
+        )}
+      </motion.div>
+    </AnimatePresence>
   );
 }

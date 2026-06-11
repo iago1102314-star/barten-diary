@@ -22,10 +22,10 @@ export default async function MemoriesPage() {
         >
           ← 路地に戻る
         </Link>
-        <h1 className="pt-4 text-lg font-light tracking-[0.08em] text-stone-300">
+        <h1 className="font-serif-jp pt-4 text-xl font-normal tracking-[0.14em] text-stone-300">
           夜のメモ
         </h1>
-        <p className="text-[12px] leading-relaxed text-stone-600">
+        <p className="font-serif-jp text-[12px] leading-relaxed tracking-[0.06em] text-stone-600">
           帰り道で、自分用に残した記録。
         </p>
       </header>
