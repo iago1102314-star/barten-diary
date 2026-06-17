@@ -1,15 +1,31 @@
 "use client";
 
 import { DrinkOnCounter } from "@/components/entrance/drink-on-counter";
+import {
+  GlowAnchorMarker,
+  GlowAnchorRoot,
+} from "@/components/entrance/glow-anchor-marker";
 import { LampGlow } from "@/components/entrance/atmosphere";
 import { ParallaxLayer } from "@/components/entrance/parallax-layer";
 import { moodAccent } from "@/lib/entrance/mood-accent";
 import type { CameraPose } from "@/lib/entrance/counter-camera-poses";
+import {
+  COUNTER_LAMP_GLOWS,
+  mapGlowsByAnchor,
+  SHOW_LAMP_GLOW_DEBUG_MARKERS,
+  SHOW_LAMP_GLOW_LIGHT,
+  type CounterLampGlowConfig,
+} from "@/lib/entrance/counter-lamp-glows";
 import { EASE_DRIFT, EASE_SOFT } from "@/lib/entrance/motion-presets";
 import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
+import {
+  COUNTER_BACK_DARKEN_OPACITY,
+  COUNTER_BACK_DARKEN_TOP_GRADIENT,
+} from "@/lib/entrance/counter-scene-tuning";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
 import { motion } from "motion/react";
 import Image from "next/image";
+import type { ReactNode } from "react";
 
 type CounterSceneProps = {
   drinkImageSrc?: string | null;
@@ -20,11 +36,36 @@ type CounterSceneProps = {
   priority?: boolean;
   settle?: boolean;
   masterMode?: "idle" | "talking";
-  /** neutral = マスターと向き合う / pondering = カウンターへ目線を落とす */
   cameraPose?: CameraPose;
-  /** 気分選択など UI 重なり時 — ぼかし・無限アニメを止めて GPU 負荷を下げる */
   reduceGpuLoad?: boolean;
+  /** ラボ / ホーム光調整 — 未指定時は COUNTER_LAMP_GLOWS */
+  lampGlows?: CounterLampGlowConfig[];
+  /** 光本体の強制表示（未指定時は SHOW_LAMP_GLOW_LIGHT） */
+  showLampGlowLight?: boolean;
 };
+
+function KenBurnsWrap({
+  enabled,
+  children,
+}: {
+  enabled: boolean;
+  children: ReactNode;
+}) {
+  if (!enabled) {
+    return <div className="absolute inset-0">{children}</div>;
+  }
+
+  return (
+    <motion.div
+      className="absolute inset-0"
+      initial={{ scale: 1.08 }}
+      animate={{ scale: 1 }}
+      transition={{ duration: 14, ease: EASE_DRIFT }}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 function SceneLayer({
   src,
@@ -50,17 +91,153 @@ function SceneLayer({
     />
   );
 
-  if (!kenBurns) return img;
+  if (!kenBurns) {
+    return <div className="absolute inset-0">{img}</div>;
+  }
+
+  return <KenBurnsWrap enabled>{img}</KenBurnsWrap>;
+}
+
+/** counter-back のみ — 画像 + 暗さオーバーレイ（Ken Burns / パララックスと一体） */
+function CounterBackLayer({
+  priority = false,
+  kenBurns = false,
+}: {
+  priority?: boolean;
+  kenBurns?: boolean;
+}) {
+  const img = (
+    <Image
+      src={ENTRANCE_ASSETS.counterBack}
+      alt=""
+      fill
+      priority={priority}
+      sizes="440px"
+      className="object-cover"
+      draggable={false}
+      unoptimized
+    />
+  );
+
+  const darken =
+    COUNTER_BACK_DARKEN_OPACITY > 0 || COUNTER_BACK_DARKEN_TOP_GRADIENT > 0 ? (
+      <>
+        {COUNTER_BACK_DARKEN_TOP_GRADIENT > 0 && (
+          <div
+            className="pointer-events-none absolute inset-0"
+            aria-hidden
+            style={{
+              background: `radial-gradient(ellipse 95% 70% at 50% 18%, rgba(0, 0, 0, ${COUNTER_BACK_DARKEN_TOP_GRADIENT}), transparent 72%)`,
+            }}
+          />
+        )}
+        {COUNTER_BACK_DARKEN_OPACITY > 0 && (
+          <div
+            className="pointer-events-none absolute inset-0"
+            aria-hidden
+            style={{ backgroundColor: `rgba(0, 0, 0, ${COUNTER_BACK_DARKEN_OPACITY})` }}
+          />
+        )}
+      </>
+    ) : null;
+
+  const content = (
+    <>
+      <div className="absolute inset-0">{img}</div>
+      {darken}
+    </>
+  );
+
+  if (!kenBurns) {
+    return <div className="absolute inset-0">{content}</div>;
+  }
+
+  return <KenBurnsWrap enabled>{content}</KenBurnsWrap>;
+}
+
+function AnchoredLampGlow({ glow }: { glow: CounterLampGlowConfig }) {
+  return (
+    <LampGlow
+      anchor={glow.anchor}
+      x={glow.offsetX}
+      y={glow.offsetY}
+      size={glow.size}
+      ratio={glow.ratio}
+      tone={glow.tone}
+      intensity={glow.intensity}
+      colorRgb={glow.colorRgb}
+      speed={glow.speed}
+      zClass="z-[1]"
+    />
+  );
+}
+
+function LanternAnchor({
+  side,
+  children,
+}: {
+  side: "left" | "right";
+  children: ReactNode;
+}) {
+  const positionClass =
+    side === "left" ? "left-[-4%] top-[-4%]" : "right-[-4%] top-[-4%]";
 
   return (
-    <motion.div
-      className="absolute inset-0"
-      initial={{ scale: 1.08 }}
-      animate={{ scale: 1 }}
-      transition={{ duration: 14, ease: EASE_DRIFT }}
+    <div
+      className={`pointer-events-none absolute ${positionClass} w-[32%] max-w-[134px] origin-top overflow-visible`}
     >
-      {img}
-    </motion.div>
+      {children}
+    </div>
+  );
+}
+
+/** ランタン先端 — HangingLantern と同じ枠（320×640）で % 座標を決める */
+function LanternGlowAnchor({
+  side,
+  glow,
+  showGlow = false,
+  showMarker = false,
+}: {
+  side: "left" | "right";
+  glow?: CounterLampGlowConfig;
+  showGlow?: boolean;
+  showMarker?: boolean;
+}) {
+  if (!glow || (!showGlow && !showMarker)) return null;
+
+  return (
+    <LanternAnchor side={side}>
+      <GlowAnchorRoot className="overflow-visible">
+        <div className="block w-full aspect-[320/640]" aria-hidden />
+        {showGlow && <AnchoredLampGlow glow={glow} />}
+        {showMarker && <GlowAnchorMarker glow={glow} />}
+      </GlowAnchorRoot>
+    </LanternAnchor>
+  );
+}
+
+/** 背景ランプ — 背景レイヤーと同じ Ken Burns 枠（画面全体）基準 */
+function BackLampGlowAnchor({
+  glow,
+  showKenBurns,
+  showGlow = false,
+  showMarker = false,
+}: {
+  glow?: CounterLampGlowConfig;
+  showKenBurns: boolean;
+  showGlow?: boolean;
+  showMarker?: boolean;
+}) {
+  if (!glow || (!showGlow && !showMarker)) return null;
+
+  return (
+    <KenBurnsWrap enabled={showKenBurns}>
+      {/* relative と absolute を混ぜない — inset-0 で画面全体を % 基準にする */}
+      <div className="absolute inset-0 overflow-visible">
+        {showGlow && <AnchoredLampGlow glow={glow} />}
+        {showMarker && <GlowAnchorMarker glow={glow} />}
+      </div>
+    </KenBurnsWrap>
   );
 }
 
@@ -73,32 +250,26 @@ function HangingLantern({
   priority?: boolean;
   staticLight?: boolean;
 }) {
-  const positionClass =
-    side === "left" ? "left-[-4%] top-[-4%]" : "right-[-4%] top-[-4%]";
   const flickerClass = staticLight ? "" : "animate-lantern-flicker";
 
   return (
-    <div
-      className={`pointer-events-none absolute ${positionClass} w-[32%] max-w-[134px] origin-top ${flickerClass}`}
-    >
-      <Image
-        src={ENTRANCE_ASSETS.lantern}
-        alt=""
-        width={320}
-        height={640}
-        priority={priority}
-        className="h-auto w-full"
-        draggable={false}
-        unoptimized
-      />
-    </div>
+    <LanternAnchor side={side}>
+      <div className={flickerClass}>
+        <Image
+          src={ENTRANCE_ASSETS.lantern}
+          alt=""
+          width={320}
+          height={640}
+          priority={priority}
+          className="block h-auto w-full"
+          draggable={false}
+          unoptimized
+        />
+      </div>
+    </LanternAnchor>
   );
 }
 
-/**
- * BarStage 相当 — back(奥) → lights → master → lantern → front(手前)
- * 各レイヤーを ParallaxLayer で包み、ポーズに応じて遠近法どおりに動かす。
- */
 export function CounterScene({
   drinkImageSrc,
   drinkName,
@@ -110,10 +281,18 @@ export function CounterScene({
   masterMode = "idle",
   cameraPose = "neutral",
   reduceGpuLoad = false,
+  lampGlows,
+  showLampGlowLight,
 }: CounterSceneProps) {
   const accent = moodAccent(moodCategoryId ?? null);
   const masterAnim =
     masterMode === "talking" ? "master-breathe" : "master-breathe";
+  const glowByAnchor = mapGlowsByAnchor(lampGlows ?? COUNTER_LAMP_GLOWS);
+  const showLampGlows = !reduceGpuLoad;
+  const showMarkers = showLampGlows && SHOW_LAMP_GLOW_DEBUG_MARKERS;
+  const showGlow =
+    showLampGlows && (showLampGlowLight ?? SHOW_LAMP_GLOW_LIGHT);
+  const showLampOverlay = showMarkers || showGlow;
 
   return (
     <motion.div
@@ -136,67 +315,76 @@ export function CounterScene({
       )}
 
       <ParallaxLayer layer="back" pose={cameraPose} className="absolute inset-0 z-0">
-        <SceneLayer
-          src={ENTRANCE_ASSETS.counterBack}
-          alt=""
-          priority={priority}
-          kenBurns={!reduceGpuLoad}
-        />
+        <CounterBackLayer priority={priority} kenBurns={showLampGlows} />
       </ParallaxLayer>
-
-      {!reduceGpuLoad && (
-        <ParallaxLayer layer="glow" pose={cameraPose} className="absolute inset-0 z-0">
-          <LampGlow
-            x={13}
-            y={38}
-            tone="warm"
-            size={22}
-            intensity={0.45}
-            speed="5.5s"
-            zClass="z-0"
-          />
-          <LampGlow
-            x={62}
-            y={24}
-            tone="warm"
-            size={88}
-            ratio={0.32}
-            intensity={0.18}
-            speed="8s"
-            zClass="z-0"
-          />
-          <LampGlow
-            x={62}
-            y={43}
-            tone="warm"
-            size={88}
-            ratio={0.32}
-            intensity={0.2}
-            speed="9.5s"
-            zClass="z-0"
-          />
-        </ParallaxLayer>
-      )}
 
       <ParallaxLayer
         layer="master"
         pose={cameraPose}
-        className={`absolute inset-0 z-[1] ${masterAnim}`}
+        className="absolute inset-0 z-[1]"
       >
-        <SceneLayer src={ENTRANCE_ASSETS.masterIdle} alt="" priority={priority} />
+        <div className={`absolute inset-0 ${masterAnim}`}>
+          <SceneLayer src={ENTRANCE_ASSETS.masterIdle} alt="" priority={priority} />
+        </div>
       </ParallaxLayer>
 
       <ParallaxLayer layer="lantern" pose={cameraPose} className="absolute inset-0 z-[2]">
-        <HangingLantern side="left" priority={priority} staticLight={reduceGpuLoad} />
-        <HangingLantern side="right" priority={priority} staticLight={reduceGpuLoad} />
+        <HangingLantern
+          side="left"
+          priority={priority}
+          staticLight={reduceGpuLoad}
+        />
+        <HangingLantern
+          side="right"
+          priority={priority}
+          staticLight={reduceGpuLoad}
+        />
       </ParallaxLayer>
 
       <ParallaxLayer layer="front" pose={cameraPose} className="absolute inset-0 z-[3]">
         <SceneLayer src={ENTRANCE_ASSETS.counterFront} alt="" priority={priority} />
       </ParallaxLayer>
 
+      {showLampOverlay && (
+        <>
+          <ParallaxLayer
+            layer="lantern"
+            pose={cameraPose}
+            className="pointer-events-none absolute inset-0 z-[8] overflow-visible"
+          >
+            <LanternGlowAnchor
+              side="left"
+              glow={glowByAnchor["lantern-left"]}
+              showMarker={showMarkers}
+              showGlow={showGlow}
+            />
+            <LanternGlowAnchor
+              side="right"
+              glow={glowByAnchor["lantern-right"]}
+              showMarker={showMarkers}
+              showGlow={showGlow}
+            />
+          </ParallaxLayer>
+
+          {glowByAnchor["back-lamp"] && (
+            <ParallaxLayer
+              layer="back"
+              pose={cameraPose}
+              className="pointer-events-none absolute inset-0 z-[8] overflow-visible"
+            >
+              <BackLampGlowAnchor
+                glow={glowByAnchor["back-lamp"]}
+                showKenBurns={showLampGlows}
+                showMarker={showMarkers}
+                showGlow={showGlow}
+              />
+            </ParallaxLayer>
+          )}
+        </>
+      )}
+
       {drinkImageSrc && drinkOnCounter && (
-        <ParallaxLayer layer="drink" pose={cameraPose} className="absolute inset-0 z-[4]">
+        <ParallaxLayer layer="drink" pose={cameraPose} className="absolute inset-0 z-[6]">
           <DrinkOnCounter
             src={drinkImageSrc}
             drinkName={drinkName ?? undefined}
@@ -206,7 +394,7 @@ export function CounterScene({
       )}
 
       {drinkImageSrc && !drinkOnCounter && (
-        <ParallaxLayer layer="drink" pose={cameraPose} className="absolute inset-0 z-[4]">
+        <ParallaxLayer layer="drink" pose={cameraPose} className="absolute inset-0 z-[6]">
           <motion.div
             className="absolute inset-0"
             initial={{ opacity: 0, y: 12 }}

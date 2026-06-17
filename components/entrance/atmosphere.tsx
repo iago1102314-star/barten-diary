@@ -1,34 +1,41 @@
 "use client";
 
+import {
+  getCounterLampBreatheProfile,
+  getLampBreatheClassName,
+  getLampBreatheStyleFromProfile,
+  type LampBreatheProfile,
+  type LampBreatheTiming,
+} from "@/lib/entrance/lamp-glow-breathe";
+import { resolveLampGlowRgb } from "@/lib/entrance/lamp-glow-color";
+import {
+  buildLampGlowBackground,
+  lampGlowElementOpacity,
+} from "@/lib/entrance/lamp-glow-visual";
+import { lampGlowCenteredLayoutStyle } from "@/lib/entrance/lamp-glow-position";
+import type { CounterLampGlowAnchor } from "@/lib/entrance/counter-lamp-glows";
 import type { CSSProperties } from "react";
-
-/* ───────── 光源グロウ ─────────
-   円形ボカシの多用を避け、面で滲む光として置く。
-   画像内の実際の光源位置に合わせて使うこと。
-   zClass で重なり順を制御（マスターより後ろに置く等）。 */
 
 type Tone = "warm" | "cold" | "neon";
 
 type LampGlowProps = {
-  /** 光源の中心 (％) */
   x: number;
   y: number;
-  /** 横幅 (枠幅に対する％) */
   size?: number;
-  /** 縦横比 (1 = 円, <1 で縦長, >1 で横長) */
   ratio?: number;
   tone?: Tone;
   intensity?: number;
-  /** 明滅周期 */
+  /** 路地など — anchor 未指定時の周期 (例 "6s") */
   speed?: string;
-  /** 重なり順 (例: "z-0" でマスターの後ろ) */
   zClass?: string;
-};
-
-const TONE: Record<Tone, string> = {
-  warm: "238, 176, 96",
-  cold: "176, 206, 226",
-  neon: "120, 196, 214",
+  /** カウンター店内 — 呼吸タイミングを anchor で決める */
+  anchor?: CounterLampGlowAnchor;
+  /** 路地ホーム等 — 呼吸プロファイル（周期・波形） */
+  breatheProfile?: LampBreatheProfile;
+  /** @deprecated breatheProfile を使う */
+  breatheTiming?: LampBreatheTiming;
+  /** "r, g, b" — tone 既定色の上書き */
+  colorRgb?: string;
 };
 
 export function LampGlow({
@@ -40,36 +47,48 @@ export function LampGlow({
   intensity = 0.5,
   speed = "6s",
   zClass = "z-[16]",
+  anchor,
+  breatheProfile,
+  breatheTiming,
+  colorRgb,
 }: LampGlowProps) {
-  const rgb = TONE[tone];
-  const style: CSSProperties = {
-    left: `${x}%`,
-    top: `${y}%`,
-    width: `${size}%`,
-    aspectRatio: String(1 / ratio),
-    transform: "translate(-50%, -50%)",
-    background: `radial-gradient(ellipse 50% 50% at 50% 50%, rgba(${rgb}, ${intensity}) 0%, rgba(${rgb}, ${
-      intensity * 0.35
-    }) 35%, rgba(${rgb}, ${intensity * 0.08}) 58%, transparent 88%)`,
+  const rgb = resolveLampGlowRgb(tone, colorRgb);
+  const profile: LampBreatheProfile | undefined =
+    breatheProfile ??
+    (breatheTiming != null
+      ? { ...breatheTiming, variant: "lantern" }
+      : anchor != null
+        ? getCounterLampBreatheProfile(anchor)
+        : undefined);
+  const useBreathe = profile != null;
+
+  const glowStyle: CSSProperties = {
+    ...lampGlowCenteredLayoutStyle(x, y, size, ratio),
+    background: buildLampGlowBackground(rgb, intensity),
     mixBlendMode: "screen",
     filter: "blur(10px)",
-    ["--lamp-speed" as string]: speed,
+    ...(useBreathe
+      ? getLampBreatheStyleFromProfile(profile, intensity)
+      : {
+          opacity: lampGlowElementOpacity(intensity),
+          ["--lamp-speed" as string]: speed,
+        }),
   };
+
+  const breatheClass = profile
+    ? getLampBreatheClassName(profile.variant)
+    : "lamp-breathe";
 
   return (
     <div
-      className={`lamp-pulse pointer-events-none absolute rounded-full ${zClass}`}
+      className={`pointer-events-none absolute rounded-full ${useBreathe ? breatheClass : "lamp-pulse"} ${zClass}`}
+      style={glowStyle}
       aria-hidden
-      style={style}
     />
   );
 }
 
-/* ───────── 遠景の靄 ─────────
-   雨の代わりに、奥の空気のゆらぎで「生きた静止画」にする。 */
-
 type HazeProps = {
-  /** 靄の帯の縦位置 (％) */
   y?: number;
   intensity?: number;
   zClass?: string;

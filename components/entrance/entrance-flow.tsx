@@ -5,16 +5,21 @@ import { CounterScene } from "@/components/entrance/counter-scene";
 import { DrinkServedPanel } from "@/components/entrance/drink-served-panel";
 import { MasterHeadDevTapZone } from "@/components/entrance/master-head-dev-tap";
 import { EnteringReveal } from "@/components/entrance/entering-reveal";
-import { EntryFadeOutScreen } from "@/components/entrance/entry-fade-out-screen";
 import { GeneratingPanel } from "@/components/entrance/generating-panel";
 import { LeavingScreen } from "@/components/entrance/leaving-screen";
+import { HomeLampGlowShapeEditor } from "@/components/entrance/home-lamp-glow-shape-editor";
+import { StartLampGlowShapeEditor } from "@/components/entrance/start-lamp-glow-shape-editor";
+import { StartBokehLampGlowShapeEditor } from "@/components/entrance/start-bokeh-lamp-glow-shape-editor";
+import { StartBokehOnlyLampGlowPositionEditor } from "@/components/entrance/start-bokeh-only-lamp-glow-position-editor";
+import { StartBokehOnlyLampGlowShapeEditor } from "@/components/entrance/start-bokeh-only-lamp-glow-shape-editor";
+import { StartLampGlowPositionEditor } from "@/components/entrance/start-lamp-glow-position-editor";
 import { MasterMoodPromptPanel } from "@/components/entrance/master-mood-prompt-panel";
 import { MasterOnBlackScreen } from "@/components/entrance/master-on-black-screen";
 import { MasterLine } from "@/components/entrance/master-line";
 import { MemoriesScreen } from "@/components/entrance/memories-screen";
 import { MoodSelectScene } from "@/components/entrance/mood-select-scene";
 import { NightAlleyScreen } from "@/components/entrance/night-alley-screen";
-import { NightEntryScreen } from "@/components/entrance/night-entry-screen";
+import { NightEntryScreen, type EntryScreenPhase } from "@/components/entrance/night-entry-screen";
 import { PastBottlePanel } from "@/components/entrance/past-bottle-panel";
 import { RecordingPanel } from "@/components/entrance/recording-panel";
 import { SceneFrame } from "@/components/entrance/scene-frame";
@@ -24,6 +29,54 @@ import {
   BAR_AUDIO_TIMING,
 } from "@/lib/entrance/audio-levels";
 import type { CameraPose } from "@/lib/entrance/counter-camera-poses";
+import {
+  applyLampGlowShapePatch,
+  mergeLampGlowsForShapeEdit,
+  saveLampGlowOverrides,
+} from "@/lib/entrance/lamp-glow-dev-overrides";
+import {
+  applyStartLampGlowShapePatch,
+  mergeStartLampGlowsForShapeEdit,
+  saveStartLampGlowOverrides,
+} from "@/lib/entrance/start-lamp-glow-dev-overrides";
+import {
+  applyStartBokehOnlyLampGlowShapePatch,
+  mergeStartBokehOnlyLampGlowsForShapeEdit,
+  saveStartBokehOnlyLampGlowOverrides,
+} from "@/lib/entrance/start-bokeh-only-lamp-glow-dev-overrides";
+import {
+  isStartBokehOnlyPositionEditing,
+  isStartBokehOnlyShapeEditing,
+  START_BOKEH_ONLY_LAMP_GLOWS,
+  START_BOKEH_ONLY_POSITION_EDIT_ON_HOME,
+  START_BOKEH_ONLY_SHAPE_EDIT_ON_HOME,
+} from "@/lib/entrance/start-bokeh-lamp-glows";
+import {
+  applyStartBokehLampGlowShapePatch,
+  mergeStartBokehLampGlowsForShapeEdit,
+  saveStartBokehLampGlowOverrides,
+} from "@/lib/entrance/start-bokeh-lamp-glow-dev-overrides";
+import {
+  isStartBokehLampGlowHomeEditing,
+  START_BOKEH_BACKGROUND_OPACITY,
+  START_BOKEH_LAMP_GLOW_SHAPE_EDIT_ON_HOME,
+  type StartBokehLampGlowConfig,
+  type StartBokehLampGlowShapeFields,
+} from "@/lib/entrance/start-bokeh-lamp-glows";
+import {
+  isStartLampGlowHomeEditing,
+  isStartLampGlowPositionEditing,
+  START_LAMP_GLOW_SHAPE_EDIT_ON_HOME,
+  START_LAMP_GLOWS,
+  type StartLampGlowConfig,
+} from "@/lib/entrance/start-lamp-glows";
+import type { LampGlowShapeFields } from "@/lib/entrance/lamp-glow-types";
+import {
+  COUNTER_LAMP_GLOWS,
+  isLampGlowHomeEditing,
+  LAMP_GLOW_SHAPE_EDIT_ON_HOME,
+  type CounterLampGlowConfig,
+} from "@/lib/entrance/counter-lamp-glows";
 import { useNightSession } from "@/hooks/use-night-session";
 import {
   isReturningVisitor,
@@ -52,7 +105,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type EntranceState =
   | "entry"
   | "memories"
-  | "entryFadeOut"
   | "masterOnBlack"
   | "counterReveal"
   | "moodPrompt"
@@ -74,6 +126,13 @@ const sceneExit = {
   exit: { opacity: 0, filter: "blur(10px)" },
   transition: { duration: 1.2 },
 } as const;
+
+const sceneExitInstant = {
+  exit: { opacity: 0 },
+  transition: { duration: 0 },
+} as const;
+
+type EntryTransition = "idle" | "doorExit" | "toMemories" | "steadyFadeIn";
 
 const COUNTER_SCENE_STATES = new Set<EntranceState>([
   "counterReveal",
@@ -126,6 +185,131 @@ export function EntranceFlow() {
   const savedDiaryIdRef = useRef<string | null>(null);
   const [moodCameraPose, setMoodCameraPose] = useState<CameraPose>("neutral");
   const moodSelectVisitedRef = useRef(false);
+  const [lampGlows, setLampGlows] = useState<CounterLampGlowConfig[]>(() =>
+    mergeLampGlowsForShapeEdit().map((glow) => ({ ...glow })),
+  );
+  const [startLampGlows, setStartLampGlows] = useState<StartLampGlowConfig[]>(
+    () => mergeStartLampGlowsForShapeEdit().map((glow) => ({ ...glow })),
+  );
+  const [startBokehLampGlows, setStartBokehLampGlows] = useState<
+    StartBokehLampGlowConfig[]
+  >(() => mergeStartBokehLampGlowsForShapeEdit().map((glow) => ({ ...glow })));
+  const [startPositionGlows, setStartPositionGlows] = useState<
+    StartLampGlowConfig[]
+  >(() => START_LAMP_GLOWS.map((glow) => ({ ...glow })));
+  const [bokehOnlyPositionGlows, setBokehOnlyPositionGlows] = useState<
+    StartBokehLampGlowConfig[]
+  >(() => START_BOKEH_ONLY_LAMP_GLOWS.map((glow) => ({ ...glow })));
+  const [bokehOnlyLampGlows, setBokehOnlyLampGlows] = useState<
+    StartBokehLampGlowConfig[]
+  >(() => mergeStartBokehOnlyLampGlowsForShapeEdit().map((glow) => ({ ...glow })));
+  const [selectedGlowId, setSelectedGlowId] = useState(
+    COUNTER_LAMP_GLOWS[0]?.id ?? "",
+  );
+  const [selectedStartGlowId, setSelectedStartGlowId] = useState(
+    START_LAMP_GLOWS[0]?.id ?? "",
+  );
+  const [selectedBokehOnlyGlowId, setSelectedBokehOnlyGlowId] = useState(
+    START_BOKEH_ONLY_LAMP_GLOWS[0]?.id ?? "",
+  );
+  const [entryPhase, setEntryPhase] = useState<EntryScreenPhase>("bokeh");
+  const [entryTransition, setEntryTransition] = useState<EntryTransition>("idle");
+  const [skipEntryEntrance, setSkipEntryEntrance] = useState(false);
+  const [devBackgroundOpacity, setDevBackgroundOpacity] = useState(
+    START_BOKEH_BACKGROUND_OPACITY,
+  );
+  const [bokehShapeEditGroup, setBokehShapeEditGroup] = useState<
+    "paired" | "bokeh-only"
+  >("bokeh-only");
+
+  const handleGlowPatch = useCallback(
+    (id: string, patch: Partial<LampGlowShapeFields>) => {
+      setSelectedGlowId(id);
+      setLampGlows((prev) => applyLampGlowShapePatch(prev, id, patch));
+    },
+    [],
+  );
+
+  const handleStartGlowPatch = useCallback(
+    (id: string, patch: Partial<LampGlowShapeFields>) => {
+      setSelectedStartGlowId(id);
+      setStartLampGlows((prev) => applyStartLampGlowShapePatch(prev, id, patch));
+    },
+    [],
+  );
+
+  const handleStartBokehGlowPatch = useCallback(
+    (id: string, patch: Partial<StartBokehLampGlowShapeFields>) => {
+      setSelectedStartGlowId(id);
+      setStartBokehLampGlows((prev) =>
+        applyStartBokehLampGlowShapePatch(prev, id, patch),
+      );
+    },
+    [],
+  );
+
+  const handleStartBokehOnlyGlowPatch = useCallback(
+    (id: string, patch: Partial<StartBokehLampGlowShapeFields>) => {
+      setSelectedBokehOnlyGlowId(id);
+      setBokehOnlyLampGlows((prev) =>
+        applyStartBokehOnlyLampGlowShapePatch(prev, id, patch),
+      );
+    },
+    [],
+  );
+
+  const handleStartGlowMove = useCallback(
+    (id: string, offsetX: number, offsetY: number) => {
+      setSelectedStartGlowId(id);
+      setStartPositionGlows((prev) =>
+        prev.map((glow) =>
+          glow.id === id ? { ...glow, offsetX, offsetY } : glow,
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleBokehOnlyGlowMove = useCallback(
+    (id: string, offsetX: number, offsetY: number) => {
+      setSelectedBokehOnlyGlowId(id);
+      setBokehOnlyPositionGlows((prev) =>
+        prev.map((glow) =>
+          glow.id === id ? { ...glow, offsetX, offsetY } : glow,
+        ),
+      );
+    },
+    [],
+  );
+
+  const lampGlowHomeEditing = isLampGlowHomeEditing();
+  const startLampGlowHomeEditing = isStartLampGlowHomeEditing();
+  const startBokehLampGlowHomeEditing = isStartBokehLampGlowHomeEditing();
+  const startBokehOnlyPositionEditing = isStartBokehOnlyPositionEditing();
+  const startBokehOnlyShapeEditing = isStartBokehOnlyShapeEditing();
+  const startLampGlowPositionEditing = isStartLampGlowPositionEditing();
+  const pairedBokehShapeEditing =
+    startBokehLampGlowHomeEditing || startBokehOnlyShapeEditing;
+
+  useEffect(() => {
+    if (!lampGlowHomeEditing) return;
+    saveLampGlowOverrides(lampGlows);
+  }, [lampGlowHomeEditing, lampGlows]);
+
+  useEffect(() => {
+    if (!startLampGlowHomeEditing) return;
+    saveStartLampGlowOverrides(startLampGlows);
+  }, [startLampGlowHomeEditing, startLampGlows]);
+
+  useEffect(() => {
+    if (!pairedBokehShapeEditing) return;
+    saveStartBokehLampGlowOverrides(startBokehLampGlows);
+  }, [pairedBokehShapeEditing, startBokehLampGlows]);
+
+  useEffect(() => {
+    if (!startBokehOnlyShapeEditing) return;
+    saveStartBokehOnlyLampGlowOverrides(bokehOnlyLampGlows);
+  }, [startBokehOnlyShapeEditing, bokehOnlyLampGlows]);
 
   const drinkImageSrc = getDrinkImagePath(pickedDrink?.id);
 
@@ -163,7 +347,10 @@ export function EntranceFlow() {
     resetNightRefs();
     setEntranceState("entry");
     audio.stopJazz();
-    audio.startOutside(BAR_AUDIO_LEVELS.outside.alley);
+    audio.startOutside(
+      BAR_AUDIO_LEVELS.outside.alley,
+      BAR_AUDIO_TIMING.entryOutsideFadeMs,
+    );
   }, [clearTimers, session, audio, resetNightRefs]);
 
   const attemptGoToAlley = useCallback(() => {
@@ -195,7 +382,17 @@ export function EntranceFlow() {
   }, []);
 
   useEffect(() => {
-    if (entranceState === "entry" || entranceState === "memories") {
+    if (entranceState === "entry") {
+      audio.startOutside(
+        BAR_AUDIO_LEVELS.outside.alley,
+        skipEntryEntrance
+          ? BAR_AUDIO_TIMING.fadeMs
+          : BAR_AUDIO_TIMING.entryOutsideFadeMs,
+      );
+      return;
+    }
+
+    if (entranceState === "memories") {
       audio.startOutside(BAR_AUDIO_LEVELS.outside.alley);
       return;
     }
@@ -203,7 +400,7 @@ export function EntranceFlow() {
     if (!OUTSIDE_AMBIENT_STATES.has(entranceState)) {
       audio.stopOutside();
     }
-  }, [entranceState, audio]);
+  }, [entranceState, skipEntryEntrance, audio]);
 
   useEffect(() => {
     if (entranceState === "moodSelect") {
@@ -351,18 +548,40 @@ export function EntranceFlow() {
   };
 
   const handleEnterCounter = () => {
+    if (entryTransition !== "idle") return;
     resetNightRefs();
     void audio.warmUp();
-    audio.stopOutside();
-    setEntranceState("entryFadeOut");
+    audio.stopOutside(false, BAR_AUDIO_TIMING.outsideStopFadeMs);
+    setEntryTransition("doorExit");
   };
 
-  const handleEntryFadeComplete = () => {
+  const handleDoorExitComplete = () => {
+    setEntryTransition("idle");
     setEntranceState("masterOnBlack");
     fadeTimerRef.current = setTimeout(() => {
       fadeTimerRef.current = null;
       audio.playDoor();
     }, BAR_AUDIO_TIMING.doorDelayAfterEntryFadeMs);
+  };
+
+  const handleOpenMemories = () => {
+    if (entryTransition !== "idle") return;
+    setEntryTransition("toMemories");
+  };
+
+  const handleMemoriesFadeOutComplete = () => {
+    setEntryTransition("idle");
+    setEntranceState("memories");
+  };
+
+  const handleBackToEntry = () => {
+    setSkipEntryEntrance(true);
+    setEntranceState("entry");
+    setEntryTransition("steadyFadeIn");
+  };
+
+  const handleSteadyFadeInComplete = () => {
+    setEntryTransition("idle");
   };
 
   const handleMasterGreetingComplete = () => {
@@ -375,14 +594,6 @@ export function EntranceFlow() {
 
   const handleCounterRevealComplete = () => {
     setEntranceState("moodPrompt");
-  };
-
-  const handleOpenMemories = () => {
-    setEntranceState("memories");
-  };
-
-  const handleBackToEntry = () => {
-    setEntranceState("entry");
   };
 
   const handleMoodSelect = (categoryId: DrinkCategoryId, drink: Drink) => {
@@ -447,13 +658,149 @@ export function EntranceFlow() {
   };
 
   if (entranceState === "entry") {
+    const entrySteadyLampGlows = startLampGlowPositionEditing
+      ? startPositionGlows
+      : startLampGlowHomeEditing
+        ? startLampGlows
+        : undefined;
+    const entryBokehLampGlows = pairedBokehShapeEditing
+      ? startBokehLampGlows
+      : undefined;
+    const entryBokehOnlyLampGlows = startBokehOnlyPositionEditing
+      ? bokehOnlyPositionGlows
+      : startBokehOnlyShapeEditing
+        ? bokehOnlyLampGlows
+        : undefined;
+
     return (
       <AnimatePresence mode="wait">
-        <motion.div key="entry" {...sceneExit}>
+        <motion.div
+          key="entry"
+          {...(entryTransition === "toMemories" ? sceneExitInstant : sceneExit)}
+          className="relative"
+        >
           <NightEntryScreen
             onEnterCounter={handleEnterCounter}
             onOpenMemories={handleOpenMemories}
+            skipImageEntrance={skipEntryEntrance}
+            steadyFadeIn={entryTransition === "steadyFadeIn"}
+            onSteadyFadeInComplete={handleSteadyFadeInComplete}
+            doorExiting={entryTransition === "doorExit"}
+            onDoorExitComplete={handleDoorExitComplete}
+            memoriesFadeOut={entryTransition === "toMemories"}
+            onMemoriesFadeOutComplete={handleMemoriesFadeOutComplete}
+            steadyLampGlows={entrySteadyLampGlows}
+            bokehLampGlows={entryBokehLampGlows}
+            bokehOnlyLampGlows={entryBokehOnlyLampGlows}
+            devBackgroundOpacity={
+              pairedBokehShapeEditing ||
+              startBokehOnlyPositionEditing ||
+              startBokehOnlyShapeEditing
+                ? devBackgroundOpacity
+                : undefined
+            }
+            onPhaseChange={setEntryPhase}
+            freezeKenBurns={
+              startLampGlowPositionEditing || startBokehOnlyPositionEditing
+            }
           />
+          {startLampGlowPositionEditing && (
+            <StartLampGlowPositionEditor
+              glows={startPositionGlows}
+              selectedId={selectedStartGlowId}
+              onSelect={setSelectedStartGlowId}
+              onMove={handleStartGlowMove}
+            />
+          )}
+          {startBokehOnlyPositionEditing &&
+            START_BOKEH_ONLY_POSITION_EDIT_ON_HOME && (
+              <StartBokehOnlyLampGlowPositionEditor
+                glows={bokehOnlyPositionGlows}
+                selectedId={selectedBokehOnlyGlowId}
+                onSelect={setSelectedBokehOnlyGlowId}
+                onMove={handleBokehOnlyGlowMove}
+                backgroundOpacity={devBackgroundOpacity}
+                onBackgroundOpacityChange={setDevBackgroundOpacity}
+              />
+            )}
+          {startBokehOnlyShapeEditing &&
+            START_BOKEH_ONLY_SHAPE_EDIT_ON_HOME &&
+            (bokehShapeEditGroup === "bokeh-only" ? (
+              <StartBokehOnlyLampGlowShapeEditor
+                glows={bokehOnlyLampGlows}
+                selectedId={selectedBokehOnlyGlowId}
+                onSelect={setSelectedBokehOnlyGlowId}
+                onPatch={handleStartBokehOnlyGlowPatch}
+                currentPhase={entryPhase}
+                backgroundOpacity={devBackgroundOpacity}
+                onBackgroundOpacityChange={setDevBackgroundOpacity}
+                groupTabs={
+                  <div className="flex flex-wrap justify-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setBokehShapeEditGroup("paired")}
+                      className="rounded-full border border-stone-700/80 bg-black/70 px-3 py-1 font-mono text-[10px] text-stone-400 hover:border-stone-500"
+                    >
+                      ペア7灯
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full border border-amber-400/80 bg-amber-950/80 px-3 py-1 font-mono text-[10px] text-amber-100"
+                    >
+                      ボケ専用15灯
+                    </button>
+                  </div>
+                }
+              />
+            ) : (
+              <StartBokehLampGlowShapeEditor
+                glows={startBokehLampGlows}
+                selectedId={selectedStartGlowId}
+                onSelect={setSelectedStartGlowId}
+                onPatch={handleStartBokehGlowPatch}
+                currentPhase={entryPhase}
+                backgroundOpacity={devBackgroundOpacity}
+                onBackgroundOpacityChange={setDevBackgroundOpacity}
+                groupTabs={
+                  <div className="flex flex-wrap justify-center gap-1.5">
+                    <button
+                      type="button"
+                      className="rounded-full border border-amber-400/80 bg-amber-950/80 px-3 py-1 font-mono text-[10px] text-amber-100"
+                    >
+                      ペア7灯
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBokehShapeEditGroup("bokeh-only")}
+                      className="rounded-full border border-stone-700/80 bg-black/70 px-3 py-1 font-mono text-[10px] text-stone-400 hover:border-stone-500"
+                    >
+                      ボケ専用15灯
+                    </button>
+                  </div>
+                }
+              />
+            ))}
+          {startLampGlowHomeEditing && START_LAMP_GLOW_SHAPE_EDIT_ON_HOME && (
+            <StartLampGlowShapeEditor
+              glows={startLampGlows}
+              selectedId={selectedStartGlowId}
+              onSelect={setSelectedStartGlowId}
+              onPatch={handleStartGlowPatch}
+            />
+          )}
+          {startBokehLampGlowHomeEditing &&
+            START_BOKEH_LAMP_GLOW_SHAPE_EDIT_ON_HOME &&
+            !startBokehOnlyShapeEditing && (
+              <StartBokehLampGlowShapeEditor
+                glows={startBokehLampGlows}
+                selectedId={selectedStartGlowId}
+                onSelect={setSelectedStartGlowId}
+                onPatch={handleStartBokehGlowPatch}
+                currentPhase={entryPhase}
+                backgroundOpacity={devBackgroundOpacity}
+                onBackgroundOpacityChange={setDevBackgroundOpacity}
+              />
+            )}
         </motion.div>
       </AnimatePresence>
     );
@@ -462,16 +809,10 @@ export function EntranceFlow() {
   if (entranceState === "memories") {
     return (
       <AnimatePresence mode="wait">
-        <motion.div key="memories" {...sceneExit}>
+        <motion.div key="memories" {...sceneExitInstant}>
           <MemoriesScreen onBack={handleBackToEntry} />
         </motion.div>
       </AnimatePresence>
-    );
-  }
-
-  if (entranceState === "entryFadeOut") {
-    return (
-      <EntryFadeOutScreen onFadeComplete={handleEntryFadeComplete} />
     );
   }
 
@@ -525,13 +866,14 @@ export function EntranceFlow() {
     entranceState === "counterFarewell";
 
   const reduceCounterGpuLoad =
-    entranceState === "moodSelect" || entranceState === "pastBottleSelect";
+    !lampGlowHomeEditing &&
+    (entranceState === "moodSelect" || entranceState === "pastBottleSelect");
 
   return (
     <AnimatePresence mode="wait">
       <motion.div key={getSceneMotionKey(entranceState)} {...sceneExit}>
         {showCounter && (
-          <SceneFrame atmosphere={!reduceCounterGpuLoad}>
+          <SceneFrame atmosphere={!reduceCounterGpuLoad && !lampGlowHomeEditing}>
             <CounterScene
               drinkImageSrc={showDrinkImage ? drinkImageSrc : null}
               drinkName={pickedDrink?.name ?? null}
@@ -541,6 +883,8 @@ export function EntranceFlow() {
               priority={entranceState === "counterReveal"}
               settle={entranceState !== "counterReveal"}
               reduceGpuLoad={reduceCounterGpuLoad}
+              lampGlows={lampGlowHomeEditing ? lampGlows : undefined}
+              showLampGlowLight
               cameraPose={
                 entranceState === "moodSelect" ||
                 entranceState === "pastBottleSelect"
@@ -551,6 +895,15 @@ export function EntranceFlow() {
                 entranceState === "recording" ? "talking" : "idle"
               }
             />
+
+            {lampGlowHomeEditing && LAMP_GLOW_SHAPE_EDIT_ON_HOME && (
+              <HomeLampGlowShapeEditor
+                glows={lampGlows}
+                selectedId={selectedGlowId}
+                onSelect={setSelectedGlowId}
+                onPatch={handleGlowPatch}
+              />
+            )}
 
             {entranceState === "counterReveal" && (
               <EnteringReveal onComplete={handleCounterRevealComplete} />
@@ -568,7 +921,7 @@ export function EntranceFlow() {
             />
 
             <div className="pointer-events-none absolute inset-0 z-30 flex flex-col">
-            {entranceState === "moodPrompt" && (
+            {entranceState === "moodPrompt" && !lampGlowHomeEditing && (
               <div className="pointer-events-auto absolute inset-0">
                 <MasterMoodPromptPanel
                   onComplete={() => setEntranceState("moodSelect")}
@@ -576,7 +929,7 @@ export function EntranceFlow() {
               </div>
             )}
 
-            {entranceState === "moodSelect" && (
+            {entranceState === "moodSelect" && !lampGlowHomeEditing && (
               <div className="pointer-events-auto absolute inset-0">
                 <MoodSelectScene
                   skipCurtainEntrance={moodSelectVisitedRef.current}

@@ -1,12 +1,18 @@
 "use client";
 
-import { Haze, LampGlow } from "@/components/entrance/atmosphere";
+import { Haze } from "@/components/entrance/atmosphere";
 import { SceneFrame } from "@/components/entrance/scene-frame";
+import { StartSteadyLampGlowLayer } from "@/components/entrance/start-steady-lamp-glow-layer";
 import { MemoList } from "@/components/memories/memo-list";
 import { MemoDetailPanel } from "@/components/memories/memo-detail-panel";
 import { BarButton } from "@/components/ui/bar-button";
 import type { DiaryListItem } from "@/components/diaries/diary-list";
 import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
+import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
+import {
+  MEMORIES_BG_FADE_IN_SEC,
+  MEMORIES_RETURN_FADE_OUT_SEC,
+} from "@/lib/entrance/start-entry-timing";
 import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
@@ -22,12 +28,19 @@ const sceneFade = {
   transition: { duration: 0.9 },
 } as const;
 
+const contentFadeIn = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  transition: { duration: MEMORIES_BG_FADE_IN_SEC, ease: EASE_DRIFT },
+} as const;
+
 /** 路地で過去の記録を振り返る — ページ遷移なし */
 export function MemoriesScreen({ onBack }: MemoriesScreenProps) {
   const [memos, setMemos] = useState<DiaryListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedMemo, setSelectedMemo] = useState<DiaryListItem | null>(null);
+  const [exiting, setExiting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,11 +100,28 @@ export function MemoriesScreen({ onBack }: MemoriesScreenProps) {
     setSelectedMemo(null);
   }, []);
 
+  const handleBackToAlley = useCallback(() => {
+    if (exiting) return;
+    setExiting(true);
+  }, [exiting]);
+
   return (
     <SceneFrame>
       <AlleyBackdrop />
 
-      <div className="absolute inset-0 z-30 flex flex-col">
+      <motion.div
+        className="pointer-events-none absolute inset-0 z-40 bg-black"
+        initial={{ opacity: 1 }}
+        animate={{ opacity: 0 }}
+        transition={{ duration: MEMORIES_BG_FADE_IN_SEC, ease: EASE_DRIFT }}
+      />
+
+      <motion.div
+        {...contentFadeIn}
+        className={`absolute inset-0 z-30 flex flex-col ${
+          exiting ? "pointer-events-none" : ""
+        }`}
+      >
         <AnimatePresence mode="wait">
           {selectedMemo ? (
             <motion.div
@@ -115,16 +145,10 @@ export function MemoriesScreen({ onBack }: MemoriesScreenProps) {
           ) : (
             <motion.div
               key="list"
-              {...sceneFade}
               className="flex min-h-0 flex-1 flex-col"
             >
-              <motion.header
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3, duration: 1 }}
-                className="shrink-0 space-y-3 px-7 pb-4 pt-[12%]"
-              >
-                <BarButton variant="ghost" onClick={onBack}>
+              <header className="shrink-0 space-y-3 px-7 pb-4 pt-[12%]">
+                <BarButton variant="ghost" onClick={handleBackToAlley}>
                   路地に戻る
                 </BarButton>
                 <div className="space-y-2 pt-2">
@@ -135,7 +159,7 @@ export function MemoriesScreen({ onBack }: MemoriesScreenProps) {
                     帰り道で、自分用に残した記録。
                   </p>
                 </div>
-              </motion.header>
+              </header>
 
               <div className="flex-1 overflow-y-auto overscroll-contain px-7 pb-[14%]">
                 {loading && (
@@ -160,19 +184,33 @@ export function MemoriesScreen({ onBack }: MemoriesScreenProps) {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </motion.div>
+
+      {exiting && (
+        <motion.div
+          className="absolute inset-0 z-50 bg-black"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: MEMORIES_RETURN_FADE_OUT_SEC, ease: EASE_DRIFT }}
+          onAnimationComplete={onBack}
+        />
+      )}
     </SceneFrame>
   );
 }
 
 function AlleyBackdrop() {
   return (
-    <>
+    <motion.div
+      className="absolute inset-0"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: MEMORIES_BG_FADE_IN_SEC, ease: EASE_DRIFT }}
+    >
       <motion.div
         className="absolute inset-0"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 1.4 }}
+        initial={{ scale: 1, x: 0 }}
+        animate={{ scale: 1, x: 0 }}
       >
         <Image
           src={ENTRANCE_ASSETS.start}
@@ -185,16 +223,13 @@ function AlleyBackdrop() {
           draggable={false}
           unoptimized
         />
+
+        <StartSteadyLampGlowLayer />
       </motion.div>
 
-      <LampGlow x={20} y={12} tone="cold" size={16} intensity={0.9} speed="7s" />
-      <LampGlow x={31} y={39} tone="neon" size={10} intensity={1.6} speed="5s" />
-      <LampGlow x={55} y={37} tone="warm" size={26} intensity={0.36} speed="5.5s" />
-      <LampGlow x={68} y={37} tone="warm" size={24} intensity={0.32} speed="6.8s" />
-      <Haze y={36} intensity={0.85} />
-
-      <div className="absolute inset-0 bg-gradient-to-b from-stone-950/55 via-stone-950/70 to-stone-950/90" />
-      <div className="absolute inset-0 bg-[#0a1020]/30 mix-blend-multiply" />
-    </>
+      <Haze y={36} intensity={1} />
+      <div className="absolute inset-0 bg-gradient-to-b from-stone-950/40 via-transparent to-stone-950/80" />
+      <div className="absolute inset-0 bg-[#0a1020]/20 mix-blend-multiply" />
+    </motion.div>
   );
 }

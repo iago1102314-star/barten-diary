@@ -217,7 +217,125 @@ body {
   }
 }
 
-/* 灯りの脈動（光源グロウ） */
+/* 灯りの呼吸 — sin に近い ease-in-out、opacity 主・scale 微動 */
+.lamp-breathe {
+  transform-origin: center center;
+  animation: lamp-breathe var(--lamp-period, 5.5s) ease-in-out infinite;
+  animation-delay: var(--lamp-delay, 0s);
+  will-change: opacity, transform;
+}
+
+@keyframes lamp-breathe {
+  0%,
+  100% {
+    opacity: var(--lamp-op-min, 0.78);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-min, 0.975));
+  }
+  38% {
+    opacity: var(--lamp-op-max, 1);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-max, 1.015));
+  }
+  62% {
+    opacity: var(--lamp-op-min, 0.78);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-min, 0.975));
+  }
+}
+
+/* 街灯 — 長く溜めてからゆっくり明るく、また長く保つ */
+.lamp-breathe-street {
+  transform-origin: center center;
+  animation: lamp-breathe-street var(--lamp-period, 14s) ease-in-out infinite;
+  animation-delay: var(--lamp-delay, 0s);
+  will-change: opacity, transform;
+}
+
+@keyframes lamp-breathe-street {
+  0%,
+  25%,
+  100% {
+    opacity: var(--lamp-op-min, 0.78);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-min, 0.99));
+  }
+  55% {
+    opacity: var(--lamp-op-max, 1);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-max, 1.008));
+  }
+  78% {
+    opacity: var(--lamp-op-min, 0.78);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-min, 0.99));
+  }
+}
+
+/* コンビニ蛍光灯 — 基本点灯、時々短いチラつき */
+.lamp-breathe-fluorescent {
+  transform-origin: center center;
+  animation: lamp-breathe-fluorescent var(--lamp-period, 5.8s) linear infinite;
+  animation-delay: var(--lamp-delay, 0s);
+  will-change: opacity, transform;
+}
+
+@keyframes lamp-breathe-fluorescent {
+  0%,
+  82%,
+  100% {
+    opacity: var(--lamp-op-max, 1);
+    transform: translate(-50%, -50%) scale(1);
+  }
+  88% {
+    opacity: var(--lamp-op-min, 0.78);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-min, 0.995));
+  }
+  91% {
+    opacity: var(--lamp-op-max, 1);
+    transform: translate(-50%, -50%) scale(1);
+  }
+  94% {
+    opacity: calc(var(--lamp-op-min, 0.78) + 0.04);
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* ネオン — 短い明滅が不規則に重なる */
+.lamp-breathe-neon {
+  transform-origin: center center;
+  animation: lamp-breathe-neon var(--lamp-period, 4.4s) ease-in-out infinite;
+  animation-delay: var(--lamp-delay, 0s);
+  will-change: opacity, transform;
+}
+
+@keyframes lamp-breathe-neon {
+  0%,
+  100% {
+    opacity: var(--lamp-op-min, 0.78);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-min, 0.98));
+  }
+  10% {
+    opacity: var(--lamp-op-max, 1);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-max, 1.012));
+  }
+  18% {
+    opacity: var(--lamp-op-min, 0.78);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-min, 0.98));
+  }
+  32% {
+    opacity: calc(var(--lamp-op-max, 1) * 0.85);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-max, 1.012));
+  }
+  48% {
+    opacity: var(--lamp-op-min, 0.78);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-min, 0.98));
+  }
+  62% {
+    opacity: var(--lamp-op-max, 1);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-max, 1.012));
+  }
+  74% {
+    opacity: calc(var(--lamp-op-min, 0.78) + 0.06);
+    transform: translate(-50%, -50%) scale(var(--lamp-scale-min, 0.98));
+  }
+}
+
+/* @deprecated カウンター以外の旧脈動 */
 .lamp-pulse {
   animation: lamp-pulse var(--lamp-speed, 6s) ease-in-out infinite;
 }
@@ -226,19 +344,15 @@ body {
   0%,
   100% {
     opacity: 0.78;
-    transform: scale(1);
   }
   30% {
     opacity: 1;
-    transform: scale(1.04);
   }
   55% {
     opacity: 0.7;
-    transform: scale(0.98);
   }
   78% {
     opacity: 0.92;
-    transform: scale(1.02);
   }
 }
 
@@ -295,6 +409,10 @@ body {
   .animate-lantern-flicker,
   .animate-ambient-breathe,
   .lamp-pulse,
+  .lamp-breathe,
+  .lamp-breathe-street,
+  .lamp-breathe-fluorescent,
+  .lamp-breathe-neon,
   .fog-drift,
   .master-breathe {
     animation: none;

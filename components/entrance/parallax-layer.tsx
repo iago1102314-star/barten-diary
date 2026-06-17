@@ -28,6 +28,7 @@ export function ParallaxLayer({
   return (
     <motion.div
       className={className}
+      initial={{ y, scale }}
       animate={{ y, scale }}
       transition={{
         duration: COUNTER_CAMERA.transitionSec,

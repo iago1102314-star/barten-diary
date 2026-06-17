@@ -47,20 +47,25 @@ export function MasterIntroPanel({
     return () => clearTimeout(timer);
   }, [bubbleDelayMs]);
 
-  const handleTap = useCallback(() => {
+  const handlePointerDown = useCallback(() => {
     if (!bubbleVisible || !done) return;
     barAudioEngine.playClick();
+  }, [bubbleVisible, done]);
+
+  const handleTap = useCallback(() => {
+    if (!bubbleVisible || !done) return;
     advance();
   }, [bubbleVisible, done, advance]);
 
   return (
     <button
       type="button"
+      onPointerDown={handlePointerDown}
       onClick={handleTap}
-      className="flex h-full w-full flex-col justify-end text-left [-webkit-tap-highlight-color:transparent]"
+      className="flex h-full w-full flex-col items-stretch justify-end text-left [-webkit-tap-highlight-color:transparent]"
     >
       {bubbleVisible && (
-        <div className="px-7 pb-12">
+        <div className="w-full self-stretch pb-12">
           <DialogueBox lineKey={index} showAdvanceCue={done}>
             <Typewriter
               key={index}

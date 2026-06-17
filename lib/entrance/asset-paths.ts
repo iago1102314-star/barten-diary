@@ -9,6 +9,9 @@ export const ENTRANCE_ASSETS = {
   lantern: "/assets/bar/lantern.webp",
   masterIdle: "/assets/master/master-idle.webp",
   leaving: "/assets/bar/leaving.webp",
+  past: "/assets/bar/past.webp",
+  pastHover: "/assets/bar/past_hover.webp",
+  back: "/back.svg",
 } as const;
 
 export const ENTRANCE_SOUNDS = {

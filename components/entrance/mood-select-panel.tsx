@@ -5,14 +5,15 @@ import {
   type MoodOption,
 } from "@/components/entrance/bar-seat-mood-picker";
 import { DeclineNightLink } from "@/components/entrance/decline-night-link";
+import { MoodOrnamentalDivider } from "@/components/entrance/mood-ornamental-divider";
+import { PastBottleLink } from "@/components/entrance/past-bottle-link";
+import { DECLINE_NIGHT_LINK_TUNING } from "@/lib/entrance/decline-night-link-tuning";
 import { buildMoodPickerOptions } from "@/lib/entrance/mood-picker-options";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
 import { getDrinkById } from "@/lib/drinks/drink-catalog";
 import { pickDrink } from "@/lib/drinks/pick-drink";
 import { useCallback, useMemo, useRef } from "react";
-
-const MOOD_OPTION_BUTTON_WIDTH = "90%";
 
 type MoodSelectPanelProps = {
   onSelect: (categoryId: DrinkCategoryId, drink: Drink) => void;
@@ -90,16 +91,18 @@ export function MoodSelectPanel({
       resolveOption={handleResolveOption}
       onSelect={handlePickerSelect}
       onBeforeSelect={handleBeforeSelect}
+      header={<PastBottleLink onClick={onPastBottle} />}
       footer={
-        <div className="mx-auto" style={{ width: MOOD_OPTION_BUTTON_WIDTH }}>
-          <button
-            type="button"
-            onClick={onPastBottle}
-            className="mt-1 w-full rounded-xl border border-white/[0.06] bg-transparent px-5 py-3 text-[11px] tracking-[0.2em] text-[#8b8fa3] transition-colors duration-500 hover:border-white/[0.14] hover:text-[#cdd6e8]"
-          >
-            過去のボトルから
-          </button>
-          <div className="pt-2 text-center">
+        <div className="mx-auto w-[90%]">
+          <MoodOrnamentalDivider
+            variant="moodFooter"
+            color={DECLINE_NIGHT_LINK_TUNING.text.color}
+            style={{
+              marginBottom: DECLINE_NIGHT_LINK_TUNING.divider.marginBottomPx,
+              transform: `translate(${DECLINE_NIGHT_LINK_TUNING.divider.offsetXpx}px, ${DECLINE_NIGHT_LINK_TUNING.divider.offsetYpx}px)`,
+            }}
+          />
+          <div className="text-center">
             <DeclineNightLink onDecline={onDecline} disabled={declineDisabled} />
           </div>
         </div>

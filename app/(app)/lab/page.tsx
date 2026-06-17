@@ -17,6 +17,14 @@ export default function LabPage() {
         <p className="text-sm leading-relaxed text-stone-500">
           同じ音声から3つの温度で夜の記録を生成し、NGワード・長さ・メモを残しながら「静かな夜」の空気を調整します。
         </p>
+        <nav className="flex flex-wrap gap-4 pt-2 text-xs">
+          <Link
+            href="/lab/lamp-glow"
+            className="text-stone-500 transition-colors hover:text-stone-300"
+          >
+            店内 LampGlow 座標調整 →
+          </Link>
+        </nav>
       </header>
       <PromptLab />
     </div>

@@ -2,6 +2,8 @@
  * バー音声の音量・タイミング調整用パラメータ。
  * 0.0〜1.0（HTMLAudioElement.volume）
  */
+import { START_ENTRY_OUTSIDE_FADE_MS } from "@/lib/entrance/start-entry-timing";
+
 export const BAR_AUDIO_LEVELS = {
   /** 路地・帰り道の環境音（ループ） */
   outside: {
@@ -28,15 +30,17 @@ export const BAR_AUDIO_TIMING = {
   fadeMs: 1600,
   /** 入店時の outside フェードアウト */
   outsideStopFadeMs: 2000,
+  /** ホーム入場 — 路地 BGM を 0 からタイトル表示まで（start-entry-timing と同期） */
+  entryOutsideFadeMs: START_ENTRY_OUTSIDE_FADE_MS,
   /** 店内ジャズの入店時フェードイン */
   jazzEntryFadeMs: 5000,
   fadeStepMs: 50,
   /** 曲内ランダム開始の分割数 */
   randomStartSegments: 5,
   /** 入店暗転完了から扉 SE まで（ms） */
-  doorDelayAfterEntryFadeMs: 400,
-  /** 扉 SE 再生から吹き出し表示まで（ms） */
-  masterBubbleDelayAfterDoorMs: 1400,
+  doorDelayAfterEntryFadeMs: 300,
+  /** 黒画面マウントから吹き出し表示まで（ms） */
+  masterBubbleDelayAfterDoorMs: 2100,
   /** グラススライド SE の遅延（drinkServed から） */
   glassSlideDelayMs: 900,
   /** カウンター明転のフェード（ms） */
@@ -45,4 +49,20 @@ export const BAR_AUDIO_TIMING = {
   counterRevealFadeDelayMs: 150,
   /** 明転完了から「今日はどうしようか？」まで（ms） */
   moodPromptDelayAfterRevealMs: 0,
+  /**
+   * 店内ジャズ — 弱い呼吸（A）+ ループ継ぎ目フェード（B）
+   * multiplier は targetVolume に掛ける係数（0〜1）
+   */
+  jazzAmbient: {
+    /** 1ループあたりの呼吸回数 */
+    breathCyclesPerLoop: 3,
+    /** 呼吸の深さ（0.35 = 通常の65%まで下がる） */
+    breathDepth: 0.35,
+    /** ループ直前フェードアウト（秒） */
+    loopFadeOutSec: 1.2,
+    /** ループ直後フェードイン（秒） */
+    loopFadeInSec: 2,
+    /** ループ継ぎ目の最低音量（通常比） */
+    loopFloorRatio: 0.3,
+  },
 } as const;

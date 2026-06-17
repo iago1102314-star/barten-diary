@@ -19,19 +19,24 @@ export function MasterMoodPromptPanel({ onComplete }: MasterMoodPromptPanelProps
     onComplete,
   );
 
-  const handleTap = useCallback(() => {
+  const handlePointerDown = useCallback(() => {
     if (!done) return;
     barAudioEngine.playClick();
+  }, [done]);
+
+  const handleTap = useCallback(() => {
+    if (!done) return;
     advance();
   }, [done, advance]);
 
   return (
     <button
       type="button"
+      onPointerDown={handlePointerDown}
       onClick={handleTap}
-      className="flex h-full w-full flex-col justify-end text-left [-webkit-tap-highlight-color:transparent]"
+      className="flex h-full w-full flex-col items-stretch justify-end text-left [-webkit-tap-highlight-color:transparent]"
     >
-      <div className="px-7 pb-12">
+      <div className="w-full self-stretch pb-12">
         <DialogueBox lineKey={index} showAdvanceCue={done}>
           <Typewriter
             key={index}

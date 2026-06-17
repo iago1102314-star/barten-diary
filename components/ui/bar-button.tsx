@@ -15,6 +15,8 @@ type BarButtonProps = {
   type?: "button" | "submit";
   /** primary — 背景を透過しぼかしなし */
   transparent?: boolean;
+  /** primary — hover グロウの transition 時間（ms）。省略時 700 */
+  hoverDurationMs?: number;
 };
 
 /**
@@ -32,14 +34,17 @@ export function BarButton({
   className = "",
   type = "button",
   transparent = false,
+  hoverDurationMs = 700,
 }: BarButtonProps) {
   if (variant === "primary") {
+    const hoverMs = hoverDurationMs;
     const surfaceClass = transparent
       ? "border-stone-100/12 bg-transparent backdrop-blur-none hover:border-amber-100/28 hover:bg-transparent"
       : "border-stone-100/12 bg-stone-950/25 backdrop-blur-md hover:border-amber-100/28 hover:bg-stone-950/40";
     const content = (
       <span
-        className={`group relative block overflow-hidden rounded-[2px] border px-8 py-4 text-center transition-all duration-700 ${surfaceClass}`}
+        className={`group relative block overflow-hidden rounded-[2px] border px-8 py-4 text-center transition-all ${surfaceClass}`}
+        style={{ transitionDuration: `${hoverMs}ms` }}
       >
         {/* 上辺の微かな光沢 */}
         <span
@@ -49,9 +54,13 @@ export function BarButton({
         {/* hover で下辺を灯りが舐める */}
         <span
           aria-hidden
-          className="pointer-events-none absolute bottom-0 left-1/2 h-px w-0 -translate-x-1/2 bg-gradient-to-r from-transparent via-amber-200/70 to-transparent transition-all duration-700 group-hover:w-full"
+          className="pointer-events-none absolute bottom-0 left-1/2 h-px w-0 -translate-x-1/2 bg-gradient-to-r from-transparent via-amber-200/70 to-transparent transition-all group-hover:w-full"
+          style={{ transitionDuration: `${hoverMs}ms` }}
         />
-        <span className="relative text-[11px] tracking-[0.4em] text-stone-300/85 transition-colors duration-700 group-hover:text-amber-50/95">
+        <span
+          className="relative text-[11px] tracking-[0.4em] text-stone-300/85 transition-colors group-hover:text-amber-50/95"
+          style={{ transitionDuration: `${hoverMs}ms` }}
+        >
           {children}
         </span>
       </span>

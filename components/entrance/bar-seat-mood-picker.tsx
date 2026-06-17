@@ -2,6 +2,12 @@
 
 import { motion } from "motion/react";
 import { barAudioEngine } from "@/lib/entrance/bar-audio-engine";
+import { PAST_BOTTLE_LINK_TUNING } from "@/lib/entrance/past-bottle-link-tuning";
+import {
+  hexToRgba,
+  MOOD_VIGNETTE_TUNING,
+} from "@/lib/entrance/mood-vignette-tuning";
+import { MOOD_SELECT_LAYOUT_TUNING } from "@/lib/entrance/mood-select-layout-tuning";
 import { useEffect, useState, type ReactNode } from "react";
 
 export type MoodOption = {
@@ -33,6 +39,8 @@ export type BarSeatMoodPickerProps = {
   /** 入場演出の時間倍率（2 = 0.5倍速） */
   entranceDurationScale?: number;
   children?: ReactNode;
+  /** 画面上部 — 幕より上 */
+  header?: ReactNode;
   footer?: ReactNode;
 };
 
@@ -112,6 +120,55 @@ function moodOptionInsetShadowBlurPx() {
 
 function moodOptionHoverInsetShadowBlurPx() {
   return MOOD_OPTION_BLUR.enabled ? MOOD_OPTION_BLUR.hoverInsetShadowBlurPx : 0;
+}
+
+/** 5ゾーンビネット — 背景と UI の間に挟まる影レイヤー */
+function VignetteOverlay() {
+  const { top, bottom, bottomLayers, layerZIndex } = MOOD_VIGNETTE_TUNING;
+  const topTotalPx = top.fixedPx + top.gradPx;
+  const topSolid = hexToRgba(top.color, top.opacity);
+  const bottomSolid = hexToRgba(bottom.color, bottom.opacity);
+
+  const topBg = `linear-gradient(to bottom, ${topSolid} 0px, ${topSolid} ${top.fixedPx}px, transparent 100%)`;
+  const bottomBg = `linear-gradient(to top, ${bottomSolid} 0px, ${bottomSolid} ${bottom.fixedPx}px, transparent 100%)`;
+
+  return (
+    <>
+      <motion.div
+        className="pointer-events-none absolute inset-x-0 top-0"
+        style={{
+          zIndex: layerZIndex,
+          height: topTotalPx,
+          background: topBg,
+        }}
+        initial={{ opacity: 0, y: top.enterY }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          delay: top.delaySec,
+          duration: top.durationSec,
+          ease: "easeOut",
+        }}
+      />
+      {bottomLayers.map((layer, i) => (
+        <motion.div
+          key={i}
+          className="pointer-events-none absolute inset-x-0 bottom-0"
+          style={{
+            zIndex: layerZIndex,
+            height: `${bottom.fixedPx + bottom.gradPx * layer.gradScale}px`,
+            background: bottomBg,
+          }}
+          initial={{ opacity: 0, y: layer.enterY }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            delay: layer.delaySec,
+            duration: layer.durationSec,
+            ease: "easeOut",
+          }}
+        />
+      ))}
+    </>
+  );
 }
 
 function MoodPickerStyles() {
@@ -402,6 +459,7 @@ export function BarSeatMoodPicker({
   resolveOption,
   entranceDurationScale = 1,
   children,
+  header,
   footer,
 }: BarSeatMoodPickerProps) {
   const [picked, setPicked] = useState<MoodOption | null>(null);
@@ -465,30 +523,65 @@ export function BarSeatMoodPicker({
       >
         {background}
 
+        {!picked && <VignetteOverlay />}
+
         {!picked ? (
-          <div className="absolute inset-0 flex flex-col justify-end pb-10">
-            {promptText && (
-              <p className="mb-6 px-10 text-center font-serif-jp text-[14px] leading-loose tracking-[0.12em] text-[#e8dcc4]">
-                <Typewriter text={promptText} speed={TIMING.promptTypeSpeed} />
-              </p>
+          <div
+            className="absolute inset-0"
+            style={{ zIndex: MOOD_VIGNETTE_TUNING.uiLayerZIndex }}
+          >
+            {header && (
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 z-20 px-7"
+                style={{ paddingTop: `${PAST_BOTTLE_LINK_TUNING.headerTopPercent}%` }}
+              >
+                <div className="pointer-events-auto">{header}</div>
+              </div>
             )}
 
-            <div className="flex flex-col gap-3 px-7">
-              {options.map((option, i) => (
-                <MoodOptionButton
-                  key={option.id}
-                  option={option}
-                  index={i}
-                  onClick={pick}
-                  disabled={isExiting}
-                  exiting={isExiting}
-                  totalOptions={options.length}
-                  entranceBaseDelay={optionBaseDelay}
-                  optionStagger={optionStagger}
-                  slideDuration={slideDuration}
-                />
-              ))}
-              {footer}
+            <div className="pointer-events-none absolute inset-0">
+              {promptText && (
+                <p className="pointer-events-auto mb-6 px-10 text-center font-serif-jp text-[14px] leading-loose tracking-[0.12em] text-[#e8dcc4]">
+                  <Typewriter text={promptText} speed={TIMING.promptTypeSpeed} />
+                </p>
+              )}
+
+              <div
+                className="pointer-events-auto absolute inset-x-0 flex flex-col gap-3"
+                style={{
+                  bottom: MOOD_SELECT_LAYOUT_TUNING.optionBlockBottomPx,
+                  paddingLeft: MOOD_SELECT_LAYOUT_TUNING.horizontalPaddingPx,
+                  paddingRight: MOOD_SELECT_LAYOUT_TUNING.horizontalPaddingPx,
+                }}
+              >
+                {options.map((option, i) => (
+                  <MoodOptionButton
+                    key={option.id}
+                    option={option}
+                    index={i}
+                    onClick={pick}
+                    disabled={isExiting}
+                    exiting={isExiting}
+                    totalOptions={options.length}
+                    entranceBaseDelay={optionBaseDelay}
+                    optionStagger={optionStagger}
+                    slideDuration={slideDuration}
+                  />
+                ))}
+              </div>
+
+              {footer && (
+                <div
+                  className="pointer-events-auto absolute inset-x-0"
+                  style={{
+                    bottom: MOOD_SELECT_LAYOUT_TUNING.footerBottomPx,
+                    paddingLeft: MOOD_SELECT_LAYOUT_TUNING.horizontalPaddingPx,
+                    paddingRight: MOOD_SELECT_LAYOUT_TUNING.horizontalPaddingPx,
+                  }}
+                >
+                  {footer}
+                </div>
+              )}
             </div>
           </div>
         ) : showPourAnimation ? (

@@ -62,11 +62,19 @@ function waitForMetadata(audio: HTMLAudioElement): Promise<void> {
   });
 }
 
+type AmbientVolumeController = {
+  pause: () => void;
+  resume: () => void;
+  applyNow: () => void;
+  dispose: () => void;
+};
+
 type LoopingTrackState = {
   audio: HTMLAudioElement | null;
   started: boolean;
   fade: ReturnType<typeof setInterval> | null;
   targetVolume: number;
+  ambient: AmbientVolumeController | null;
 };
 
 function createInitialTrackState(defaultVolume: number): LoopingTrackState {
@@ -75,6 +83,112 @@ function createInitialTrackState(defaultVolume: number): LoopingTrackState {
     started: false,
     fade: null,
     targetVolume: defaultVolume,
+    ambient: null,
+  };
+}
+
+function clampVolume(volume: number): number {
+  return Math.max(0, Math.min(1, volume));
+}
+
+function easeInOut(t: number): number {
+  const p = Math.max(0, Math.min(1, t));
+  return p * p * (3 - 2 * p);
+}
+
+function computeBreathMultiplier(
+  currentTime: number,
+  duration: number,
+): number {
+  const { breathCyclesPerLoop, breathDepth } = BAR_AUDIO_TIMING.jazzAmbient;
+  const period = duration / breathCyclesPerLoop;
+  if (!Number.isFinite(period) || period <= 0) return 1;
+
+  const wave = (1 - Math.cos((currentTime / period) * Math.PI * 2)) / 2;
+  return 1 - breathDepth * wave;
+}
+
+function computeLoopMultiplier(
+  currentTime: number,
+  duration: number,
+): number {
+  const { loopFadeInSec, loopFadeOutSec, loopFloorRatio } =
+    BAR_AUDIO_TIMING.jazzAmbient;
+
+  if (currentTime < loopFadeInSec) {
+    const progress = easeInOut(currentTime / loopFadeInSec);
+    return loopFloorRatio + (1 - loopFloorRatio) * progress;
+  }
+
+  if (currentTime > duration - loopFadeOutSec) {
+    const progress = easeInOut(
+      (currentTime - (duration - loopFadeOutSec)) / loopFadeOutSec,
+    );
+    return 1 - (1 - loopFloorRatio) * progress;
+  }
+
+  return 1;
+}
+
+function computeJazzAmbientMultiplier(
+  currentTime: number,
+  duration: number,
+): number {
+  return (
+    computeBreathMultiplier(currentTime, duration) *
+    computeLoopMultiplier(currentTime, duration)
+  );
+}
+
+function disposeAmbientController(track: LoopingTrackState) {
+  track.ambient?.dispose();
+  track.ambient = null;
+}
+
+function createJazzAmbientModulation(
+  audio: HTMLAudioElement,
+  track: LoopingTrackState,
+): AmbientVolumeController {
+  let paused = false;
+  let rafId: number | null = null;
+
+  const applyNow = () => {
+    if (paused || track.fade || audio.paused) return;
+
+    const duration = audio.duration;
+    if (!Number.isFinite(duration) || duration <= 0) return;
+
+    const multiplier = computeJazzAmbientMultiplier(
+      audio.currentTime,
+      duration,
+    );
+    audio.volume = clampVolume(track.targetVolume * multiplier);
+  };
+
+  const tick = () => {
+    if (track.audio === audio) {
+      applyNow();
+      rafId = requestAnimationFrame(tick);
+    }
+  };
+
+  rafId = requestAnimationFrame(tick);
+
+  return {
+    pause: () => {
+      paused = true;
+    },
+    resume: () => {
+      paused = false;
+      applyNow();
+    },
+    applyNow,
+    dispose: () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+    },
   };
 }
 
@@ -94,6 +208,7 @@ function fadeVolume(
   onComplete?: () => void,
 ) {
   cancelTrackFade(track);
+  track.ambient?.pause();
 
   const steps = Math.max(
     1,
@@ -105,11 +220,25 @@ function fadeVolume(
   track.fade = setInterval(() => {
     step += 1;
     const progress = step / steps;
-    audio.volume = from + (to - from) * progress;
+
+    if (track.ambient && to > 0 && from === 0) {
+      const duration = audio.duration;
+      const ambientMult =
+        Number.isFinite(duration) && duration > 0
+          ? computeJazzAmbientMultiplier(audio.currentTime, duration)
+          : 1;
+      audio.volume = clampVolume(track.targetVolume * ambientMult * progress);
+    } else {
+      audio.volume = from + (to - from) * progress;
+    }
 
     if (step >= steps) {
       cancelTrackFade(track);
       audio.volume = to;
+      if (track.ambient && to > 0) {
+        track.ambient.applyNow();
+        track.ambient.resume();
+      }
       onComplete?.();
     }
   }, BAR_AUDIO_TIMING.fadeStepMs);
@@ -183,6 +312,11 @@ async function playSfx(
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 
+  playSfxNow(src, volume);
+}
+
+/** ユーザー操作直後 — await なしで即再生 */
+function playSfxNow(src: string, volume: number) {
   ensureSfxPool();
   const slots = sfxPool.get(src);
   if (!slots?.length) return;
@@ -190,12 +324,7 @@ async function playSfx(
   const audio = slots.find((slot) => slot.paused) ?? slots[0];
   audio.volume = volume;
   audio.currentTime = 0;
-
-  try {
-    await audio.play();
-  } catch {
-    // ファイル無し・自動再生ブロック等は無視
-  }
+  void audio.play().catch(() => {});
 }
 
 async function startLooping(
@@ -203,6 +332,7 @@ async function startLooping(
   volume: number,
   track: LoopingTrackState,
   fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
+  enableAmbientModulation = false,
 ) {
   track.targetVolume = volume;
 
@@ -232,11 +362,18 @@ async function startLooping(
   await waitForMetadata(audio);
   audio.currentTime = pickRandomStartTime(audio.duration);
 
+  if (enableAmbientModulation) {
+    disposeAmbientController(track);
+    track.ambient = createJazzAmbientModulation(audio, track);
+    track.ambient.pause();
+  }
+
   try {
     await audio.play();
     fadeVolume(audio, 0, volume, fadeMs, track);
   } catch {
     cancelTrackFade(track);
+    disposeAmbientController(track);
     track.audio = null;
     track.started = false;
   }
@@ -246,6 +383,10 @@ function setLoopingVolume(volume: number, track: LoopingTrackState) {
   track.targetVolume = volume;
   if (!track.audio) return;
   cancelTrackFade(track);
+  if (track.ambient) {
+    track.ambient.applyNow();
+    return;
+  }
   track.audio.volume = volume;
 }
 
@@ -259,6 +400,7 @@ function stopLooping(
 
   if (immediate) {
     cancelTrackFade(track);
+    disposeAmbientController(track);
     audio.pause();
     audio.currentTime = 0;
     track.audio = null;
@@ -266,7 +408,9 @@ function stopLooping(
     return;
   }
 
+  track.ambient?.pause();
   fadeVolume(audio, audio.volume, 0, fadeMs, track, () => {
+    disposeAmbientController(track);
     audio.pause();
     audio.currentTime = 0;
     track.audio = null;
@@ -277,8 +421,11 @@ function stopLooping(
 export const barAudioEngine = {
   warmUp: warmUpBarAudio,
 
-  startOutside(volume: number = BAR_AUDIO_LEVELS.outside.alley) {
-    void startLooping(ENTRANCE_SOUNDS.outside, volume, outsideTrack);
+  startOutside(
+    volume: number = BAR_AUDIO_LEVELS.outside.alley,
+    fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
+  ) {
+    void startLooping(ENTRANCE_SOUNDS.outside, volume, outsideTrack, fadeMs);
   },
 
   setOutsideVolume(volume: number) {
@@ -296,7 +443,13 @@ export const barAudioEngine = {
     volume: number = BAR_AUDIO_LEVELS.jazz.counter,
     fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   ) {
-    void startLooping(ENTRANCE_SOUNDS.jazz, volume, jazzTrack, fadeMs);
+    void startLooping(
+      ENTRANCE_SOUNDS.jazz,
+      volume,
+      jazzTrack,
+      fadeMs,
+      true,
+    );
   },
 
   setJazzVolume(volume: number) {
@@ -316,7 +469,7 @@ export const barAudioEngine = {
   },
 
   playClick() {
-    void playSfx(ENTRANCE_SOUNDS.click, BAR_AUDIO_LEVELS.sfx.click);
+    playSfxNow(ENTRANCE_SOUNDS.click, BAR_AUDIO_LEVELS.sfx.click);
   },
 
   playThink() {
