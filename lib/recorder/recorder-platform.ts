@@ -52,3 +52,11 @@ export function resolveRecordedMimeType(
 
 /** コンテナだけで中身が無い mp4 等を弾く目安（バイト） */
 export const MIN_RECORDING_BYTES = 2048;
+
+/** WebKit — 前回の MediaStream 解放後に getUserMedia する待ち（ms） */
+export const MIC_RELEASE_DELAY_MS = 300;
+
+export async function waitForMicRelease(): Promise<void> {
+  if (!isAppleMediaRecorder()) return;
+  await new Promise((resolve) => setTimeout(resolve, MIC_RELEASE_DELAY_MS));
+}

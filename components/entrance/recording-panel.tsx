@@ -68,8 +68,8 @@ export function RecordingPanel({
     return () => clearTimeout(timer);
   }, [resuming]);
 
-  if (listenFailureVisible && listenFailureCount > 0) {
-    const lines = listenFailureMasterLines(listenFailureCount);
+  if (listenFailureVisible) {
+    const lines = listenFailureMasterLines(Math.max(listenFailureCount, 1));
     const showLeave = canLeaveWithoutRecord(listenFailureCount);
 
     return (

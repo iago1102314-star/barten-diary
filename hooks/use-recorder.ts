@@ -6,6 +6,7 @@ import {
   isAppleMediaRecorder,
   MIN_RECORDING_BYTES,
   resolveRecordedMimeType,
+  waitForMicRelease,
 } from "@/lib/recorder/recorder-platform";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -45,16 +46,19 @@ function formatElapsed(ms: number) {
 export type UseRecorderReturn = ReturnType<typeof useRecorder>;
 
 type UseRecorderOptions = {
-  onFatalError?: () => void;
+  onFatalError?: (context: { hadRecordingAttempt: boolean }) => void;
 };
 
 export function useRecorder(options: UseRecorderOptions = {}) {
   const onFatalErrorRef = useRef(options.onFatalError);
   onFatalErrorRef.current = options.onFatalError;
+  const suppressFatalErrorRef = useRef(false);
 
-  const notifyFatalError = useCallback(() => {
+  const notifyFatalError = useCallback((hadRecordingAttempt: boolean) => {
+    if (suppressFatalErrorRef.current) return;
     queueMicrotask(() => {
-      onFatalErrorRef.current?.();
+      if (suppressFatalErrorRef.current) return;
+      onFatalErrorRef.current?.({ hadRecordingAttempt });
     });
   }, []);
   const [state, setState] = useState<UseRecorderState>({
@@ -146,6 +150,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
   }, []);
 
   const reset = useCallback(() => {
+    suppressFatalErrorRef.current = true;
     clearTimers();
 
     if (
@@ -171,6 +176,12 @@ export function useRecorder(options: UseRecorderOptions = {}) {
       elapsedMs: 0,
       mimeType: null,
       canPauseRecording: false,
+    });
+
+    queueMicrotask(() => {
+      queueMicrotask(() => {
+        suppressFatalErrorRef.current = false;
+      });
     });
   }, [clearTimers, revokeAudioUrl, stopMediaTracks]);
 
@@ -261,13 +272,14 @@ export function useRecorder(options: UseRecorderOptions = {}) {
         status: "error",
         error: "このブラウザでは録音がサポートされていません。",
       }));
-      notifyFatalError();
+      notifyFatalError(false);
       return;
     }
 
     reset();
 
     try {
+      await waitForMicRelease();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
 
@@ -299,7 +311,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
           status: "error",
           error: "録音中にエラーが発生しました。",
         }));
-        notifyFatalError();
+        notifyFatalError(true);
       };
 
       recorder.onstop = () => {
@@ -339,7 +351,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
               mimeType: recordedMimeType,
               canPauseRecording: false,
             });
-            notifyFatalError();
+            notifyFatalError(true);
             return;
           }
 
@@ -400,7 +412,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
         mimeType: null,
         canPauseRecording: false,
       });
-      notifyFatalError();
+      notifyFatalError(false);
     }
   }, [
     clearTimers,

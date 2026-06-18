@@ -48,33 +48,42 @@ export function useNightSession() {
   const [generationFailed, setGenerationFailed] = useState(false);
   const pipelineLock = useRef(false);
   const inflightGenerationKeyRef = useRef<string | null>(null);
-  const registerListenFailureRef = useRef<() => void>(() => {});
+  const registerListenFailureRef = useRef<
+    (options?: { advanceCount?: boolean }) => void
+  >(() => {});
 
   const recorder = useRecorder({
-    onFatalError: () => {
+    onFatalError: ({ hadRecordingAttempt }) => {
       if (
         phaseRef.current !== "recording" &&
         phaseRef.current !== "processing"
       ) {
         return;
       }
-      registerListenFailureRef.current();
+      registerListenFailureRef.current({
+        advanceCount: hadRecordingAttempt,
+      });
     },
   });
 
-  const registerListenFailure = useCallback(() => {
-    pipelineLock.current = false;
-    inflightGenerationKeyRef.current = null;
-    barAudioEngine.resumeJazzAfterRecording();
-    recorder.reset();
-    generation.reset();
-    setTranscript(null);
-    setRecordedAt(null);
-    setGenerationFailed(false);
-    setListenFailureCount((count) => count + 1);
-    setListenFailureVisible(true);
-    setPhase("recording");
-  }, [recorder, generation]);
+  const registerListenFailure = useCallback(
+    (options?: { advanceCount?: boolean }) => {
+      pipelineLock.current = false;
+      inflightGenerationKeyRef.current = null;
+      barAudioEngine.resumeJazzAfterRecording();
+      recorder.reset();
+      generation.reset();
+      setTranscript(null);
+      setRecordedAt(null);
+      setGenerationFailed(false);
+      if (options?.advanceCount !== false) {
+        setListenFailureCount((count) => count + 1);
+      }
+      setListenFailureVisible(true);
+      setPhase("recording");
+    },
+    [recorder, generation],
+  );
 
   registerListenFailureRef.current = registerListenFailure;
 
@@ -250,6 +259,7 @@ export function useNightSession() {
   useEffect(() => {
     if (phase !== "recording") return;
     if (recorder.status !== "stopped" || !recorder.blob) return;
+    barAudioEngine.resumeJazzAfterRecording();
     setPhase("processing");
   }, [phase, recorder.status, recorder.blob]);
 

@@ -15,6 +15,8 @@ export const BAR_AUDIO_LEVELS = {
   /** 店内ジャズ（ループ） */
   jazz: {
     counter: 0.03,
+    /** 録音中 — 止めずに下げる倍率（iOS マイク許可時の急増を抑えつつ BGM を残す） */
+    recordingDuckRatio: 0.2,
   },
   /** 一度きりの効果音 */
   sfx: {

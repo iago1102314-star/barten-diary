@@ -32,11 +32,9 @@ export function NightSession() {
         </div>
       )}
 
-      {session.phase === "recording" &&
-        session.listenFailureVisible &&
-        session.listenFailureCount > 0 && (
+      {session.phase === "recording" && session.listenFailureVisible && (
           <div className="space-y-3 py-2">
-            {listenFailureMasterLines(session.listenFailureCount).map((line) => (
+            {listenFailureMasterLines(Math.max(session.listenFailureCount, 1)).map((line) => (
               <p
                 key={line}
                 className="text-[13px] leading-relaxed tracking-wide text-stone-500/90"

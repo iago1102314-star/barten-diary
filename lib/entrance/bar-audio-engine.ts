@@ -281,7 +281,7 @@ function fadeVolume(
 const outsideTrack = createInitialTrackState(BAR_AUDIO_LEVELS.outside.alley);
 const jazzTrack = createInitialTrackState(BAR_AUDIO_LEVELS.jazz.counter);
 
-let jazzPausedForRecording = false;
+let jazzDuckedForRecording = false;
 
 const sfxPool = new Map<string, HTMLAudioElement[]>();
 let sfxPoolInitialized = false;
@@ -517,43 +517,33 @@ export const barAudioEngine = {
   },
 
   stopJazz() {
-    jazzPausedForRecording = false;
+    jazzDuckedForRecording = false;
     stopLooping(jazzTrack);
   },
 
-  /** 録音中 — iOS でマイク許可時に BGM が急激に大きくなるのを防ぐ */
+  /** 録音中 — 止めずに音量を下げる（iOS マイク許可時の急増を抑えつつ BGM を残す） */
   pauseJazzForRecording() {
     const audio = jazzTrack.audio;
-    if (!audio || jazzPausedForRecording) return;
+    if (!audio || !jazzTrack.started || jazzDuckedForRecording) return;
 
-    jazzPausedForRecording = true;
+    jazzDuckedForRecording = true;
     cancelTrackFade(jazzTrack);
     jazzTrack.ambient?.pause();
-    try {
-      audio.pause();
-    } catch {
-      // 既に停止済み
-    }
+
+    const duckVolume =
+      jazzTrack.targetVolume * BAR_AUDIO_LEVELS.jazz.recordingDuckRatio;
+    fadeVolume(audio, audio.volume, duckVolume, 400, jazzTrack);
   },
 
   resumeJazzAfterRecording() {
-    if (!jazzPausedForRecording) return;
-    jazzPausedForRecording = false;
+    if (!jazzDuckedForRecording) return;
+    jazzDuckedForRecording = false;
 
     const audio = jazzTrack.audio;
     if (!audio || !jazzTrack.started) return;
 
     cancelTrackFade(jazzTrack);
-    jazzTrack.ambient?.pause();
-    audio.volume = 0;
-
-    void audio
-      .play()
-      .then(() => {
-        if (jazzTrack.audio !== audio) return;
-        fadeVolume(audio, 0, jazzTrack.targetVolume, 1200, jazzTrack);
-      })
-      .catch(() => {});
+    fadeVolume(audio, audio.volume, jazzTrack.targetVolume, 900, jazzTrack);
   },
 
   playDoor() {
@@ -573,7 +563,7 @@ export const barAudioEngine = {
   },
 
   dispose() {
-    jazzPausedForRecording = false;
+    jazzDuckedForRecording = false;
     stopLooping(outsideTrack, true);
     stopLooping(jazzTrack, true);
 
