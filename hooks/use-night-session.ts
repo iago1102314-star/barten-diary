@@ -8,6 +8,7 @@ import { simulateNight } from "@/lib/dev/simulate-night";
 import type { FakeNightId } from "@/lib/dev/fake-nights";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import type { DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
+import { barAudioEngine } from "@/lib/entrance/bar-audio-engine";
 import { transcribeAudio } from "@/lib/transcribe/transcribe-audio";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -28,9 +29,11 @@ function generationKey(transcript: string, recordedAt: string | null): string {
 }
 
 export function useNightSession() {
-  const recorder = useRecorder();
-  const generation = useGenerateDiary();
   const [phase, setPhase] = useState<NightPhase>("idle");
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+
+  const generation = useGenerateDiary();
   const [listenFailureCount, setListenFailureCount] = useState(0);
   const [listenFailureVisible, setListenFailureVisible] = useState(false);
   const [transcript, setTranscript] = useState<string | null>(null);
@@ -42,20 +45,38 @@ export function useNightSession() {
     null,
   );
   const [isDevSimulated, setIsDevSimulated] = useState(false);
+  const [generationFailed, setGenerationFailed] = useState(false);
   const pipelineLock = useRef(false);
   const inflightGenerationKeyRef = useRef<string | null>(null);
+  const registerListenFailureRef = useRef<() => void>(() => {});
+
+  const recorder = useRecorder({
+    onFatalError: () => {
+      if (
+        phaseRef.current !== "recording" &&
+        phaseRef.current !== "processing"
+      ) {
+        return;
+      }
+      registerListenFailureRef.current();
+    },
+  });
 
   const registerListenFailure = useCallback(() => {
     pipelineLock.current = false;
     inflightGenerationKeyRef.current = null;
+    barAudioEngine.resumeJazzAfterRecording();
     recorder.reset();
     generation.reset();
     setTranscript(null);
     setRecordedAt(null);
+    setGenerationFailed(false);
     setListenFailureCount((count) => count + 1);
     setListenFailureVisible(true);
     setPhase("recording");
   }, [recorder, generation]);
+
+  registerListenFailureRef.current = registerListenFailure;
 
   const resetListenFailure = useCallback(() => {
     setListenFailureCount(0);
@@ -79,6 +100,7 @@ export function useNightSession() {
     setSelectedDrinkId(null);
     setContinuedFrom(null);
     setIsDevSimulated(false);
+    setGenerationFailed(false);
   }, [recorder, generation, resetListenFailure]);
 
   const selectCategory = useCallback(
@@ -111,10 +133,12 @@ export function useNightSession() {
     resetListenFailure();
     pipelineLock.current = false;
     inflightGenerationKeyRef.current = null;
+    setGenerationFailed(false);
     recorder.reset();
     generation.reset();
     setTranscript(null);
     setRecordedAt(null);
+    barAudioEngine.pauseJazzForRecording();
     setPhase("recording");
     await recorder.start();
   }, [recorder, generation, selectedCategoryId, resetListenFailure]);
@@ -122,7 +146,6 @@ export function useNightSession() {
   const stopSpeaking = useCallback(() => {
     if (recorder.status !== "recording" && recorder.status !== "paused") return;
     setRecordedAt(new Date().toISOString());
-    setPhase("processing");
     recorder.stop();
   }, [recorder]);
 
@@ -136,8 +159,10 @@ export function useNightSession() {
 
   const retrySpeaking = useCallback(async () => {
     setListenFailureVisible(false);
+    setGenerationFailed(false);
     pipelineLock.current = false;
     inflightGenerationKeyRef.current = null;
+    barAudioEngine.pauseJazzForRecording();
     recorder.reset();
     generation.reset();
     setTranscript(null);
@@ -146,14 +171,23 @@ export function useNightSession() {
     await recorder.start();
   }, [recorder, generation]);
 
+  const retryGeneration = useCallback(() => {
+    if (!transcript || !selectedCategoryId) return;
+    setGenerationFailed(false);
+    inflightGenerationKeyRef.current = null;
+    setPhase("accepted");
+  }, [transcript, selectedCategoryId]);
+
   const abandonNightWithoutRecord = useCallback(() => {
     pipelineLock.current = false;
     inflightGenerationKeyRef.current = null;
+    barAudioEngine.resumeJazzAfterRecording();
     recorder.reset();
     generation.reset();
     setTranscript(null);
     setRecordedAt(null);
     setListenFailureVisible(false);
+    setGenerationFailed(false);
     setIsDevSimulated(false);
     setPhase("idle");
   }, [recorder, generation]);
@@ -214,6 +248,12 @@ export function useNightSession() {
   );
 
   useEffect(() => {
+    if (phase !== "recording") return;
+    if (recorder.status !== "stopped" || !recorder.blob) return;
+    setPhase("processing");
+  }, [phase, recorder.status, recorder.blob]);
+
+  useEffect(() => {
     if (phase !== "processing") return;
     if (recorder.status !== "stopped") return;
     if (!recorder.blob || !recorder.mimeType) return;
@@ -245,10 +285,12 @@ export function useNightSession() {
       .generate(transcript, selectedCategoryId, endedAt, selectedDrinkId)
       .then((outcome) => {
         if (outcome.ok) {
+          barAudioEngine.resumeJazzAfterRecording();
           setPhase("revealed");
           return;
         }
         inflightGenerationKeyRef.current = null;
+        setGenerationFailed(true);
         console.error("Background diary generation failed");
       });
   }, [
@@ -261,12 +303,6 @@ export function useNightSession() {
     generation.generate,
   ]);
 
-  useEffect(() => {
-    if (recorder.status === "error" && phase === "recording") {
-      registerListenFailure();
-    }
-  }, [recorder.status, recorder.error, phase, registerListenFailure]);
-
   return {
     phase,
     isDevSimulated,
@@ -275,6 +311,7 @@ export function useNightSession() {
     transcript,
     record: generation.result,
     generationStatus: generation.status,
+    generationFailed,
     selectedCategoryId,
     selectedDrinkId,
     continuedFrom,
@@ -286,6 +323,7 @@ export function useNightSession() {
     pauseSpeaking,
     resumeSpeaking,
     retrySpeaking,
+    retryGeneration,
     abandonNightWithoutRecord,
     simulateDevNight,
     elapsedMs: recorder.elapsedMs,

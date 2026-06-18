@@ -1,3 +1,4 @@
+import { FetchTimeoutError, fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { getAudioExtension } from "@/lib/transcribe/get-audio-extension";
 
 export type TranscribeAudioResult = {
@@ -8,6 +9,8 @@ export type TranscribeAudioError = {
   error: string;
 };
 
+const TRANSCRIBE_TIMEOUT_MS = 90_000;
+
 export async function transcribeAudio(
   blob: Blob,
   mimeType: string,
@@ -16,10 +19,20 @@ export async function transcribeAudio(
   const formData = new FormData();
   formData.append("file", blob, `recording.${extension}`);
 
-  const response = await fetch("/api/transcribe", {
-    method: "POST",
-    body: formData,
-  });
+  let response: Response;
+
+  try {
+    response = await fetchWithTimeout(
+      "/api/transcribe",
+      { method: "POST", body: formData },
+      TRANSCRIBE_TIMEOUT_MS,
+    );
+  } catch (error) {
+    if (error instanceof FetchTimeoutError) {
+      throw new Error("文字起こしに時間がかかりすぎました。もう一度お試しください。");
+    }
+    throw error;
+  }
 
   const data = (await response.json()) as
     | TranscribeAudioResult

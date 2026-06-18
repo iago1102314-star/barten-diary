@@ -44,7 +44,19 @@ function formatElapsed(ms: number) {
 
 export type UseRecorderReturn = ReturnType<typeof useRecorder>;
 
-export function useRecorder() {
+type UseRecorderOptions = {
+  onFatalError?: () => void;
+};
+
+export function useRecorder(options: UseRecorderOptions = {}) {
+  const onFatalErrorRef = useRef(options.onFatalError);
+  onFatalErrorRef.current = options.onFatalError;
+
+  const notifyFatalError = useCallback(() => {
+    queueMicrotask(() => {
+      onFatalErrorRef.current?.();
+    });
+  }, []);
   const [state, setState] = useState<UseRecorderState>({
     status: "idle",
     error: null,
@@ -249,6 +261,7 @@ export function useRecorder() {
         status: "error",
         error: "このブラウザでは録音がサポートされていません。",
       }));
+      notifyFatalError();
       return;
     }
 
@@ -286,6 +299,7 @@ export function useRecorder() {
           status: "error",
           error: "録音中にエラーが発生しました。",
         }));
+        notifyFatalError();
       };
 
       recorder.onstop = () => {
@@ -325,6 +339,7 @@ export function useRecorder() {
               mimeType: recordedMimeType,
               canPauseRecording: false,
             });
+            notifyFatalError();
             return;
           }
 
@@ -385,10 +400,12 @@ export function useRecorder() {
         mimeType: null,
         canPauseRecording: false,
       });
+      notifyFatalError();
     }
   }, [
     clearTimers,
     getActiveElapsedMs,
+    notifyFatalError,
     reset,
     revokeAudioUrl,
     startElapsedTimer,

@@ -430,7 +430,7 @@ export function EntranceFlow() {
   }, [session.phase, entranceState]);
 
   useEffect(() => {
-    if (session.phase === "processing") {
+    if (session.phase === "processing" || session.phase === "accepted") {
       setEntranceState("processing");
     }
   }, [session.phase]);
@@ -442,7 +442,7 @@ export function EntranceFlow() {
   }, [session.phase, session.listenFailureVisible]);
 
   useEffect(() => {
-    if (session.phase !== "accepted") return;
+    if (session.phase !== "revealed") return;
     if (farewellStartedRef.current) return;
 
     farewellStartedRef.current = true;
@@ -983,7 +983,12 @@ export function EntranceFlow() {
                 />
               )}
 
-              {entranceState === "processing" && <GeneratingPanel />}
+              {entranceState === "processing" && (
+                <GeneratingPanel
+                  failed={session.generationFailed}
+                  onRetry={session.retryGeneration}
+                />
+              )}
 
               {entranceState === "counterFarewell" && counterFarewellLine && (
                 <MasterLine>{counterFarewellLine}</MasterLine>

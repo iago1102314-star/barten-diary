@@ -281,6 +281,8 @@ function fadeVolume(
 const outsideTrack = createInitialTrackState(BAR_AUDIO_LEVELS.outside.alley);
 const jazzTrack = createInitialTrackState(BAR_AUDIO_LEVELS.jazz.counter);
 
+let jazzPausedForRecording = false;
+
 const sfxPool = new Map<string, HTMLAudioElement[]>();
 let sfxPoolInitialized = false;
 let warmUpPromise: Promise<void> | null = null;
@@ -515,7 +517,43 @@ export const barAudioEngine = {
   },
 
   stopJazz() {
+    jazzPausedForRecording = false;
     stopLooping(jazzTrack);
+  },
+
+  /** 録音中 — iOS でマイク許可時に BGM が急激に大きくなるのを防ぐ */
+  pauseJazzForRecording() {
+    const audio = jazzTrack.audio;
+    if (!audio || jazzPausedForRecording) return;
+
+    jazzPausedForRecording = true;
+    cancelTrackFade(jazzTrack);
+    jazzTrack.ambient?.pause();
+    try {
+      audio.pause();
+    } catch {
+      // 既に停止済み
+    }
+  },
+
+  resumeJazzAfterRecording() {
+    if (!jazzPausedForRecording) return;
+    jazzPausedForRecording = false;
+
+    const audio = jazzTrack.audio;
+    if (!audio || !jazzTrack.started) return;
+
+    cancelTrackFade(jazzTrack);
+    jazzTrack.ambient?.pause();
+    audio.volume = 0;
+
+    void audio
+      .play()
+      .then(() => {
+        if (jazzTrack.audio !== audio) return;
+        fadeVolume(audio, 0, jazzTrack.targetVolume, 1200, jazzTrack);
+      })
+      .catch(() => {});
   },
 
   playDoor() {
@@ -535,6 +573,7 @@ export const barAudioEngine = {
   },
 
   dispose() {
+    jazzPausedForRecording = false;
     stopLooping(outsideTrack, true);
     stopLooping(jazzTrack, true);
 

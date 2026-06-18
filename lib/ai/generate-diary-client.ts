@@ -6,6 +6,9 @@ import type {
 } from "@/lib/ai/types";
 import type { DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
 import { validateTranscript } from "@/lib/ai/validate-transcript";
+import { FetchTimeoutError, fetchWithTimeout } from "@/lib/fetch-with-timeout";
+
+const GENERATE_TIMEOUT_MS = 90_000;
 
 type GenerateOptions = {
   recordedAt?: string;
@@ -64,20 +67,33 @@ async function requestGeneration(
     throw new Error(validationError);
   }
 
-  const response = await fetch("/api/generate-diary", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      transcript,
-      recordedAt: options.recordedAt,
-      variantCount: options.variantCount ?? 1,
-      selectedCategoryId: options.selectedCategoryId,
-      selectedDrinkId: options.selectedDrinkId,
-      timeZone:
-        options.timeZone ??
-        Intl.DateTimeFormat().resolvedOptions().timeZone,
-    }),
-  });
+  let response: Response;
+
+  try {
+    response = await fetchWithTimeout(
+      "/api/generate-diary",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript,
+          recordedAt: options.recordedAt,
+          variantCount: options.variantCount ?? 1,
+          selectedCategoryId: options.selectedCategoryId,
+          selectedDrinkId: options.selectedDrinkId,
+          timeZone:
+            options.timeZone ??
+            Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
+      },
+      GENERATE_TIMEOUT_MS,
+    );
+  } catch (error) {
+    if (error instanceof FetchTimeoutError) {
+      throw new Error("日記の生成に時間がかかりすぎました。もう一度お試しください。");
+    }
+    throw error;
+  }
 
   const data = (await response.json()) as
     | GeneratedDiary

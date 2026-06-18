@@ -1,5 +1,6 @@
 "use client";
 
+import { BarButton } from "@/components/ui/bar-button";
 import { Typewriter } from "@/components/motion/typewriter";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
@@ -11,16 +12,42 @@ const STATUS_LINES = [
   "……記録の形に、近づいている。",
 ] as const;
 
+type GeneratingPanelProps = {
+  failed?: boolean;
+  onRetry?: () => void;
+};
+
 /** GeneratingScene 相当 — 封をする儀式の短縮版 */
-export function GeneratingPanel() {
+export function GeneratingPanel({
+  failed = false,
+  onRetry,
+}: GeneratingPanelProps) {
   const [lineIndex, setLineIndex] = useState(0);
 
   useEffect(() => {
+    if (failed) return;
     const timer = setInterval(() => {
       setLineIndex((i) => (i + 1) % STATUS_LINES.length);
     }, 1400);
     return () => clearInterval(timer);
-  }, []);
+  }, [failed]);
+
+  if (failed) {
+    return (
+      <div className="space-y-6 text-center">
+        <p className="font-serif-jp text-[14px] leading-relaxed tracking-[0.1em] text-stone-300/85">
+          ……うまく紡げなかった。
+          <br />
+          もう一度だけ試してくれ。
+        </p>
+        {onRetry && (
+          <BarButton variant="ghost" onClick={onRetry}>
+            もう一度紡ぐ
+          </BarButton>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 text-center">
