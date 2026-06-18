@@ -90,7 +90,9 @@ const MOOD_OPTION_TEXT = {
 /** ぼかし演出 — false で無効（コードは残す） */
 const MOOD_OPTION_BLUR = {
   enabled: true,
+  buttonBackdropEnabled: true,
   buttonBackdropClass: "backdrop-blur-[2px]",
+  leftGlowBlurEnabled: true,
   leftGlowBlurClass: "blur-xl",
   insetShadowBlurPx: 24,
   hoverInsetShadowBlurPx: 32,
@@ -111,11 +113,17 @@ function scaleGlowAlpha(glow: string, scale: number): string {
 }
 
 function moodOptionButtonBlurClass() {
-  return MOOD_OPTION_BLUR.enabled ? MOOD_OPTION_BLUR.buttonBackdropClass : "";
+  if (!MOOD_OPTION_BLUR.enabled || !MOOD_OPTION_BLUR.buttonBackdropEnabled) {
+    return "";
+  }
+  return MOOD_OPTION_BLUR.buttonBackdropClass;
 }
 
 function moodOptionLeftGlowBlurClass() {
-  return MOOD_OPTION_BLUR.enabled ? MOOD_OPTION_BLUR.leftGlowBlurClass : "";
+  if (!MOOD_OPTION_BLUR.enabled || !MOOD_OPTION_BLUR.leftGlowBlurEnabled) {
+    return "";
+  }
+  return MOOD_OPTION_BLUR.leftGlowBlurClass;
 }
 
 function moodOptionInsetShadowBlurPx() {

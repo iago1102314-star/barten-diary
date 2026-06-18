@@ -16,7 +16,7 @@ const MOOD_COLORS: Record<
 /** カタログの気分カテゴリ → BarSeat 選択肢（注ぎ演出用ラベル付き） */
 export function buildMoodPickerOptions(): MoodOption[] {
   return DRINK_CATEGORIES.map((category) => {
-    const drink = pickDrink(category.id, new Date(), undefined, {
+    const drink = pickDrink(category.id, new Date(), {
       imageOnly: true,
     });
     const palette = MOOD_COLORS[category.id] ?? MOOD_COLORS.master;

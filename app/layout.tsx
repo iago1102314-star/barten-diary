@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "back bar",
+    title: "バーテン日記",
   },
   icons: {
     apple: "/icons/icon-192.png",

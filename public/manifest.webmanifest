@@ -1,6 +1,6 @@
 {
   "name": "バーテン日記",
-  "short_name": "back bar",
+  "short_name": "バーテン日記",
   "description": "深夜のバーで、夜の記録を残す",
   "start_url": "/",
   "display": "standalone",

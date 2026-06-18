@@ -19,10 +19,10 @@ function getSelectableDrinks(categoryId: DrinkCategoryId): Drink[] {
 function buildSeed(
   at: Date,
   categoryId: DrinkCategoryId,
-  timeZone: string,
+  tz: string,
 ): number {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
+    timeZone: tz,
     year: "numeric",
     month: "numeric",
     day: "numeric",
@@ -49,7 +49,27 @@ type PickDrinkOptions = {
   imageOnly?: boolean;
   /** 指定時はその銘柄を優先（生成APIとの一致用） */
   preferredDrinkId?: DrinkId | null;
+  /** 省略時は Asia/Tokyo */
+  timeZone?: string;
 };
+
+function resolvePickDrinkArgs(
+  timeZoneOrOptions?: string | PickDrinkOptions,
+  maybeOptions?: PickDrinkOptions,
+): { tz: string; options: PickDrinkOptions } {
+  if (typeof timeZoneOrOptions === "string") {
+    return {
+      tz: timeZoneOrOptions || DEFAULT_TIME_ZONE,
+      options: maybeOptions ?? {},
+    };
+  }
+
+  const options = timeZoneOrOptions ?? {};
+  return {
+    tz: options.timeZone ?? DEFAULT_TIME_ZONE,
+    options,
+  };
+}
 
 /**
  * カテゴリ内から1杯を選ぶ（決定的な簡易ロジック）
@@ -57,9 +77,10 @@ type PickDrinkOptions = {
 export function pickDrink(
   categoryId: DrinkCategoryId,
   at: Date,
-  timeZone = DEFAULT_TIME_ZONE,
-  options: PickDrinkOptions = {},
+  timeZoneOrOptions?: string | PickDrinkOptions,
+  maybeOptions?: PickDrinkOptions,
 ): Drink {
+  const { tz, options } = resolvePickDrinkArgs(timeZoneOrOptions, maybeOptions);
   let pool = getSelectableDrinks(categoryId);
 
   if (options.preferredDrinkId) {
@@ -87,6 +108,6 @@ export function pickDrink(
     return { id: "night-cap", name: "Night Cap" };
   }
 
-  const seed = buildSeed(at, categoryId, timeZone);
+  const seed = buildSeed(at, categoryId, tz);
   return pool[seed % pool.length]!;
 }

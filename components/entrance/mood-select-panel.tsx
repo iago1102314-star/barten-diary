@@ -29,7 +29,7 @@ type MoodSelectPanelProps = {
 
 function resolveMoodOptionDrink(option: MoodOption): MoodOption {
   const categoryId = option.id as DrinkCategoryId;
-  const drink = pickDrink(categoryId, new Date(), undefined, {
+  const drink = pickDrink(categoryId, new Date(), {
     imageOnly: true,
   });
 
@@ -77,7 +77,7 @@ export function MoodSelectPanel({
       (option.resultDrinkId
         ? getDrinkById(option.resultDrinkId)
         : undefined) ??
-      pickDrink(categoryId, new Date(), undefined, {
+      pickDrink(categoryId, new Date(), {
         imageOnly: true,
         preferredDrinkId: option.resultDrinkId,
       });

@@ -75,6 +75,8 @@ type LoopingTrackState = {
   fade: ReturnType<typeof setInterval> | null;
   targetVolume: number;
   ambient: AmbientVolumeController | null;
+  /** stop / 新規 start で進め、await 後の stale 再生を防ぐ */
+  generation: number;
 };
 
 function createInitialTrackState(defaultVolume: number): LoopingTrackState {
@@ -84,7 +86,29 @@ function createInitialTrackState(defaultVolume: number): LoopingTrackState {
     fade: null,
     targetVolume: defaultVolume,
     ambient: null,
+    generation: 0,
   };
+}
+
+function releaseAudio(audio: HTMLAudioElement | null) {
+  if (!audio) return;
+
+  try {
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.src = "";
+    audio.load();
+  } catch {
+    // 解放失敗は無視（既に detach 済み等）
+  }
+}
+
+function isTrackAudioCurrent(
+  track: LoopingTrackState,
+  token: number,
+  audio: HTMLAudioElement,
+): boolean {
+  return track.generation === token && track.audio === audio;
 }
 
 function clampVolume(volume: number): number {
@@ -196,6 +220,16 @@ function cancelTrackFade(track: LoopingTrackState) {
   if (track.fade) {
     clearInterval(track.fade);
     track.fade = null;
+  }
+}
+
+function clearTrackAudio(track: LoopingTrackState, audio: HTMLAudioElement) {
+  cancelTrackFade(track);
+  disposeAmbientController(track);
+  releaseAudio(audio);
+  if (track.audio === audio) {
+    track.audio = null;
+    track.started = false;
   }
 }
 
@@ -334,18 +368,31 @@ async function startLooping(
   fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   enableAmbientModulation = false,
 ) {
+  track.generation += 1;
+  const token = track.generation;
   track.targetVolume = volume;
 
   if (track.started && track.audio) {
     const audio = track.audio;
     if (audio.paused) {
       await waitForMetadata(audio);
+      if (!isTrackAudioCurrent(track, token, audio)) {
+        releaseAudio(audio);
+        return;
+      }
       audio.currentTime = pickRandomStartTime(audio.duration);
       try {
         await audio.play();
       } catch {
         return;
       }
+      if (!isTrackAudioCurrent(track, token, audio)) {
+        releaseAudio(audio);
+        return;
+      }
+    }
+    if (!isTrackAudioCurrent(track, token, audio)) {
+      return;
     }
     fadeVolume(audio, audio.volume, volume, fadeMs, track);
     return;
@@ -360,6 +407,11 @@ async function startLooping(
   track.started = true;
 
   await waitForMetadata(audio);
+  if (!isTrackAudioCurrent(track, token, audio)) {
+    releaseAudio(audio);
+    return;
+  }
+
   audio.currentTime = pickRandomStartTime(audio.duration);
 
   if (enableAmbientModulation) {
@@ -368,14 +420,24 @@ async function startLooping(
     track.ambient.pause();
   }
 
+  if (!isTrackAudioCurrent(track, token, audio)) {
+    releaseAudio(audio);
+    return;
+  }
+
   try {
     await audio.play();
+    if (!isTrackAudioCurrent(track, token, audio)) {
+      releaseAudio(audio);
+      return;
+    }
     fadeVolume(audio, 0, volume, fadeMs, track);
   } catch {
-    cancelTrackFade(track);
-    disposeAmbientController(track);
-    track.audio = null;
-    track.started = false;
+    if (track.audio === audio) {
+      clearTrackAudio(track, audio);
+    } else {
+      releaseAudio(audio);
+    }
   }
 }
 
@@ -395,26 +457,22 @@ function stopLooping(
   immediate = false,
   fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
 ) {
+  track.generation += 1;
   const audio = track.audio;
   if (!audio) return;
 
   if (immediate) {
-    cancelTrackFade(track);
-    disposeAmbientController(track);
-    audio.pause();
-    audio.currentTime = 0;
-    track.audio = null;
-    track.started = false;
+    clearTrackAudio(track, audio);
     return;
   }
 
   track.ambient?.pause();
   fadeVolume(audio, audio.volume, 0, fadeMs, track, () => {
-    disposeAmbientController(track);
-    audio.pause();
-    audio.currentTime = 0;
-    track.audio = null;
-    track.started = false;
+    if (track.audio !== audio) {
+      releaseAudio(audio);
+      return;
+    }
+    clearTrackAudio(track, audio);
   });
 }
 
@@ -479,6 +537,12 @@ export const barAudioEngine = {
   dispose() {
     stopLooping(outsideTrack, true);
     stopLooping(jazzTrack, true);
+
+    for (const slots of sfxPool.values()) {
+      for (const audio of slots) {
+        releaseAudio(audio);
+      }
+    }
     sfxPool.clear();
     sfxPoolInitialized = false;
     warmUpPromise = null;
