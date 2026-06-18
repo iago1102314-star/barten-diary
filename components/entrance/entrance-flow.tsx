@@ -933,6 +933,7 @@ export function EntranceFlow() {
               <div className="pointer-events-auto absolute inset-0">
                 <MoodSelectScene
                   skipCurtainEntrance={moodSelectVisitedRef.current}
+                  skipPastBottleEntrance={moodSelectVisitedRef.current}
                   onCurtainEntranceComplete={() => {
                     moodSelectVisitedRef.current = true;
                   }}

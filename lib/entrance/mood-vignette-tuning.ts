@@ -8,6 +8,9 @@
  * ─ 中クリア（何もなし）
  * ─ 下グラデ（透明 → bottom.color, bottom.gradPx）
  * ─ 下固定帯（bottom.fixedPx）
+ *
+ * 上下とも T=0 スタート・同一速度（100px/s @scale=1）。
+ * 移動距離が短い上から先に完了する。
  */
 
 export const MOOD_VIGNETTE_TUNING = {
@@ -30,8 +33,10 @@ export const MOOD_VIGNETTE_TUNING = {
     opacity: 0.98,
     /** 入場 — 上から滑り込む開始オフセット（px） */
     enterY: -100,
-    delaySec: 0.3,
-    durationSec: 1.2,
+    /** T=0 スタート */
+    delaySec: 0,
+    /** 100px ÷ 100px/s = 1.0s @ scale=1 */
+    durationSec: 0.22,
   },
 
   bottom: {
@@ -46,15 +51,14 @@ export const MOOD_VIGNETTE_TUNING = {
   },
 
   /**
-   * 下部グラデ — 複数レイヤーが異なる速度で下から滑り込む。
+   * 下部グラデ — 複数レイヤーが同一速度（100px/s @scale=1）で下から滑り込む。
+   * enterY に比例した duration → 上下ビネットが同じ px/s で動く。
    * gradScale: bottom.gradPx に対する倍率（1 = そのまま、0.85 = 15% 浅い）
-   * enterY: 開始位置（px・下方向）
-   * delaySec / durationSec: 入場タイミング
    */
   bottomLayers: [
-    { gradScale: 1.0, enterY: 48, delaySec: 0.2, durationSec: 1.4 },
-    { gradScale: 0.85, enterY: 82, delaySec: 0.05, durationSec: 2.0 },
-    { gradScale: 0.7, enterY: 122, delaySec: 0.0, durationSec: 2.7 },
+    { gradScale: 1.0, enterY: 48, delaySec: 0, durationSec: 0.10 },
+    { gradScale: 0.85, enterY: 82, delaySec: 0, durationSec: 0.18 },
+    { gradScale: 0.7, enterY: 122, delaySec: 0, durationSec: 0.26 },
   ],
 } as const;
 

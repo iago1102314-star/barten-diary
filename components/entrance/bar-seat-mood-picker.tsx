@@ -77,9 +77,13 @@ const TIMING = {
 } as const;
 
 const MOOD_OPTION_TEXT = {
-  title: "#ece4d2",
+  title: "#d8cbb5",
+  titleFontSizePx: 17,
+  /** ラベル（少し濃いめで 等）の太さ — 400=通常, 500=やや太, 600=セミボールド */
+  titleFontWeight: 510,
+  titleLetterSpacingEm: 0.25,
   /** タイトルに対する明るさ 45% */
-  sub: "rgba(236, 228, 210, 0.45)",
+  sub: "rgba(196, 184, 164, 0.5)",
   subFontSizePx: 11,
 } as const;
 
@@ -123,8 +127,9 @@ function moodOptionHoverInsetShadowBlurPx() {
 }
 
 /** 5ゾーンビネット — 背景と UI の間に挟まる影レイヤー */
-function VignetteOverlay() {
+function VignetteOverlay({ durationScale = 1 }: { durationScale?: number }) {
   const { top, bottom, bottomLayers, layerZIndex } = MOOD_VIGNETTE_TUNING;
+  const t = (sec: number) => sec * durationScale;
   const topTotalPx = top.fixedPx + top.gradPx;
   const topSolid = hexToRgba(top.color, top.opacity);
   const bottomSolid = hexToRgba(bottom.color, bottom.opacity);
@@ -144,8 +149,8 @@ function VignetteOverlay() {
         initial={{ opacity: 0, y: top.enterY }}
         animate={{ opacity: 1, y: 0 }}
         transition={{
-          delay: top.delaySec,
-          duration: top.durationSec,
+          delay: t(top.delaySec),
+          duration: t(top.durationSec),
           ease: "easeOut",
         }}
       />
@@ -161,8 +166,8 @@ function VignetteOverlay() {
           initial={{ opacity: 0, y: layer.enterY }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
-            delay: layer.delaySec,
-            duration: layer.durationSec,
+            delay: t(layer.delaySec),
+            duration: t(layer.durationSec),
             ease: "easeOut",
           }}
         />
@@ -428,8 +433,13 @@ export function MoodOptionButton({
         aria-hidden
       />
       <span
-        className="relative z-[1] font-serif-jp text-[17px] tracking-[0.25em]"
-        style={{ color: MOOD_OPTION_TEXT.title }}
+        className="relative z-[1] font-serif-jp"
+        style={{
+          color: MOOD_OPTION_TEXT.title,
+          fontSize: MOOD_OPTION_TEXT.titleFontSizePx,
+          fontWeight: MOOD_OPTION_TEXT.titleFontWeight,
+          letterSpacing: `${MOOD_OPTION_TEXT.titleLetterSpacingEm}em`,
+        }}
       >
         {option.label}
       </span>
@@ -503,7 +513,7 @@ export function BarSeatMoodPicker({
   const sceneFadeIn = instantEntrance ? 0 : TIMING.sceneFadeIn;
   const entranceScale = entranceDurationScale;
   const optionBaseDelay =
-    (instantEntrance ? 0.06 : TIMING.optionBaseDelay) * entranceScale;
+    (instantEntrance ? 0 : TIMING.optionBaseDelay) * entranceScale;
   const optionStagger =
     TIMING.optionStagger * entranceScale * TIMING.optionStaggerFactor;
   const slideDuration =
@@ -523,7 +533,7 @@ export function BarSeatMoodPicker({
       >
         {background}
 
-        {!picked && <VignetteOverlay />}
+        {!picked && <VignetteOverlay durationScale={entranceScale} />}
 
         {!picked ? (
           <div
@@ -532,10 +542,10 @@ export function BarSeatMoodPicker({
           >
             {header && (
               <div
-                className="pointer-events-none absolute inset-x-0 top-0 z-20 px-7"
+                className="pointer-events-none absolute inset-x-0 top-0 z-20 overflow-visible px-7"
                 style={{ paddingTop: `${PAST_BOTTLE_LINK_TUNING.headerTopPercent}%` }}
               >
-                <div className="pointer-events-auto">{header}</div>
+                <div className="pointer-events-auto overflow-visible">{header}</div>
               </div>
             )}
 

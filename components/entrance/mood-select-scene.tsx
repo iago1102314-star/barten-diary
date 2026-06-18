@@ -11,6 +11,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type MoodSelectSceneProps = {
   /** @deprecated 入場幕演出は廃止。常にUIを即表示 */
   skipCurtainEntrance?: boolean;
+  /** 過去ボトル画面から戻る等 —「過去のボトルから」出現演出を省略 */
+  skipPastBottleEntrance?: boolean;
   onCurtainEntranceComplete?: () => void;
   /** 選択確定 — 幕を閉じてから注ぎ演出へ */
   onSelectionStart?: () => void;
@@ -25,6 +27,7 @@ export function MoodSelectScene({
   onSelect,
   onPastBottle,
   onDecline,
+  skipPastBottleEntrance = false,
 }: MoodSelectSceneProps) {
   // 入場幕は廃止。UI は常に即表示。幕は選択時の「閉じる」のみ使用。
   const [curtainPhase, setCurtainPhase] = useState<MoodCurtainPhase>("hidden");
@@ -70,6 +73,7 @@ export function MoodSelectScene({
           onPastBottle={onPastBottle}
           onDecline={onDecline}
           onBeforeSelect={handleBeforeSelect}
+          skipPastBottleEntrance={skipPastBottleEntrance}
         />
       </div>
     </>

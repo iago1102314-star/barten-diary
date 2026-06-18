@@ -1,10 +1,12 @@
+import { isProd } from "@/lib/env/app-env";
+
 /**
  * DEV 専用ショートカットの表示可否。
- * production build では NODE_ENV が production のため常に false。
+ * production 環境（APP_ENV=production）では常に false。
  */
 export function isDevShortcutEnabled(): boolean {
   return (
-    process.env.NODE_ENV !== "production" &&
+    !isProd &&
     process.env.NEXT_PUBLIC_ENABLE_DEV_SHORTCUT === "true"
   );
 }

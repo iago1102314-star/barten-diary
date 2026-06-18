@@ -1,6 +1,9 @@
 /**
  * 気分選択 — 装飾ライン SVG の形状。
- * 線の位置・長さはこのファイルだけ触ればよい。
+ * 線の位置・長さ・太さはこのファイルだけ触ればよい。
+ *
+ * strokeWidth は 1 未満も可（例: 0.35, 0.5）。
+ * viewBox 座標系での値 — 線とダイヤ（星）は別パラメータ。
  */
 
 export const MOOD_ORNAMENTAL_DIVIDER_TUNING = {
@@ -11,29 +14,36 @@ export const MOOD_ORNAMENTAL_DIVIDER_TUNING = {
 
   /** 過去のボトルから — 下のライン（1本 + 右端ダイヤ） */
   pastBottle: {
-    /** 線の太さ（viewBox 内） */
-    strokeWidth: 1,
-    lineStartX: -40,
-    lineEndX: 205,
-    diamondCenterX: 214,
-    diamondHalfWidth: 4,
-    diamondHalfHeight: 4,
+    line: {
+      /** 線の太さ — 1 より細くて OK（例: 0.5） */
+      strokeWidth: 0.5,
+      lineStartX: -10,
+      lineEndX: 300,
+    },
+    /** 右端ダイヤ — 線の strokeWidth とは無関係 */
+    diamond: {
+      centerX: 256,
+      halfWidth: 4,
+      halfHeight: 4,
+    },
   },
 
   /**
    * 感情選択と「また今度にする」の間 — 2本線 + 中央ダイヤ
-   * leftLineEndX / rightLineStartX の差が中央の隙間幅
    */
   moodFooter: {
-    /** 線の太さ（viewBox 内） */
-    strokeWidth: 1,
-    leftLineStartX: 0,
-    leftLineEndX: 98,
-    rightLineStartX: 122,
-    rightLineEndX: 220,
-    diamondCenterX: 110,
-    diamondHalfWidth: 6,
-    diamondHalfHeight: 6,
+    line: {
+      strokeWidth: 0.2,
+      leftLineStartX: 31,
+      leftLineEndX: 98,
+      rightLineStartX: 122,
+      rightLineEndX: 189,
+    },
+    diamond: {
+      centerX: 110,
+      halfWidth: 6,
+      halfHeight: 6,
+    },
   },
 } as const;
 

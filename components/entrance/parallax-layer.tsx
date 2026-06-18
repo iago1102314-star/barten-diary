@@ -6,6 +6,7 @@ import {
   type CameraPose,
   type CounterLayerId,
 } from "@/lib/entrance/counter-camera-poses";
+import { MOOD_SELECT_ENTRANCE_DURATION_SCALE } from "@/lib/entrance/mood-select-entrance-tuning";
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
 
@@ -31,7 +32,8 @@ export function ParallaxLayer({
       initial={{ y, scale }}
       animate={{ y, scale }}
       transition={{
-        duration: COUNTER_CAMERA.transitionSec,
+        duration:
+          COUNTER_CAMERA.transitionSec * MOOD_SELECT_ENTRANCE_DURATION_SCALE,
         ease: "linear",
       }}
       style={{ transformOrigin: COUNTER_CAMERA.origin }}

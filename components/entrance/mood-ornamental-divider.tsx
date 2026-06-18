@@ -31,23 +31,23 @@ export function MoodOrnamentalDivider({
   };
 
   if (variant === "pastBottle") {
-    const t = MOOD_ORNAMENTAL_DIVIDER_TUNING.pastBottle;
+    const { line, diamond } = MOOD_ORNAMENTAL_DIVIDER_TUNING.pastBottle;
     return (
       <svg {...svgProps}>
         <line
-          x1={t.lineStartX}
+          x1={line.lineStartX}
           y1={centerY}
-          x2={t.lineEndX}
+          x2={line.lineEndX}
           y2={centerY}
           stroke="currentColor"
-          strokeWidth={t.strokeWidth}
+          strokeWidth={line.strokeWidth}
         />
         <path
           d={ornamentalDiamondPath(
-            t.diamondCenterX,
+            diamond.centerX,
             centerY,
-            t.diamondHalfWidth,
-            t.diamondHalfHeight,
+            diamond.halfWidth,
+            diamond.halfHeight,
           )}
           fill="currentColor"
         />
@@ -55,31 +55,31 @@ export function MoodOrnamentalDivider({
     );
   }
 
-  const t = MOOD_ORNAMENTAL_DIVIDER_TUNING.moodFooter;
+  const { line, diamond } = MOOD_ORNAMENTAL_DIVIDER_TUNING.moodFooter;
   return (
     <svg {...svgProps}>
       <line
-        x1={t.leftLineStartX}
+        x1={line.leftLineStartX}
         y1={centerY}
-        x2={t.leftLineEndX}
+        x2={line.leftLineEndX}
         y2={centerY}
         stroke="currentColor"
-        strokeWidth={t.strokeWidth}
+        strokeWidth={line.strokeWidth}
       />
       <line
-        x1={t.rightLineStartX}
+        x1={line.rightLineStartX}
         y1={centerY}
-        x2={t.rightLineEndX}
+        x2={line.rightLineEndX}
         y2={centerY}
         stroke="currentColor"
-        strokeWidth={t.strokeWidth}
+        strokeWidth={line.strokeWidth}
       />
       <path
         d={ornamentalDiamondPath(
-          t.diamondCenterX,
+          diamond.centerX,
           centerY,
-          t.diamondHalfWidth,
-          t.diamondHalfHeight,
+          diamond.halfWidth,
+          diamond.halfHeight,
         )}
         fill="currentColor"
       />

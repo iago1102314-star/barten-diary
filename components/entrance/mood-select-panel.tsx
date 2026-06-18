@@ -5,9 +5,12 @@ import {
   type MoodOption,
 } from "@/components/entrance/bar-seat-mood-picker";
 import { DeclineNightLink } from "@/components/entrance/decline-night-link";
-import { MoodOrnamentalDivider } from "@/components/entrance/mood-ornamental-divider";
 import { PastBottleLink } from "@/components/entrance/past-bottle-link";
-import { DECLINE_NIGHT_LINK_TUNING } from "@/lib/entrance/decline-night-link-tuning";
+import {
+  DECLINE_LINK_ENTRANCE_DELAY_SEC,
+  MOOD_SELECT_ENTRANCE_DURATION_SCALE,
+  PAST_BOTTLE_ENTRANCE_DELAY_SEC,
+} from "@/lib/entrance/mood-select-entrance-tuning";
 import { buildMoodPickerOptions } from "@/lib/entrance/mood-picker-options";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
@@ -21,6 +24,7 @@ type MoodSelectPanelProps = {
   onDecline: () => void;
   onBeforeSelect?: (option: MoodOption, proceed: () => void) => void;
   declineDisabled?: boolean;
+  skipPastBottleEntrance?: boolean;
 };
 
 function resolveMoodOptionDrink(option: MoodOption): MoodOption {
@@ -43,6 +47,7 @@ export function MoodSelectPanel({
   onDecline,
   onBeforeSelect,
   declineDisabled = false,
+  skipPastBottleEntrance = false,
 }: MoodSelectPanelProps) {
   const options = useMemo(() => buildMoodPickerOptions(), []);
   const pendingDrinkRef = useRef<Drink | null>(null);
@@ -87,25 +92,24 @@ export function MoodSelectPanel({
       promptText=""
       transparentBackground
       instantEntrance
-      entranceDurationScale={2}
+      entranceDurationScale={MOOD_SELECT_ENTRANCE_DURATION_SCALE}
       resolveOption={handleResolveOption}
       onSelect={handlePickerSelect}
       onBeforeSelect={handleBeforeSelect}
-      header={<PastBottleLink onClick={onPastBottle} />}
+      header={
+        <PastBottleLink
+          onClick={onPastBottle}
+          skipEntrance={skipPastBottleEntrance}
+          entranceDelaySec={skipPastBottleEntrance ? 0 : PAST_BOTTLE_ENTRANCE_DELAY_SEC}
+        />
+      }
       footer={
-        <div className="mx-auto w-[90%]">
-          <MoodOrnamentalDivider
-            variant="moodFooter"
-            color={DECLINE_NIGHT_LINK_TUNING.text.color}
-            style={{
-              marginBottom: DECLINE_NIGHT_LINK_TUNING.divider.marginBottomPx,
-              transform: `translate(${DECLINE_NIGHT_LINK_TUNING.divider.offsetXpx}px, ${DECLINE_NIGHT_LINK_TUNING.divider.offsetYpx}px)`,
-            }}
-          />
-          <div className="text-center">
-            <DeclineNightLink onDecline={onDecline} disabled={declineDisabled} />
-          </div>
-        </div>
+        <DeclineNightLink
+          onDecline={onDecline}
+          disabled={declineDisabled}
+          showDivider
+          entranceDelaySec={skipPastBottleEntrance ? undefined : DECLINE_LINK_ENTRANCE_DELAY_SEC}
+        />
       }
     />
   );

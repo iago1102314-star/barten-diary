@@ -5,34 +5,58 @@ import { useState } from "react";
 
 export function GoogleSignInButton() {
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSignIn = async () => {
     setLoading(true);
+    setErrorMessage(null);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
 
-    if (error) {
+      if (error) {
+        throw error;
+      }
+
+      if (data.url) {
+        // モバイル Safari 等で自動リダイレクトが効かない場合に備え明示的に遷移
+        window.location.assign(data.url);
+        return;
+      }
+
+      throw new Error("OAuth URL が取得できませんでした");
+    } catch (error) {
       setLoading(false);
-      console.error("Google sign-in failed:", error.message);
+      const message =
+        error instanceof Error ? error.message : "ログインを開始できませんでした";
+      setErrorMessage(message);
+      console.error("Google sign-in failed:", error);
     }
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleSignIn}
-      disabled={loading}
-      className="mx-auto flex h-11 items-center justify-center gap-3 rounded-full border border-stone-700/50 bg-stone-900/60 px-8 text-sm text-stone-400 transition-colors hover:border-stone-600 hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      <GoogleIcon />
-      {loading ? "…" : "入店する"}
-    </button>
+    <div className="space-y-3">
+      <button
+        type="button"
+        onClick={handleSignIn}
+        disabled={loading}
+        className="mx-auto flex h-11 min-h-[44px] w-full max-w-xs touch-manipulation items-center justify-center gap-3 rounded-full border border-stone-700/50 bg-stone-900/60 px-8 text-sm text-stone-400 transition-colors hover:border-stone-600 hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <GoogleIcon />
+        {loading ? "…" : "入店する"}
+      </button>
+      {errorMessage && (
+        <p role="alert" className="text-sm text-red-300/80">
+          {errorMessage}
+        </p>
+      )}
+    </div>
   );
 }
 

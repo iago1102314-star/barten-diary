@@ -26,7 +26,11 @@ import { getStartLampBreatheProfile } from "@/lib/entrance/start-lamp-glow-breat
 import {
   DOOR_EXIT_DURATION_SEC,
   DOOR_EXIT_IMAGE_ZOOM_SCALE,
+  DOOR_EXIT_ORIGIN,
+  DOOR_EXIT_ORIGIN_X_PERCENT,
+  DOOR_EXIT_ORIGIN_Y_PERCENT,
   DOOR_EXIT_ZOOM_SCALE,
+  SHOW_DOOR_EXIT_ORIGIN_MARKER,
   MEMORIES_EXIT_FADE_SEC,
   START_ENTRY_BOKEH_HOLD_MS,
   START_ENTRY_BUTTONS_DELAY_MS,
@@ -60,8 +64,6 @@ const BOKEH_HOLD_MS = START_ENTRY_BOKEH_HOLD_MS;
 const REVEAL_MS = START_ENTRY_REVEAL_MS;
 const TITLE_DELAY_MS = START_ENTRY_TITLE_DELAY_MS;
 const BUTTONS_DELAY_MS = START_ENTRY_BUTTONS_DELAY_MS;
-
-const DOOR_EXIT_ORIGIN = "75% 50%";
 
 // ─── Ken Burns ────────────────────────────────────────────────────────────────
 const ALLEY_KEN_BURNS = {
@@ -396,7 +398,7 @@ export function NightEntryScreen({
                 sizes="440px"
                 className="object-cover"
                 style={{
-                  objectPosition: doorExiting ? "75% 50%" : "60% 50%",
+                  objectPosition: doorExiting ? DOOR_EXIT_ORIGIN : "60% 50%",
                 }}
                 draggable={false}
                 unoptimized
@@ -452,7 +454,6 @@ export function NightEntryScreen({
           type="button"
           aria-label="バーの入口"
           onClick={interactionLocked ? undefined : onEnterCounter}
-          whileTap={interactionLocked ? undefined : { scale: 0.97 }}
           animate={{ opacity: doorExiting ? 0 : 1 }}
           transition={{ duration: doorExiting ? 0.35 : 0 }}
           className={`absolute right-[10%] top-[36%] z-20 h-[26%] w-[34%] [-webkit-tap-highlight-color:transparent] ${
@@ -522,6 +523,29 @@ export function NightEntryScreen({
           transition={{ duration: MEMORIES_EXIT_FADE_SEC, ease: EASE_DRIFT }}
           onAnimationComplete={onMemoriesFadeOutComplete}
         />
+      )}
+
+      {SHOW_DOOR_EXIT_ORIGIN_MARKER && (
+        <>
+          <div
+            className="pointer-events-none absolute z-[45] h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500 shadow-[0_0_0_2px_#fff,0_0_10px_3px_rgba(255,0,0,0.9)]"
+            style={{
+              left: `${DOOR_EXIT_ORIGIN_X_PERCENT}%`,
+              top: `${DOOR_EXIT_ORIGIN_Y_PERCENT}%`,
+            }}
+            aria-hidden
+          />
+          <span
+            className="pointer-events-none absolute z-[45] whitespace-nowrap font-mono text-[10px] font-bold leading-tight text-red-400 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+            style={{
+              left: `${DOOR_EXIT_ORIGIN_X_PERCENT}%`,
+              top: `${DOOR_EXIT_ORIGIN_Y_PERCENT}%`,
+              transform: "translate(-50%, calc(-50% + 14px))",
+            }}
+          >
+            扉ズーム ({DOOR_EXIT_ORIGIN_X_PERCENT}%, {DOOR_EXIT_ORIGIN_Y_PERCENT}%)
+          </span>
+        </>
       )}
     </SceneFrame>
   );

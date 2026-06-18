@@ -14,8 +14,14 @@ export const START_ENTRY_OUTSIDE_FADE_MS =
 
 /** 扉を開ける — 75% 50% へズームしながらフェードアウト */
 export const DOOR_EXIT_DURATION_SEC = 0.945;
-export const DOOR_EXIT_ZOOM_SCALE = 1.11;
-export const DOOR_EXIT_IMAGE_ZOOM_SCALE = 1.015;
+export const DOOR_EXIT_ORIGIN_X_PERCENT = 75;
+export const DOOR_EXIT_ORIGIN_Y_PERCENT = 40;
+export const DOOR_EXIT_ORIGIN = `${DOOR_EXIT_ORIGIN_X_PERCENT}% ${DOOR_EXIT_ORIGIN_Y_PERCENT}%`;
+/** ズーム中心の確認用赤点 */
+export const SHOW_DOOR_EXIT_ORIGIN_MARKER = false;
+/** 拡大量を 1 からの差分 ×0.7（旧 1.11 → 1.077、旧 1.015 → 1.0105） */
+export const DOOR_EXIT_ZOOM_SCALE = 1.077;
+export const DOOR_EXIT_IMAGE_ZOOM_SCALE = 1.0105;
 
 /** ホーム → メモ — 暗転（メモ画面フェードイン開始まで） */
 export const MEMORIES_EXIT_FADE_SEC = 0.63;

@@ -39,8 +39,8 @@ export function BarButton({
   if (variant === "primary") {
     const hoverMs = hoverDurationMs;
     const surfaceClass = transparent
-      ? "border-stone-100/12 bg-transparent backdrop-blur-none hover:border-amber-100/28 hover:bg-transparent"
-      : "border-stone-100/12 bg-stone-950/25 backdrop-blur-md hover:border-amber-100/28 hover:bg-stone-950/40";
+      ? "border-stone-100/12 bg-transparent backdrop-blur-none hover:border-amber-100/28 hover:bg-transparent active:border-amber-100/55 active:shadow-[0_0_28px_rgba(252,211,77,0.32),inset_0_0_14px_rgba(252,211,77,0.1)]"
+      : "border-stone-100/12 bg-stone-950/25 backdrop-blur-md hover:border-amber-100/28 hover:bg-stone-950/40 active:border-amber-100/55 active:bg-stone-950/50 active:shadow-[0_0_28px_rgba(252,211,77,0.32),inset_0_0_14px_rgba(252,211,77,0.1)]";
     const content = (
       <span
         className={`group relative block overflow-hidden rounded-[2px] border px-8 py-4 text-center transition-all ${surfaceClass}`}
@@ -49,16 +49,17 @@ export function BarButton({
         {/* 上辺の微かな光沢 */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-stone-100/15 to-transparent"
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-stone-100/15 to-transparent transition-all group-hover:via-amber-100/35 group-active:via-amber-100/55"
+          style={{ transitionDuration: `${hoverMs}ms` }}
         />
-        {/* hover で下辺を灯りが舐める */}
+        {/* hover / tap で下辺を灯りが舐める */}
         <span
           aria-hidden
-          className="pointer-events-none absolute bottom-0 left-1/2 h-px w-0 -translate-x-1/2 bg-gradient-to-r from-transparent via-amber-200/70 to-transparent transition-all group-hover:w-full"
+          className="pointer-events-none absolute bottom-0 left-1/2 h-px w-0 -translate-x-1/2 bg-gradient-to-r from-transparent via-amber-200/70 to-transparent transition-all group-hover:w-full group-active:w-full group-active:via-amber-100/95 group-active:h-[2px]"
           style={{ transitionDuration: `${hoverMs}ms` }}
         />
         <span
-          className="relative text-[11px] tracking-[0.4em] text-stone-300/85 transition-colors group-hover:text-amber-50/95"
+          className="relative text-[11px] tracking-[0.4em] text-stone-300/85 transition-colors group-hover:text-amber-50/95 group-active:text-amber-50"
           style={{ transitionDuration: `${hoverMs}ms` }}
         >
           {children}
