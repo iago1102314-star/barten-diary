@@ -348,16 +348,9 @@ export function MoodOptionButton({
       ? -TIMING.optionSlideOffsetPx
       : TIMING.optionSlideOffsetPx;
   const buttonWidth = `${TIMING.optionButtonWidthScale * 100}%`;
-  const hoverTransition = {
-    duration: TIMING.optionHoverDurationSec,
-    ease: "easeOut" as const,
-  };
   const insetGlow = option.glow
     .replace("0.35", String(TIMING.optionBorderGlowAlpha))
     .replace("0.4", String(TIMING.optionBorderGlowAlpha));
-  const hoverInsetGlow = option.glow
-    .replace("0.35", "0.14")
-    .replace("0.4", "0.14");
   const accentStyles = moodOptionAccentStyles(option.glow);
 
   return (
@@ -379,27 +372,13 @@ export function MoodOptionButton({
           ? {
               opacity: { delay: exitDelay, duration: slideDuration },
               x: { delay: exitDelay, duration: slideDuration },
-              scale: hoverTransition,
-              borderColor: hoverTransition,
-              boxShadow: hoverTransition,
             }
           : {
               opacity: { delay: entranceDelay, duration: slideDuration },
               x: { delay: entranceDelay, duration: slideDuration },
-              scale: hoverTransition,
-              borderColor: hoverTransition,
-              boxShadow: hoverTransition,
             }
       }
-      whileHover={
-        disabled
-          ? undefined
-          : {
-              scale: 1.025,
-              borderColor: `${option.color}aa`,
-              boxShadow: `0 0 22px ${option.glow}, 0 0 6px ${option.color}55, inset 0 0 ${moodOptionHoverInsetShadowBlurPx()}px ${hoverInsetGlow}`,
-            }
-      }
+      whileHover={disabled ? undefined : { scale: 1.025 }}
       whileTap={{ scale: disabled ? 1 : 0.97 }}
       className={`mood-option-btn group relative mx-auto flex items-center gap-3 overflow-hidden rounded-xl border border-white/[0.07] bg-gradient-to-r from-white/[0.04] to-transparent px-5 transition-[border-color,box-shadow] duration-75 disabled:pointer-events-none ${moodOptionButtonBlurClass()}`}
       style={{

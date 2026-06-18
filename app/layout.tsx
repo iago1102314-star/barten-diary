@@ -44,8 +44,8 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        {/* Service Worker 登録 — production / dev 環境のみ有効 */}
-        {process.env.NEXT_PUBLIC_APP_ENV !== "local" && (
+        {/* Service Worker — production のみ（Preview/dev では JS チャンク競合を避ける） */}
+        {process.env.NEXT_PUBLIC_APP_ENV === "production" && (
           <script
             dangerouslySetInnerHTML={{
               __html: `
