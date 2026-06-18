@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  getRecorderTimesliceMs,
+  getSupportedRecorderMimeType,
+  isAppleMediaRecorder,
+  MIN_RECORDING_BYTES,
+  resolveRecordedMimeType,
+} from "@/lib/recorder/recorder-platform";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const MAX_DURATION_MS = 3 * 60 * 1000;
@@ -26,17 +33,6 @@ export function canPauseRecorder(recorder: MediaRecorder): boolean {
     typeof recorder.pause === "function" &&
     typeof recorder.resume === "function"
   );
-}
-
-function getSupportedMimeType(): string | undefined {
-  const candidates = [
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/mp4",
-    "audio/ogg;codecs=opus",
-  ];
-
-  return candidates.find((type) => MediaRecorder.isTypeSupported(type));
 }
 
 function formatElapsed(ms: number) {
@@ -170,9 +166,19 @@ export function useRecorder() {
     const recorder = mediaRecorderRef.current;
     if (!recorder) return;
 
-    if (recorder.state === "recording" || recorder.state === "paused") {
-      recorder.stop();
+    if (recorder.state !== "recording" && recorder.state !== "paused") {
+      return;
     }
+
+    if (isAppleMediaRecorder() && typeof recorder.requestData === "function") {
+      try {
+        recorder.requestData();
+      } catch {
+        // requestData 非対応時は stop のみ
+      }
+    }
+
+    recorder.stop();
   }, []);
 
   const pause = useCallback((): boolean => {
@@ -252,7 +258,7 @@ export function useRecorder() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
 
-      const mimeType = getSupportedMimeType();
+      const mimeType = getSupportedRecorderMimeType();
       const recorder = mimeType
         ? new MediaRecorder(stream, { mimeType })
         : new MediaRecorder(stream);
@@ -283,44 +289,71 @@ export function useRecorder() {
       };
 
       recorder.onstop = () => {
-        clearTimers();
-        stopMediaTracks();
+        const finalizeRecording = () => {
+          clearTimers();
+          stopMediaTracks();
 
-        const recordedMimeType = recorder.mimeType || mimeType || "audio/webm";
-        const blob = new Blob(chunksRef.current, { type: recordedMimeType });
-        chunksRef.current = [];
+          const recordedMimeType = resolveRecordedMimeType(
+            recorder.mimeType,
+            mimeType,
+          );
+          const blob = new Blob(chunksRef.current, { type: recordedMimeType });
+          chunksRef.current = [];
 
-        revokeAudioUrl();
-        const audioUrl = URL.createObjectURL(blob);
-        audioUrlRef.current = audioUrl;
+          const elapsedMs =
+            pauseStartedAtRef.current !== null
+              ? Math.min(
+                  pauseStartedAtRef.current -
+                    startTimeRef.current -
+                    totalPausedMsRef.current,
+                  MAX_DURATION_MS,
+                )
+              : getActiveElapsedMs();
 
-        const elapsedMs =
-          pauseStartedAtRef.current !== null
-            ? Math.min(
-                pauseStartedAtRef.current -
-                  startTimeRef.current -
-                  totalPausedMsRef.current,
-                MAX_DURATION_MS,
-              )
-            : getActiveElapsedMs();
+          pauseStartedAtRef.current = null;
+          mediaRecorderRef.current = null;
 
-        pauseStartedAtRef.current = null;
+          if (blob.size < MIN_RECORDING_BYTES) {
+            revokeAudioUrl();
+            setState({
+              status: "error",
+              error:
+                "録音データを取得できませんでした。Safari の場合はブラウザタブから開き直すか、もう一度お試しください。",
+              blob: null,
+              audioUrl: null,
+              elapsedMs,
+              mimeType: recordedMimeType,
+              canPauseRecording: false,
+            });
+            return;
+          }
 
-        setState({
-          status: "stopped",
-          error: null,
-          blob,
-          audioUrl,
-          elapsedMs,
-          mimeType: recordedMimeType,
-          canPauseRecording: false,
-        });
+          revokeAudioUrl();
+          const audioUrl = URL.createObjectURL(blob);
+          audioUrlRef.current = audioUrl;
 
-        mediaRecorderRef.current = null;
+          setState({
+            status: "stopped",
+            error: null,
+            blob,
+            audioUrl,
+            elapsedMs,
+            mimeType: recordedMimeType,
+            canPauseRecording: false,
+          });
+        };
+
+        // WebKit: 最終 dataavailable の処理後に Blob を組み立てる
+        queueMicrotask(finalizeRecording);
       };
 
       startTimeRef.current = Date.now();
-      recorder.start(250);
+      const timesliceMs = getRecorderTimesliceMs();
+      if (timesliceMs != null) {
+        recorder.start(timesliceMs);
+      } else {
+        recorder.start();
+      }
       startElapsedTimer();
       startMaxDurationTimer();
 

@@ -1,6 +1,7 @@
 import { refineTranscript } from "@/lib/transcribe/refine-transcript";
 import { getAudioExtension } from "@/lib/transcribe/get-audio-extension";
 import { WHISPER_INITIAL_PROMPT } from "@/lib/transcribe/whisper-context";
+import { MIN_RECORDING_BYTES } from "@/lib/recorder/recorder-platform";
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
@@ -36,9 +37,9 @@ export async function POST(request: Request) {
     );
   }
 
-  if (file.size === 0) {
+  if (file.size < MIN_RECORDING_BYTES) {
     return NextResponse.json(
-      { error: "音声ファイルが空です。" },
+      { error: "音声が短すぎるか、録音データを取得できませんでした。" },
       { status: 400 },
     );
   }
