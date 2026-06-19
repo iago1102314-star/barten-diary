@@ -1,5 +1,10 @@
 "use client";
 
+import { getBarAudioDiagnostics } from "@/lib/entrance/bar-audio-engine";
+import {
+  extractJazzFromAudioDiagnostics,
+  updateRecordingPipelineDiagnostic,
+} from "@/lib/recorder/recording-pipeline-diagnostic";
 import {
   getRecorderTimesliceMs,
   getSupportedRecorderMimeType,
@@ -8,6 +13,7 @@ import {
   resolveRecordedMimeType,
   waitForMicRelease,
 } from "@/lib/recorder/recorder-platform";
+import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const MAX_DURATION_MS = 3 * 60 * 1000;
@@ -280,8 +286,29 @@ export function useRecorder(options: UseRecorderOptions = {}) {
 
     try {
       await waitForMicRelease();
+      logRecordingPipeline("recorder.start: before getUserMedia", {
+        audio: getBarAudioDiagnostics(),
+        isApple: isAppleMediaRecorder(),
+        supportedMimeType: getSupportedRecorderMimeType(),
+        timesliceMs: getRecorderTimesliceMs() ?? null,
+      });
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
+
+      logRecordingPipeline("recorder.start: after getUserMedia", {
+        audio: getBarAudioDiagnostics(),
+        tracks: stream.getAudioTracks().map((track) => ({
+          label: track.label,
+          enabled: track.enabled,
+          muted: track.muted,
+          readyState: track.readyState,
+          settings: track.getSettings?.() ?? null,
+        })),
+      });
+
+      updateRecordingPipelineDiagnostic({
+        jazz: extractJazzFromAudioDiagnostics(getBarAudioDiagnostics()),
+      });
 
       const mimeType = getSupportedRecorderMimeType();
       const recorder = mimeType
@@ -300,6 +327,11 @@ export function useRecorder(options: UseRecorderOptions = {}) {
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
         }
+        logRecordingPipeline("recorder.ondataavailable", {
+          chunkSize: event.data.size,
+          chunkType: event.data.type,
+          chunkCount: chunksRef.current.length,
+        });
       };
 
       recorder.onerror = () => {
@@ -323,6 +355,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
             recorder.mimeType,
             mimeType,
           );
+          const chunkSizes = chunksRef.current.map((chunk) => chunk.size);
           const blob = new Blob(chunksRef.current, { type: recordedMimeType });
           chunksRef.current = [];
 
@@ -338,6 +371,28 @@ export function useRecorder(options: UseRecorderOptions = {}) {
 
           pauseStartedAtRef.current = null;
           mediaRecorderRef.current = null;
+
+          logRecordingPipeline("recorder.onstop: blob assembled", {
+            audio: getBarAudioDiagnostics(),
+            blobSize: blob.size,
+            blobType: blob.type,
+            recordedMimeType,
+            recorderMimeType: recorder.mimeType,
+            elapsedMs,
+            durationSec: Math.round(elapsedMs / 1000),
+            chunkCount: chunkSizes.length,
+            chunkSizes,
+            chunkTotalBytes: chunkSizes.reduce((sum, size) => sum + size, 0),
+            minRecordingBytes: MIN_RECORDING_BYTES,
+            belowMinBytes: blob.size < MIN_RECORDING_BYTES,
+          });
+
+          updateRecordingPipelineDiagnostic({
+            blobSize: blob.size,
+            chunkCount: chunkSizes.length,
+            durationSec: Math.round(elapsedMs / 1000),
+            blobType: blob.type || recordedMimeType,
+          });
 
           if (blob.size < MIN_RECORDING_BYTES) {
             revokeAudioUrl();
@@ -381,6 +436,14 @@ export function useRecorder(options: UseRecorderOptions = {}) {
       } else {
         recorder.start();
       }
+
+      logRecordingPipeline("recorder.start: MediaRecorder started", {
+        state: recorder.state,
+        mimeType: recorder.mimeType || mimeType || null,
+        timesliceMs: timesliceMs ?? null,
+        canPause: supportsPause,
+      });
+
       startElapsedTimer();
       startMaxDurationTimer();
 

@@ -30,12 +30,12 @@ export function LoadingGate({ onReady }: LoadingGateProps) {
   }, [onReady]);
 
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black"
-      role="status"
-      aria-live="polite"
-    >
-      <p className="loading-gate-message font-serif-jp translate-y-4 text-[14px] tracking-[0.12em] text-amber-100/80">
+    <div className="flex h-full min-h-0 w-full items-center justify-center bg-black">
+      <p
+        className="loading-gate-message font-serif-jp translate-y-4 text-[14px] tracking-[0.12em] text-amber-100/80"
+        role="status"
+        aria-live="polite"
+      >
         夜を準備しています
       </p>
     </div>

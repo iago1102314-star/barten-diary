@@ -693,7 +693,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         <motion.div
           key="entry"
           {...(entryTransition === "toMemories" ? sceneExitInstant : sceneExit)}
-          className="relative"
+          className="relative h-full w-full min-h-0"
         >
           <NightEntryScreen
             onEnterCounter={handleEnterCounter}

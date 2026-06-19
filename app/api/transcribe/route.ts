@@ -2,6 +2,8 @@ import { refineTranscript } from "@/lib/transcribe/refine-transcript";
 import { getAudioExtension } from "@/lib/transcribe/get-audio-extension";
 import { WHISPER_INITIAL_PROMPT } from "@/lib/transcribe/whisper-context";
 import { MIN_RECORDING_BYTES } from "@/lib/recorder/recorder-platform";
+import { logRecordingPipelineServer } from "@/lib/recorder/recording-pipeline-log";
+import { isNonProd } from "@/lib/env/app-env";
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
@@ -58,6 +60,13 @@ export async function POST(request: Request) {
     type: mimeType,
   });
 
+  logRecordingPipelineServer("transcribe API: received file", {
+    fileSize: file.size,
+    mimeType,
+    extension,
+    minRecordingBytes: MIN_RECORDING_BYTES,
+  });
+
   const openai = new OpenAI({ apiKey });
 
   try {
@@ -68,9 +77,27 @@ export async function POST(request: Request) {
       prompt: WHISPER_INITIAL_PROMPT,
     });
 
+    logRecordingPipelineServer("transcribe API: whisper raw", {
+      rawLength: transcription.text.length,
+      rawTranscript: transcription.text,
+    });
+
     const refined = await refineTranscript(openai, transcription.text);
 
-    return NextResponse.json({ transcript: refined });
+    logRecordingPipelineServer("transcribe API: whisper refined", {
+      refinedLength: refined.length,
+      refinedTranscript: refined,
+      changedFromRaw: refined !== transcription.text.trim(),
+    });
+
+    return NextResponse.json(
+      isNonProd
+        ? {
+            transcript: refined,
+            debug: { whisperRaw: transcription.text },
+          }
+        : { transcript: refined },
+    );
   } catch (error) {
     console.error("OpenAI transcription failed:", error);
 

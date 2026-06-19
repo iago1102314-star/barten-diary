@@ -3,6 +3,7 @@ import {
   BAR_AUDIO_LEVELS,
   BAR_AUDIO_TIMING,
 } from "@/lib/entrance/audio-levels";
+import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
 
 const SFX_SOURCES = [
   ENTRANCE_SOUNDS.door,
@@ -483,6 +484,53 @@ function stopLooping(
   });
 }
 
+function snapshotLoopTrack(
+  track: LoopingTrackState,
+): Record<string, unknown> | null {
+  if (!track.started && !track.audio) return null;
+
+  const audio = track.audio;
+  return {
+    started: track.started,
+    paused: audio?.paused ?? true,
+    currentVolume: audio?.volume ?? null,
+    targetVolume: track.targetVolume,
+    currentTime: audio?.currentTime ?? null,
+    duration: Number.isFinite(audio?.duration) ? audio?.duration : null,
+    fadeActive: track.fade !== null,
+    hasAmbientModulation: track.ambient !== null,
+    generation: track.generation,
+  };
+}
+
+function snapshotActiveSfx(): Array<Record<string, unknown>> {
+  const active: Array<Record<string, unknown>> = [];
+
+  for (const [src, slots] of sfxPool.entries()) {
+    for (const audio of slots) {
+      if (audio.paused) continue;
+      active.push({
+        src,
+        volume: audio.volume,
+        currentTime: audio.currentTime,
+      });
+    }
+  }
+
+  return active;
+}
+
+/** 録音開始時の BGM / SE 状態スナップショット（診断ログ用） */
+export function getBarAudioDiagnostics(): Record<string, unknown> {
+  return {
+    jazzDuckedForRecording,
+    barAudioUnlocked: barAudioUserGestureUnlocked,
+    jazz: snapshotLoopTrack(jazzTrack),
+    outside: snapshotLoopTrack(outsideTrack),
+    activeSfx: snapshotActiveSfx(),
+  };
+}
+
 export const barAudioEngine = {
   warmUp: warmUpBarAudio,
 
@@ -529,7 +577,15 @@ export const barAudioEngine = {
   /** 録音中 — 止めずに音量を下げる（iOS マイク許可時の急増を抑えつつ BGM を残す） */
   pauseJazzForRecording() {
     const audio = jazzTrack.audio;
-    if (!audio || !jazzTrack.started || jazzDuckedForRecording) return;
+    if (!audio || !jazzTrack.started || jazzDuckedForRecording) {
+      logRecordingPipeline("pauseJazzForRecording: skipped", {
+        hasAudio: Boolean(audio),
+        jazzStarted: jazzTrack.started,
+        alreadyDucked: jazzDuckedForRecording,
+        audio: getBarAudioDiagnostics(),
+      });
+      return;
+    }
 
     jazzDuckedForRecording = true;
     cancelTrackFade(jazzTrack);
@@ -537,6 +593,15 @@ export const barAudioEngine = {
 
     const duckVolume =
       jazzTrack.targetVolume * BAR_AUDIO_LEVELS.jazz.recordingDuckRatio;
+
+    logRecordingPipeline("pauseJazzForRecording: duck fade started", {
+      fromVolume: audio.volume,
+      toVolume: duckVolume,
+      targetVolume: jazzTrack.targetVolume,
+      duckRatio: BAR_AUDIO_LEVELS.jazz.recordingDuckRatio,
+      fadeMs: 400,
+    });
+
     fadeVolume(audio, audio.volume, duckVolume, 400, jazzTrack);
   },
 

@@ -1,8 +1,12 @@
 import { FetchTimeoutError, fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { getAudioExtension } from "@/lib/transcribe/get-audio-extension";
+import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
 
 export type TranscribeAudioResult = {
   transcript: string;
+  debug?: {
+    whisperRaw: string;
+  };
 };
 
 export type TranscribeAudioError = {
@@ -18,6 +22,14 @@ export async function transcribeAudio(
   const extension = getAudioExtension(mimeType);
   const formData = new FormData();
   formData.append("file", blob, `recording.${extension}`);
+
+  logRecordingPipeline("transcribe API: request", {
+    blobSize: blob.size,
+    blobType: blob.type,
+    mimeType,
+    extension,
+    fileName: `recording.${extension}`,
+  });
 
   let response: Response;
 
@@ -35,7 +47,7 @@ export async function transcribeAudio(
   }
 
   const data = (await response.json()) as
-    | TranscribeAudioResult
+    | (TranscribeAudioResult & { debug?: { whisperRaw: string } })
     | TranscribeAudioError;
 
   if (!response.ok) {
@@ -50,5 +62,8 @@ export async function transcribeAudio(
     throw new Error("文字起こし結果が空でした。");
   }
 
-  return data;
+  return {
+    transcript: data.transcript,
+    debug: data.debug,
+  };
 }

@@ -8,7 +8,13 @@ import { simulateNight } from "@/lib/dev/simulate-night";
 import type { FakeNightId } from "@/lib/dev/fake-nights";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import type { DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
-import { barAudioEngine } from "@/lib/entrance/bar-audio-engine";
+import { barAudioEngine, getBarAudioDiagnostics } from "@/lib/entrance/bar-audio-engine";
+import { MIN_RECORDING_BYTES } from "@/lib/recorder/recorder-platform";
+import {
+  resetRecordingPipelineDiagnostic,
+  updateRecordingPipelineDiagnostic,
+} from "@/lib/recorder/recording-pipeline-diagnostic";
+import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
 import { transcribeAudio } from "@/lib/transcribe/transcribe-audio";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -147,9 +153,20 @@ export function useNightSession() {
     generation.reset();
     setTranscript(null);
     setRecordedAt(null);
+    resetRecordingPipelineDiagnostic();
+    logRecordingPipeline("startSpeaking: before pauseJazzForRecording", {
+      audio: getBarAudioDiagnostics(),
+    });
     barAudioEngine.pauseJazzForRecording();
+    logRecordingPipeline("startSpeaking: after pauseJazzForRecording", {
+      audio: getBarAudioDiagnostics(),
+    });
     setPhase("recording");
     await recorder.start();
+    logRecordingPipeline("startSpeaking: after recorder.start", {
+      audio: getBarAudioDiagnostics(),
+      recorderStatus: recorder.status,
+    });
   }, [recorder, generation, selectedCategoryId, resetListenFailure]);
 
   const stopSpeaking = useCallback(() => {
@@ -171,6 +188,7 @@ export function useNightSession() {
     setGenerationFailed(false);
     pipelineLock.current = false;
     inflightGenerationKeyRef.current = null;
+    resetRecordingPipelineDiagnostic();
     barAudioEngine.pauseJazzForRecording();
     recorder.reset();
     generation.reset();
@@ -235,11 +253,34 @@ export function useNightSession() {
 
   const runTranscribePipeline = useCallback(
     async (blob: Blob, mimeType: string) => {
+      logRecordingPipeline("transcribe pipeline: start", {
+        blobSize: blob.size,
+        blobType: blob.type || mimeType,
+        mimeType,
+        minRecordingBytes: MIN_RECORDING_BYTES,
+      });
+
       try {
-        const { transcript: text } = await transcribeAudio(blob, mimeType);
+        const { transcript: text, debug } = await transcribeAudio(blob, mimeType);
+
+        updateRecordingPipelineDiagnostic({
+          whisperRaw: debug?.whisperRaw,
+          refinedTranscript: text,
+        });
+
+        logRecordingPipeline("transcribe pipeline: response", {
+          transcriptLength: text.length,
+          transcript: text,
+        });
 
         const validation = validateTranscriptInput(text);
         if (!validation.ok) {
+          logRecordingPipeline("transcribe pipeline: validation failed", {
+            code: validation.code,
+            message: validation.message,
+            transcriptLength: text.length,
+            transcript: text,
+          });
           registerListenFailure();
           return;
         }
@@ -247,7 +288,10 @@ export function useNightSession() {
         clearListenFailureUi();
         setTranscript(text);
         setPhase("accepted");
-      } catch {
+      } catch (error) {
+        logRecordingPipeline("transcribe pipeline: error", {
+          error: error instanceof Error ? error.message : String(error),
+        });
         registerListenFailure();
       } finally {
         pipelineLock.current = false;
@@ -259,9 +303,15 @@ export function useNightSession() {
   useEffect(() => {
     if (phase !== "recording") return;
     if (recorder.status !== "stopped" || !recorder.blob) return;
+    logRecordingPipeline("recording finished: resume BGM, enter processing", {
+      audio: getBarAudioDiagnostics(),
+      blobSize: recorder.blob.size,
+      mimeType: recorder.mimeType,
+      elapsedMs: recorder.elapsedMs,
+    });
     barAudioEngine.resumeJazzAfterRecording();
     setPhase("processing");
-  }, [phase, recorder.status, recorder.blob]);
+  }, [phase, recorder.status, recorder.blob, recorder.mimeType, recorder.elapsedMs]);
 
   useEffect(() => {
     if (phase !== "processing") return;
@@ -291,14 +341,35 @@ export function useNightSession() {
     if (inflightGenerationKeyRef.current === key) return;
     inflightGenerationKeyRef.current = key;
 
+    logRecordingPipeline("diary generation: start", {
+      transcriptLength: transcript.length,
+      transcript,
+      selectedCategoryId,
+      selectedDrinkId,
+    });
+
+    updateRecordingPipelineDiagnostic({
+      diaryTranscript: transcript,
+    });
+
     void generation
       .generate(transcript, selectedCategoryId, endedAt, selectedDrinkId)
       .then((outcome) => {
         if (outcome.ok) {
+          logRecordingPipeline("diary generation: success", {
+            transcriptLength: transcript.length,
+            transcript,
+            bottleTag: outcome.diary.bottleTag,
+            diaryPreview: outcome.diary.diary.slice(0, 120),
+          });
           barAudioEngine.resumeJazzAfterRecording();
           setPhase("revealed");
           return;
         }
+        logRecordingPipeline("diary generation: failed", {
+          transcriptLength: transcript.length,
+          transcript,
+        });
         inflightGenerationKeyRef.current = null;
         setGenerationFailed(true);
         console.error("Background diary generation failed");
