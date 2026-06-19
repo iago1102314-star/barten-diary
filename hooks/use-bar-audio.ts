@@ -5,11 +5,15 @@ import { useEffect } from "react";
 
 let consumerCount = 0;
 
+/** ユーザー操作後に SE プールを初期化する（ロード時は呼ばない） */
+export function prepareBarAudioOnUserGesture(): void {
+  void barAudioEngine.warmUp();
+}
+
 /** バー音声 — モジュール共有エンジン経由（SE プリロード・低遅延再生） */
 export function useBarAudio() {
   useEffect(() => {
     consumerCount += 1;
-    void barAudioEngine.warmUp();
 
     return () => {
       consumerCount -= 1;

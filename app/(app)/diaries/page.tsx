@@ -1,9 +1,5 @@
-import { EntranceFlow } from "@/components/entrance/entrance-flow";
+import { EntranceApp } from "@/components/entrance/entrance-app";
 
 export default function DiariesPage() {
-  return (
-    <div className="stage-viewport">
-      <EntranceFlow />
-    </div>
-  );
+  return <EntranceApp />;
 }

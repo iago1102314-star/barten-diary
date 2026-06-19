@@ -5,6 +5,7 @@ import { GlowAnchorMarker } from "@/components/entrance/glow-anchor-marker";
 import { SceneFrame } from "@/components/entrance/scene-frame";
 import { BarButton } from "@/components/ui/bar-button";
 import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
+import { isEntryImagePreloaded } from "@/lib/entrance/entry-image-preload";
 import { resolveLampGlowRgb } from "@/lib/entrance/lamp-glow-color";
 import {
   getLampBreatheClassName,
@@ -231,6 +232,7 @@ export function NightEntryScreen({
   const showBokehOnlyMarkers = SHOW_START_BOKEH_ONLY_POSITION_MARKERS;
   const showGlow = SHOW_START_LAMP_GLOW_LIGHT || showMarkers;
   const interactionLocked = doorExiting || memoriesFadeOut;
+  const entryImagePreloaded = isEntryImagePreloaded();
 
   const [phase, setPhase] = useState<EntryScreenPhase>(
     skipImageEntrance ? "normal" : "bokeh",
@@ -394,7 +396,7 @@ export function NightEntryScreen({
                 src={ENTRANCE_ASSETS.start}
                 alt=""
                 fill
-                priority
+                priority={!entryImagePreloaded}
                 sizes="440px"
                 className="object-cover"
                 style={{

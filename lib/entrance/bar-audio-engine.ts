@@ -353,7 +353,7 @@ async function playSfx(
 
 /** ユーザー操作直後 — await なしで即再生 */
 function playSfxNow(src: string, volume: number) {
-  ensureSfxPool();
+  if (!sfxPoolInitialized) return;
   const slots = sfxPool.get(src);
   if (!slots?.length) return;
 

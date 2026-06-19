@@ -23,7 +23,7 @@ import { NightEntryScreen, type EntryScreenPhase } from "@/components/entrance/n
 import { PastBottlePanel } from "@/components/entrance/past-bottle-panel";
 import { RecordingPanel } from "@/components/entrance/recording-panel";
 import { SceneFrame } from "@/components/entrance/scene-frame";
-import { useBarAudio } from "@/hooks/use-bar-audio";
+import { prepareBarAudioOnUserGesture, useBarAudio } from "@/hooks/use-bar-audio";
 import {
   BAR_AUDIO_LEVELS,
   BAR_AUDIO_TIMING,
@@ -78,8 +78,8 @@ import {
   type CounterLampGlowConfig,
 } from "@/lib/entrance/counter-lamp-glows";
 import { useNightSession } from "@/hooks/use-night-session";
+import type { LoadingGateSnapshot } from "@/lib/entrance/loading-gate-init";
 import {
-  isReturningVisitor,
   markReturningVisitor,
 } from "@/lib/entrance/visit-state";
 import type {
@@ -159,10 +159,15 @@ function getSceneMotionKey(state: EntranceState): string {
   return COUNTER_SCENE_STATES.has(state) ? "counter" : state;
 }
 
-export function EntranceFlow() {
+type EntranceFlowProps = {
+  gateSnapshot: LoadingGateSnapshot;
+};
+
+export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const session = useNightSession();
   const router = useRouter();
   const audio = useBarAudio();
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [entranceState, setEntranceState] = useState<EntranceState>("entry");
   const [pickedDrink, setPickedDrink] = useState<Drink | null>(null);
   const [pastMasterLine, setPastMasterLine] = useState<string | null>(null);
@@ -221,6 +226,14 @@ export function EntranceFlow() {
   const [bokehShapeEditGroup, setBokehShapeEditGroup] = useState<
     "paired" | "bokeh-only"
   >("bokeh-only");
+
+  const unlockBarAudio = useCallback(() => {
+    setAudioUnlocked((unlocked) => {
+      if (unlocked) return unlocked;
+      prepareBarAudioOnUserGesture();
+      return true;
+    });
+  }, []);
 
   const handleGlowPatch = useCallback(
     (id: string, patch: Partial<LampGlowShapeFields>) => {
@@ -382,7 +395,9 @@ export function EntranceFlow() {
   }, []);
 
   useEffect(() => {
-    if (entranceState === "entry") {
+    if (!audioUnlocked) return;
+
+    if (entranceState === "entry" && entryTransition === "idle") {
       audio.startOutside(
         BAR_AUDIO_LEVELS.outside.alley,
         skipEntryEntrance
@@ -400,7 +415,7 @@ export function EntranceFlow() {
     if (!OUTSIDE_AMBIENT_STATES.has(entranceState)) {
       audio.stopOutside();
     }
-  }, [entranceState, skipEntryEntrance, audio]);
+  }, [entranceState, entryTransition, skipEntryEntrance, audio, audioUnlocked]);
 
   useEffect(() => {
     if (entranceState === "moodSelect") {
@@ -550,7 +565,7 @@ export function EntranceFlow() {
   const handleEnterCounter = () => {
     if (entryTransition !== "idle") return;
     resetNightRefs();
-    void audio.warmUp();
+    unlockBarAudio();
     audio.stopOutside(false, BAR_AUDIO_TIMING.outsideStopFadeMs);
     setEntryTransition("doorExit");
   };
@@ -566,6 +581,7 @@ export function EntranceFlow() {
 
   const handleOpenMemories = () => {
     if (entryTransition !== "idle") return;
+    unlockBarAudio();
     setEntryTransition("toMemories");
   };
 
@@ -575,6 +591,7 @@ export function EntranceFlow() {
   };
 
   const handleBackToEntry = () => {
+    unlockBarAudio();
     setSkipEntryEntrance(true);
     setEntranceState("entry");
     setEntryTransition("steadyFadeIn");
@@ -585,6 +602,7 @@ export function EntranceFlow() {
   };
 
   const handleMasterGreetingComplete = () => {
+    unlockBarAudio();
     audio.startJazz(
       BAR_AUDIO_LEVELS.jazz.counter,
       BAR_AUDIO_TIMING.jazzEntryFadeMs,
@@ -819,7 +837,7 @@ export function EntranceFlow() {
   if (entranceState === "masterOnBlack") {
     return (
       <MasterOnBlackScreen
-        returning={isReturningVisitor()}
+        returning={gateSnapshot.isReturningVisitor}
         onComplete={handleMasterGreetingComplete}
       />
     );
