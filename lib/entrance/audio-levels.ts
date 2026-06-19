@@ -15,8 +15,6 @@ export const BAR_AUDIO_LEVELS = {
   /** 店内ジャズ（ループ） */
   jazz: {
     counter: 0.03,
-    /** 録音中 — 止めずに下げる倍率（iOS マイク許可時の急増を抑えつつ BGM を残す） */
-    recordingDuckRatio: 0.2,
   },
   /** 一度きりの効果音 */
   sfx: {
@@ -30,6 +28,8 @@ export const BAR_AUDIO_LEVELS = {
 export const BAR_AUDIO_TIMING = {
   /** BGM フェードイン・アウト（通常） */
   fadeMs: 1600,
+  /** 録音開始直前 — 店内 BGM をフェードアウトしてから完全停止 */
+  recordingFadeOutMs: 300,
   /** 入店時の outside フェードアウト */
   outsideStopFadeMs: 2000,
   /** ホーム入場 — 路地 BGM を 0 からタイトル表示まで（start-entry-timing と同期） */

@@ -154,14 +154,14 @@ export function useNightSession() {
     setTranscript(null);
     setRecordedAt(null);
     resetRecordingPipelineDiagnostic();
+    setPhase("recording");
     logRecordingPipeline("startSpeaking: before pauseJazzForRecording", {
       audio: getBarAudioDiagnostics(),
     });
-    barAudioEngine.pauseJazzForRecording();
+    await barAudioEngine.pauseJazzForRecording();
     logRecordingPipeline("startSpeaking: after pauseJazzForRecording", {
       audio: getBarAudioDiagnostics(),
     });
-    setPhase("recording");
     await recorder.start();
     logRecordingPipeline("startSpeaking: after recorder.start", {
       audio: getBarAudioDiagnostics(),
@@ -189,12 +189,12 @@ export function useNightSession() {
     pipelineLock.current = false;
     inflightGenerationKeyRef.current = null;
     resetRecordingPipelineDiagnostic();
-    barAudioEngine.pauseJazzForRecording();
+    setPhase("recording");
+    await barAudioEngine.pauseJazzForRecording();
     recorder.reset();
     generation.reset();
     setTranscript(null);
     setRecordedAt(null);
-    setPhase("recording");
     await recorder.start();
   }, [recorder, generation]);
 

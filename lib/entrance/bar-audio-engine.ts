@@ -12,7 +12,7 @@ const SFX_SOURCES = [
   ENTRANCE_SOUNDS.think,
 ] as const;
 
-let jazzDuckedForRecording = false;
+let bgmPausedForRecording = false;
 
 const sfxPool = new Map<string, HTMLAudioElement[]>();
 let sfxPoolInitialized = false;
@@ -348,8 +348,11 @@ async function playSfx(
   volume: number,
   delayMs = 0,
 ): Promise<void> {
+  if (bgmPausedForRecording) return;
+
   if (delayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
+    if (bgmPausedForRecording) return;
   }
 
   playSfxNow(src, volume);
@@ -357,7 +360,7 @@ async function playSfx(
 
 /** ユーザー操作直後 — await なしで即再生 */
 function playSfxNow(src: string, volume: number) {
-  if (!isBarAudioUnlocked() || !sfxPoolInitialized) return;
+  if (!isBarAudioUnlocked() || !sfxPoolInitialized || bgmPausedForRecording) return;
   const slots = sfxPool.get(src);
   if (!slots?.length) return;
 
@@ -503,6 +506,40 @@ function snapshotLoopTrack(
   };
 }
 
+function stopAllActiveSfx() {
+  for (const slots of sfxPool.values()) {
+    for (const audio of slots) {
+      if (audio.paused) continue;
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
+function fadeOutAndStopTrack(
+  track: LoopingTrackState,
+  fadeMs: number,
+): Promise<void> {
+  const audio = track.audio;
+  if (!audio || !track.started) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    cancelTrackFade(track);
+    track.ambient?.pause();
+    fadeVolume(audio, audio.volume, 0, fadeMs, track, () => {
+      track.generation += 1;
+      clearTrackAudio(track, audio);
+      resolve();
+    });
+  });
+}
+
 function snapshotActiveSfx(): Array<Record<string, unknown>> {
   const active: Array<Record<string, unknown>> = [];
 
@@ -523,7 +560,7 @@ function snapshotActiveSfx(): Array<Record<string, unknown>> {
 /** 録音開始時の BGM / SE 状態スナップショット（診断ログ用） */
 export function getBarAudioDiagnostics(): Record<string, unknown> {
   return {
-    jazzDuckedForRecording,
+    bgmPausedForRecording,
     barAudioUnlocked: barAudioUserGestureUnlocked,
     jazz: snapshotLoopTrack(jazzTrack),
     outside: snapshotLoopTrack(outsideTrack),
@@ -570,50 +607,53 @@ export const barAudioEngine = {
   },
 
   stopJazz() {
-    jazzDuckedForRecording = false;
+    bgmPausedForRecording = false;
     stopLooping(jazzTrack);
   },
 
-  /** 録音中 — 止めずに音量を下げる（iOS マイク許可時の急増を抑えつつ BGM を残す） */
-  pauseJazzForRecording() {
-    const audio = jazzTrack.audio;
-    if (!audio || !jazzTrack.started || jazzDuckedForRecording) {
-      logRecordingPipeline("pauseJazzForRecording: skipped", {
-        hasAudio: Boolean(audio),
-        jazzStarted: jazzTrack.started,
-        alreadyDucked: jazzDuckedForRecording,
-        audio: getBarAudioDiagnostics(),
-      });
-      return;
-    }
+  /**
+   * 録音開始直前 — SE 即停止、BGM を短時間フェードアウトしてから完全停止。
+   * iOS / Mac 共通（duck ではなく pause + 解放）。
+   */
+  async pauseJazzForRecording(): Promise<void> {
+    if (bgmPausedForRecording) return;
 
-    jazzDuckedForRecording = true;
-    cancelTrackFade(jazzTrack);
-    jazzTrack.ambient?.pause();
+    bgmPausedForRecording = true;
+    stopAllActiveSfx();
 
-    const duckVolume =
-      jazzTrack.targetVolume * BAR_AUDIO_LEVELS.jazz.recordingDuckRatio;
-
-    logRecordingPipeline("pauseJazzForRecording: duck fade started", {
-      fromVolume: audio.volume,
-      toVolume: duckVolume,
-      targetVolume: jazzTrack.targetVolume,
-      duckRatio: BAR_AUDIO_LEVELS.jazz.recordingDuckRatio,
-      fadeMs: 400,
+    const fadeMs = BAR_AUDIO_TIMING.recordingFadeOutMs;
+    logRecordingPipeline("pauseJazzForRecording: fade out + stop", {
+      fadeMs,
+      audio: getBarAudioDiagnostics(),
     });
 
-    fadeVolume(audio, audio.volume, duckVolume, 400, jazzTrack);
+    await Promise.all([
+      fadeOutAndStopTrack(outsideTrack, fadeMs),
+      fadeOutAndStopTrack(jazzTrack, fadeMs),
+    ]);
+
+    logRecordingPipeline("pauseJazzForRecording: stopped", {
+      audio: getBarAudioDiagnostics(),
+    });
   },
 
+  /** 録音終了後 — 店内 BGM を通常音量（0.03）でフェードイン再開 */
   resumeJazzAfterRecording() {
-    if (!jazzDuckedForRecording) return;
-    jazzDuckedForRecording = false;
+    if (!bgmPausedForRecording) return;
+    bgmPausedForRecording = false;
 
-    const audio = jazzTrack.audio;
-    if (!audio || !jazzTrack.started) return;
+    logRecordingPipeline("resumeJazzAfterRecording: restart jazz", {
+      targetVolume: BAR_AUDIO_LEVELS.jazz.counter,
+      fadeMs: BAR_AUDIO_TIMING.fadeMs,
+    });
 
-    cancelTrackFade(jazzTrack);
-    fadeVolume(audio, audio.volume, jazzTrack.targetVolume, 900, jazzTrack);
+    void startLooping(
+      ENTRANCE_SOUNDS.jazz,
+      BAR_AUDIO_LEVELS.jazz.counter,
+      jazzTrack,
+      BAR_AUDIO_TIMING.fadeMs,
+      true,
+    );
   },
 
   playDoor() {
@@ -633,7 +673,7 @@ export const barAudioEngine = {
   },
 
   dispose() {
-    jazzDuckedForRecording = false;
+    bgmPausedForRecording = false;
     barAudioUserGestureUnlocked = false;
     stopLooping(outsideTrack, true);
     stopLooping(jazzTrack, true);
