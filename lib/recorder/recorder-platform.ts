@@ -33,12 +33,27 @@ export function getSupportedRecorderMimeType(): string | undefined {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type));
 }
 
+/** WebKit — timeslice < 1s で空 chunk を出しやすい */
+export const APPLE_RECORDER_TIMESLICE_MS = 1000;
+
+/** Chrome 等 — 短い間隔で chunk を溜める */
+export const DEFAULT_RECORDER_TIMESLICE_MS = 250;
+
+/** WebKit — stop 後の final dataavailable を待つ（ms） */
+export const APPLE_RECORDER_FINALIZE_DELAY_MS = 300;
+
 /**
- * WebKit は timeslice < 1s で空 Blob を出しやすい。
- * Apple では timeslice なし start() にする。
+ * 録音中の timeslice。Apple は >= 1s、それ以外は 250ms。
  */
-export function getRecorderTimesliceMs(): number | undefined {
-  return isAppleMediaRecorder() ? undefined : 250;
+export function getRecorderTimesliceMs(): number {
+  return isAppleMediaRecorder()
+    ? APPLE_RECORDER_TIMESLICE_MS
+    : DEFAULT_RECORDER_TIMESLICE_MS;
+}
+
+/** stop 後 Blob 組み立てまでの待ち */
+export function getRecorderFinalizeDelayMs(): number {
+  return isAppleMediaRecorder() ? APPLE_RECORDER_FINALIZE_DELAY_MS : 0;
 }
 
 export function resolveRecordedMimeType(

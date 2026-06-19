@@ -6,6 +6,7 @@ import {
   updateRecordingPipelineDiagnostic,
 } from "@/lib/recorder/recording-pipeline-diagnostic";
 import {
+  getRecorderFinalizeDelayMs,
   getRecorderTimesliceMs,
   getSupportedRecorderMimeType,
   isAppleMediaRecorder,
@@ -87,6 +88,11 @@ export function useRecorder(options: UseRecorderOptions = {}) {
   const remainingMaxDurationMsRef = useRef<number>(MAX_DURATION_MS);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const maxDurationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopRequestedRef = useRef(false);
+  const finalizeStartedRef = useRef(false);
+  const finalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fallbackMimeTypeRef = useRef<string | undefined>(undefined);
+  const stopRecordingRef = useRef<() => void>(() => {});
 
   const getActiveElapsedMs = useCallback(() => {
     return Math.min(
@@ -109,10 +115,18 @@ export function useRecorder(options: UseRecorderOptions = {}) {
     }
   }, []);
 
+  const clearPendingFinalize = useCallback(() => {
+    if (finalizeTimerRef.current) {
+      clearTimeout(finalizeTimerRef.current);
+      finalizeTimerRef.current = null;
+    }
+  }, []);
+
   const clearTimers = useCallback(() => {
     clearElapsedTimer();
     clearMaxDurationTimer();
-  }, [clearElapsedTimer, clearMaxDurationTimer]);
+    clearPendingFinalize();
+  }, [clearElapsedTimer, clearMaxDurationTimer, clearPendingFinalize]);
 
   const startElapsedTimer = useCallback(() => {
     clearElapsedTimer();
@@ -134,12 +148,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
           // resume failure is handled by stop attempt below
         }
       }
-      if (
-        mediaRecorderRef.current?.state === "recording" ||
-        mediaRecorderRef.current?.state === "paused"
-      ) {
-        mediaRecorderRef.current.stop();
-      }
+      stopRecordingRef.current();
     }, remainingMaxDurationMsRef.current);
   }, [clearMaxDurationTimer]);
 
@@ -158,6 +167,8 @@ export function useRecorder(options: UseRecorderOptions = {}) {
   const reset = useCallback(() => {
     suppressFatalErrorRef.current = true;
     clearTimers();
+    stopRequestedRef.current = false;
+    finalizeStartedRef.current = false;
 
     if (
       mediaRecorderRef.current &&
@@ -173,6 +184,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
     totalPausedMsRef.current = 0;
     pauseStartedAtRef.current = null;
     remainingMaxDurationMsRef.current = MAX_DURATION_MS;
+    fallbackMimeTypeRef.current = undefined;
 
     setState({
       status: "idle",
@@ -192,22 +204,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
   }, [clearTimers, revokeAudioUrl, stopMediaTracks]);
 
   const stop = useCallback(() => {
-    const recorder = mediaRecorderRef.current;
-    if (!recorder) return;
-
-    if (recorder.state !== "recording" && recorder.state !== "paused") {
-      return;
-    }
-
-    if (isAppleMediaRecorder() && typeof recorder.requestData === "function") {
-      try {
-        recorder.requestData();
-      } catch {
-        // requestData 非対応時は stop のみ
-      }
-    }
-
-    recorder.stop();
+    stopRecordingRef.current();
   }, []);
 
   const pause = useCallback((): boolean => {
@@ -286,11 +283,13 @@ export function useRecorder(options: UseRecorderOptions = {}) {
 
     try {
       await waitForMicRelease();
+      const timesliceMs = getRecorderTimesliceMs();
       logRecordingPipeline("recorder.start: before getUserMedia", {
         audio: getBarAudioDiagnostics(),
         isApple: isAppleMediaRecorder(),
         supportedMimeType: getSupportedRecorderMimeType(),
-        timesliceMs: getRecorderTimesliceMs() ?? null,
+        timesliceMs,
+        finalizeDelayMs: getRecorderFinalizeDelayMs(),
       });
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
@@ -311,17 +310,131 @@ export function useRecorder(options: UseRecorderOptions = {}) {
       });
 
       const mimeType = getSupportedRecorderMimeType();
+      fallbackMimeTypeRef.current = mimeType;
       const recorder = mimeType
         ? new MediaRecorder(stream, { mimeType })
         : new MediaRecorder(stream);
 
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
+      stopRequestedRef.current = false;
+      finalizeStartedRef.current = false;
       totalPausedMsRef.current = 0;
       pauseStartedAtRef.current = null;
       remainingMaxDurationMsRef.current = MAX_DURATION_MS;
 
       const supportsPause = canPauseRecorder(recorder);
+
+      const finalizeRecording = () => {
+        if (finalizeStartedRef.current) return;
+        finalizeStartedRef.current = true;
+        clearPendingFinalize();
+        clearTimers();
+        stopMediaTracks();
+
+        const recordedMimeType = resolveRecordedMimeType(
+          recorder.mimeType,
+          fallbackMimeTypeRef.current,
+        );
+        const chunkSizes = chunksRef.current.map((chunk) => chunk.size);
+        const blob = new Blob(chunksRef.current, { type: recordedMimeType });
+        chunksRef.current = [];
+
+        const elapsedMs =
+          pauseStartedAtRef.current !== null
+            ? Math.min(
+                pauseStartedAtRef.current -
+                  startTimeRef.current -
+                  totalPausedMsRef.current,
+                MAX_DURATION_MS,
+              )
+            : getActiveElapsedMs();
+
+        pauseStartedAtRef.current = null;
+        mediaRecorderRef.current = null;
+        stopRequestedRef.current = false;
+
+        logRecordingPipeline("recorder.onstop: blob assembled", {
+          audio: getBarAudioDiagnostics(),
+          blobSize: blob.size,
+          blobType: blob.type,
+          recordedMimeType,
+          recorderMimeType: recorder.mimeType,
+          elapsedMs,
+          durationSec: Math.round(elapsedMs / 1000),
+          chunkCount: chunkSizes.length,
+          chunkSizes,
+          chunkTotalBytes: chunkSizes.reduce((sum, size) => sum + size, 0),
+          minRecordingBytes: MIN_RECORDING_BYTES,
+          belowMinBytes: blob.size < MIN_RECORDING_BYTES,
+        });
+
+        updateRecordingPipelineDiagnostic({
+          blobSize: blob.size,
+          chunkCount: chunkSizes.length,
+          durationSec: Math.round(elapsedMs / 1000),
+          blobType: blob.type || recordedMimeType,
+        });
+
+        if (blob.size < MIN_RECORDING_BYTES) {
+          revokeAudioUrl();
+          setState({
+            status: "error",
+            error:
+              "録音データを取得できませんでした。Safari の場合はブラウザタブから開き直すか、もう一度お試しください。",
+            blob: null,
+            audioUrl: null,
+            elapsedMs,
+            mimeType: recordedMimeType,
+            canPauseRecording: false,
+          });
+          notifyFatalError(true);
+          return;
+        }
+
+        revokeAudioUrl();
+        const audioUrl = URL.createObjectURL(blob);
+        audioUrlRef.current = audioUrl;
+
+        setState({
+          status: "stopped",
+          error: null,
+          blob,
+          audioUrl,
+          elapsedMs,
+          mimeType: recordedMimeType,
+          canPauseRecording: false,
+        });
+      };
+
+      const scheduleFinalize = (reason: string) => {
+        if (!stopRequestedRef.current || finalizeStartedRef.current) return;
+
+        clearPendingFinalize();
+        const delayMs = getRecorderFinalizeDelayMs();
+
+        logRecordingPipeline("recorder.finalize: scheduled", {
+          reason,
+          delayMs,
+          recorderState: recorder.state,
+          chunkCount: chunksRef.current.length,
+        });
+
+        finalizeTimerRef.current = setTimeout(() => {
+          finalizeTimerRef.current = null;
+
+          if (!stopRequestedRef.current || finalizeStartedRef.current) {
+            return;
+          }
+
+          if (recorder.state !== "inactive") {
+            scheduleFinalize("wait-inactive");
+            return;
+          }
+
+          finalizeRecording();
+        }, delayMs);
+      };
 
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -331,11 +444,18 @@ export function useRecorder(options: UseRecorderOptions = {}) {
           chunkSize: event.data.size,
           chunkType: event.data.type,
           chunkCount: chunksRef.current.length,
+          stopRequested: stopRequestedRef.current,
+          recorderState: recorder.state,
         });
+
+        if (stopRequestedRef.current) {
+          scheduleFinalize("dataavailable");
+        }
       };
 
       recorder.onerror = () => {
         clearTimers();
+        stopRequestedRef.current = false;
         stopMediaTracks();
         pauseStartedAtRef.current = null;
         setState((prev) => ({
@@ -347,100 +467,54 @@ export function useRecorder(options: UseRecorderOptions = {}) {
       };
 
       recorder.onstop = () => {
-        const finalizeRecording = () => {
-          clearTimers();
-          stopMediaTracks();
+        if (!stopRequestedRef.current) {
+          clearPendingFinalize();
+          return;
+        }
 
-          const recordedMimeType = resolveRecordedMimeType(
-            recorder.mimeType,
-            mimeType,
-          );
-          const chunkSizes = chunksRef.current.map((chunk) => chunk.size);
-          const blob = new Blob(chunksRef.current, { type: recordedMimeType });
-          chunksRef.current = [];
+        logRecordingPipeline("recorder.onstop", {
+          chunkCount: chunksRef.current.length,
+          recorderState: recorder.state,
+        });
 
-          const elapsedMs =
-            pauseStartedAtRef.current !== null
-              ? Math.min(
-                  pauseStartedAtRef.current -
-                    startTimeRef.current -
-                    totalPausedMsRef.current,
-                  MAX_DURATION_MS,
-                )
-              : getActiveElapsedMs();
+        scheduleFinalize("onstop");
+      };
 
-          pauseStartedAtRef.current = null;
-          mediaRecorderRef.current = null;
+      stopRecordingRef.current = () => {
+        const activeRecorder = mediaRecorderRef.current;
+        if (!activeRecorder) return;
 
-          logRecordingPipeline("recorder.onstop: blob assembled", {
-            audio: getBarAudioDiagnostics(),
-            blobSize: blob.size,
-            blobType: blob.type,
-            recordedMimeType,
-            recorderMimeType: recorder.mimeType,
-            elapsedMs,
-            durationSec: Math.round(elapsedMs / 1000),
-            chunkCount: chunkSizes.length,
-            chunkSizes,
-            chunkTotalBytes: chunkSizes.reduce((sum, size) => sum + size, 0),
-            minRecordingBytes: MIN_RECORDING_BYTES,
-            belowMinBytes: blob.size < MIN_RECORDING_BYTES,
-          });
+        if (
+          activeRecorder.state !== "recording" &&
+          activeRecorder.state !== "paused"
+        ) {
+          return;
+        }
 
-          updateRecordingPipelineDiagnostic({
-            blobSize: blob.size,
-            chunkCount: chunkSizes.length,
-            durationSec: Math.round(elapsedMs / 1000),
-            blobType: blob.type || recordedMimeType,
-          });
+        stopRequestedRef.current = true;
 
-          if (blob.size < MIN_RECORDING_BYTES) {
-            revokeAudioUrl();
-            setState({
-              status: "error",
-              error:
-                "録音データを取得できませんでした。Safari の場合はブラウザタブから開き直すか、もう一度お試しください。",
-              blob: null,
-              audioUrl: null,
-              elapsedMs,
-              mimeType: recordedMimeType,
-              canPauseRecording: false,
-            });
-            notifyFatalError(true);
-            return;
+        if (
+          isAppleMediaRecorder() &&
+          typeof activeRecorder.requestData === "function"
+        ) {
+          try {
+            activeRecorder.requestData();
+          } catch {
+            // requestData 非対応時は stop のみ
           }
+        }
 
-          revokeAudioUrl();
-          const audioUrl = URL.createObjectURL(blob);
-          audioUrlRef.current = audioUrl;
-
-          setState({
-            status: "stopped",
-            error: null,
-            blob,
-            audioUrl,
-            elapsedMs,
-            mimeType: recordedMimeType,
-            canPauseRecording: false,
-          });
-        };
-
-        // WebKit: 最終 dataavailable の処理後に Blob を組み立てる
-        queueMicrotask(finalizeRecording);
+        activeRecorder.stop();
       };
 
       startTimeRef.current = Date.now();
-      const timesliceMs = getRecorderTimesliceMs();
-      if (timesliceMs != null) {
-        recorder.start(timesliceMs);
-      } else {
-        recorder.start();
-      }
+      recorder.start(timesliceMs);
 
       logRecordingPipeline("recorder.start: MediaRecorder started", {
         state: recorder.state,
         mimeType: recorder.mimeType || mimeType || null,
-        timesliceMs: timesliceMs ?? null,
+        timesliceMs,
+        finalizeDelayMs: getRecorderFinalizeDelayMs(),
         canPause: supportsPause,
       });
 
@@ -460,6 +534,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
       clearTimers();
       stopMediaTracks();
       pauseStartedAtRef.current = null;
+      stopRequestedRef.current = false;
 
       const message =
         err instanceof DOMException && err.name === "NotAllowedError"
@@ -478,6 +553,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
       notifyFatalError(false);
     }
   }, [
+    clearPendingFinalize,
     clearTimers,
     getActiveElapsedMs,
     notifyFatalError,
@@ -491,6 +567,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
   useEffect(() => {
     return () => {
       clearTimers();
+      stopRequestedRef.current = false;
       if (
         mediaRecorderRef.current &&
         mediaRecorderRef.current.state !== "inactive"
