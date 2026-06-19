@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  readLoadingGateFallbackSnapshot,
   runLoadingGateInit,
   type LoadingGateSnapshot,
 } from "@/lib/entrance/loading-gate-init";
@@ -21,15 +20,9 @@ export function LoadingGate({ onReady }: LoadingGateProps) {
 
     let cancelled = false;
 
-    void runLoadingGateInit()
-      .then((snapshot) => {
-        if (!cancelled) onReady(snapshot);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          onReady(readLoadingGateFallbackSnapshot());
-        }
-      });
+    void runLoadingGateInit().then((snapshot) => {
+      if (!cancelled) onReady(snapshot);
+    });
 
     return () => {
       cancelled = true;
@@ -42,7 +35,7 @@ export function LoadingGate({ onReady }: LoadingGateProps) {
       role="status"
       aria-live="polite"
     >
-      <p className="loading-gate-message font-serif-jp translate-y-6 text-[13px] tracking-[0.14em] text-amber-200/45">
+      <p className="loading-gate-message font-serif-jp translate-y-4 text-[14px] tracking-[0.12em] text-amber-100/80">
         夜を準備しています
       </p>
     </div>

@@ -7,6 +7,9 @@ export type LoadingGateSnapshot = {
   entryImagePreloaded: boolean;
 };
 
+/** UX — ロード完了後もこの時間は Gate を維持（実ロードが長い場合はそちらを優先） */
+export const LOADING_GATE_MIN_DISPLAY_MS = 3000;
+
 type LoadingGatePhase = {
   id: string;
   run: () => Promise<void>;
@@ -48,6 +51,14 @@ async function runLoadingGatePhases(phases: LoadingGatePhase[]): Promise<void> {
   }
 }
 
+async function waitForMinimumGateDisplay(gateStartedAt: number): Promise<void> {
+  const remaining = LOADING_GATE_MIN_DISPLAY_MS - (performance.now() - gateStartedAt);
+  if (remaining <= 0) return;
+
+  logLoadingGate("min-display:wait", { ms: Math.round(remaining) });
+  await new Promise((resolve) => setTimeout(resolve, remaining));
+}
+
 const LOADING_GATE_PHASES: LoadingGatePhase[] = [
   {
     id: "visit-state",
@@ -68,15 +79,24 @@ const LOADING_GATE_PHASES: LoadingGatePhase[] = [
 /** Loading Gate — Audio / React 演出は触らない */
 export async function runLoadingGateInit(): Promise<LoadingGateSnapshot> {
   const gateStartedAt = performance.now();
-  logLoadingGate("gate:start");
+  logLoadingGate("gate:start", { minDisplayMs: LOADING_GATE_MIN_DISPLAY_MS });
 
-  const visit = readVisitStateSnapshot();
-  await runLoadingGatePhases(LOADING_GATE_PHASES);
+  let snapshot: LoadingGateSnapshot;
 
-  const snapshot = buildSnapshot(visit);
+  try {
+    const visit = readVisitStateSnapshot();
+    await runLoadingGatePhases(LOADING_GATE_PHASES);
+    snapshot = buildSnapshot(visit);
+  } catch {
+    snapshot = readLoadingGateFallbackSnapshot();
+    logLoadingGate("gate:fallback-snapshot");
+  }
+
+  await waitForMinimumGateDisplay(gateStartedAt);
 
   logLoadingGate("gate:ready", {
     ms: Math.round(performance.now() - gateStartedAt),
+    minDisplayMs: LOADING_GATE_MIN_DISPLAY_MS,
     isReturningVisitor: snapshot.isReturningVisitor,
     entryImagePreloaded: snapshot.entryImagePreloaded,
   });
