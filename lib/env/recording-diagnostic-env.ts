@@ -1,10 +1,14 @@
-import { APP_ENV, isProd } from "@/lib/env/app-env";
+import { APP_ENV } from "@/lib/env/app-env";
 
-/** dev / local のみ — production では常に false */
+/**
+ * 録音パイプライン診断 UI / debug API の有効化。
+ * production のみ OFF — local / dev / 未設定は ON。
+ */
 export function isRecordingDiagnosticEnabled(): boolean {
-  return !isProd;
+  const env = process.env.NEXT_PUBLIC_APP_ENV ?? APP_ENV;
+  return env !== "production";
 }
 
 export function recordingDiagnosticEnvLabel(): string {
-  return APP_ENV;
+  return process.env.NEXT_PUBLIC_APP_ENV ?? APP_ENV;
 }

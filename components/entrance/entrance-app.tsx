@@ -1,10 +1,11 @@
 "use client";
 
-import { RecordingPipelineDiagnosticPanel } from "@/components/entrance/recording-pipeline-diagnostic-panel";
+import { EntranceDiagnosticOverlay } from "@/components/entrance/entrance-diagnostic-overlay";
 import { EntranceFlow } from "@/components/entrance/entrance-flow";
 import { LoadingGate } from "@/components/entrance/loading-gate";
 import { useEntranceScrollLock } from "@/hooks/use-entrance-scroll-lock";
 import type { LoadingGateSnapshot } from "@/lib/entrance/loading-gate-init";
+import { isRecordingDiagnosticEnabled } from "@/lib/env/recording-diagnostic-env";
 import { useCallback, useState } from "react";
 
 export function EntranceApp() {
@@ -31,7 +32,7 @@ export function EntranceApp() {
           </div>
         </div>
       )}
-      <RecordingPipelineDiagnosticPanel />
+      {isRecordingDiagnosticEnabled() ? <EntranceDiagnosticOverlay /> : null}
     </div>
   );
 }

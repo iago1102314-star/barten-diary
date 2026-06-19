@@ -2,7 +2,6 @@
 
 import { ListeningIndicator } from "@/components/entrance/listening-indicator";
 import { MasterLine } from "@/components/entrance/master-line";
-import { RecordingPipelineDiagnosticPanel } from "@/components/entrance/recording-pipeline-diagnostic-panel";
 import { BarButton } from "@/components/ui/bar-button";
 import {
   canLeaveWithoutRecord,
@@ -81,7 +80,6 @@ export function RecordingPanel({
           ))}
         </div>
         <div className="flex flex-col items-center gap-5 pt-1">
-          <RecordingPipelineDiagnosticPanel forceVisible inline />
           <BarButton variant="ghost" onClick={onRetrySpeaking}>
             もう一度話す
           </BarButton>
