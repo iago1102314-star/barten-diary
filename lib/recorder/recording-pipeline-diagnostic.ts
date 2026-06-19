@@ -1,4 +1,7 @@
-import { isNonProd } from "@/lib/env/app-env";
+import {
+  isRecordingDiagnosticEnabled,
+  recordingDiagnosticEnvLabel,
+} from "@/lib/env/recording-diagnostic-env";
 
 export type RecordingPipelineJazzSnapshot = {
   currentVolume: number | null;
@@ -15,6 +18,7 @@ export type RecordingPipelineDiagnosticSnapshot = {
   whisperRaw?: string;
   refinedTranscript?: string;
   diaryTranscript?: string;
+  pipelineError?: string;
   jazz?: RecordingPipelineJazzSnapshot;
 };
 
@@ -37,7 +41,7 @@ export function subscribeRecordingPipelineDiagnostic(listener: () => void): () =
 }
 
 export function resetRecordingPipelineDiagnostic(): void {
-  if (!isNonProd) return;
+  if (!isRecordingDiagnosticEnabled()) return;
   snapshot = { updatedAt: Date.now() };
   notify();
 }
@@ -45,7 +49,7 @@ export function resetRecordingPipelineDiagnostic(): void {
 export function updateRecordingPipelineDiagnostic(
   patch: Partial<Omit<RecordingPipelineDiagnosticSnapshot, "updatedAt">>,
 ): void {
-  if (!isNonProd) return;
+  if (!isRecordingDiagnosticEnabled()) return;
   snapshot = { ...snapshot, ...patch, updatedAt: Date.now() };
   notify();
 }
@@ -80,6 +84,7 @@ export function formatRecordingPipelineDiagnostic(
 ): string {
   const lines = [
     "=== Recording Pipeline Diagnostic ===",
+    `env: ${recordingDiagnosticEnvLabel()}`,
     `updatedAt: ${new Date(data.updatedAt).toISOString()}`,
     "",
     `blobSize: ${formatValue(data.blobSize)}`,
@@ -96,6 +101,9 @@ export function formatRecordingPipelineDiagnostic(
     "--- diary generation transcript ---",
     formatValue(data.diaryTranscript),
     "",
+    "--- pipeline error ---",
+    formatValue(data.pipelineError),
+    "",
     "--- jazz (mic ON) ---",
     `currentVolume: ${formatValue(data.jazz?.currentVolume)}`,
     `targetVolume: ${formatValue(data.jazz?.targetVolume)}`,
@@ -108,5 +116,12 @@ export function formatRecordingPipelineDiagnostic(
 export function hasRecordingPipelineDiagnosticData(
   data: RecordingPipelineDiagnosticSnapshot = snapshot,
 ): boolean {
-  return data.blobSize !== undefined;
+  return (
+    data.blobSize !== undefined ||
+    data.whisperRaw !== undefined ||
+    data.refinedTranscript !== undefined ||
+    data.diaryTranscript !== undefined ||
+    data.pipelineError !== undefined ||
+    data.jazz !== undefined
+  );
 }

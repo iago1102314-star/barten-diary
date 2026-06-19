@@ -1,4 +1,4 @@
-import { isNonProd } from "@/lib/env/app-env";
+import { isRecordingDiagnosticEnabled } from "@/lib/env/recording-diagnostic-env";
 
 const MAX_EVENTS = 40;
 
@@ -16,12 +16,12 @@ declare global {
   }
 }
 
-/** local / Vercel dev のみ — 実機 Safari で `copy(window.__RECORDING_PIPELINE_LOG__)` も可 */
+/** local / Vercel dev のみ — production PWA 実機計測を汚さない */
 export function logRecordingPipeline(
   message: string,
   detail?: Record<string, unknown>,
 ) {
-  if (!isNonProd) return;
+  if (!isRecordingDiagnosticEnabled()) return;
 
   const entry: PipelineLogEntry = { t: Date.now(), message, detail };
   ring.push(entry);
@@ -45,7 +45,7 @@ export function logRecordingPipelineServer(
   message: string,
   detail?: Record<string, unknown>,
 ) {
-  if (!isNonProd) return;
+  if (!isRecordingDiagnosticEnabled()) return;
 
   if (detail) {
     console.info(`[RecordingPipeline] ${message}`, detail);

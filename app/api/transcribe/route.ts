@@ -3,7 +3,7 @@ import { getAudioExtension } from "@/lib/transcribe/get-audio-extension";
 import { WHISPER_INITIAL_PROMPT } from "@/lib/transcribe/whisper-context";
 import { MIN_RECORDING_BYTES } from "@/lib/recorder/recorder-platform";
 import { logRecordingPipelineServer } from "@/lib/recorder/recording-pipeline-log";
-import { isNonProd } from "@/lib/env/app-env";
+import { isRecordingDiagnosticEnabled } from "@/lib/env/recording-diagnostic-env";
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      isNonProd
+      isRecordingDiagnosticEnabled()
         ? {
             transcript: refined,
             debug: { whisperRaw: transcription.text },

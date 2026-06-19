@@ -275,6 +275,9 @@ export function useNightSession() {
 
         const validation = validateTranscriptInput(text);
         if (!validation.ok) {
+          updateRecordingPipelineDiagnostic({
+            pipelineError: `validation:${validation.code} — ${validation.message}`,
+          });
           logRecordingPipeline("transcribe pipeline: validation failed", {
             code: validation.code,
             message: validation.message,
@@ -289,8 +292,12 @@ export function useNightSession() {
         setTranscript(text);
         setPhase("accepted");
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        updateRecordingPipelineDiagnostic({
+          pipelineError: message,
+        });
         logRecordingPipeline("transcribe pipeline: error", {
-          error: error instanceof Error ? error.message : String(error),
+          error: message,
         });
         registerListenFailure();
       } finally {
