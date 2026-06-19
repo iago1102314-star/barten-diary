@@ -11,11 +11,29 @@ const SFX_SOURCES = [
   ENTRANCE_SOUNDS.think,
 ] as const;
 
+let jazzDuckedForRecording = false;
+
+const sfxPool = new Map<string, HTMLAudioElement[]>();
+let sfxPoolInitialized = false;
+let warmUpPromise: Promise<void> | null = null;
+let barAudioUserGestureUnlocked = false;
+
+function isBarAudioUnlocked(): boolean {
+  return barAudioUserGestureUnlocked;
+}
+
+/** 扉を開ける / メモを見る等 — 最初の明確なユーザー操作後にのみ呼ぶ */
+export function unlockBarAudioForUserGesture(): void {
+  if (barAudioUserGestureUnlocked) return;
+  barAudioUserGestureUnlocked = true;
+  void warmUpBarAudio();
+}
+
 function createAudio(src: string): HTMLAudioElement | null {
   if (typeof window === "undefined") return null;
   try {
     const audio = new Audio(src);
-    audio.preload = "auto";
+    audio.preload = "none";
     return audio;
   } catch {
     return null;
@@ -281,12 +299,6 @@ function fadeVolume(
 const outsideTrack = createInitialTrackState(BAR_AUDIO_LEVELS.outside.alley);
 const jazzTrack = createInitialTrackState(BAR_AUDIO_LEVELS.jazz.counter);
 
-let jazzDuckedForRecording = false;
-
-const sfxPool = new Map<string, HTMLAudioElement[]>();
-let sfxPoolInitialized = false;
-let warmUpPromise: Promise<void> | null = null;
-
 function ensureSfxPool() {
   if (sfxPoolInitialized) return;
 
@@ -307,8 +319,12 @@ function ensureSfxPool() {
   sfxPoolInitialized = true;
 }
 
-/** SE をプリロードし、ユーザー操作直後にデコードを済ませる */
+/** SE プール生成 + decode 待ち（silent play は行わない） */
 export function warmUpBarAudio(): Promise<void> {
+  if (!isBarAudioUnlocked()) {
+    return Promise.resolve();
+  }
+
   ensureSfxPool();
 
   if (!warmUpPromise) {
@@ -320,19 +336,6 @@ export function warmUpBarAudio(): Promise<void> {
       }
 
       await Promise.all(waitTargets.map((audio) => waitForCanPlay(audio)));
-
-      for (const audio of waitTargets) {
-        const volume = audio.volume;
-        audio.volume = 0;
-        try {
-          await audio.play();
-          audio.pause();
-          audio.currentTime = 0;
-        } catch {
-          // 自動再生ポリシー等は無視（扉ボタン操作後なら通る想定）
-        }
-        audio.volume = volume;
-      }
     })();
   }
 
@@ -353,7 +356,7 @@ async function playSfx(
 
 /** ユーザー操作直後 — await なしで即再生 */
 function playSfxNow(src: string, volume: number) {
-  if (!sfxPoolInitialized) return;
+  if (!isBarAudioUnlocked() || !sfxPoolInitialized) return;
   const slots = sfxPool.get(src);
   if (!slots?.length) return;
 
@@ -370,6 +373,8 @@ async function startLooping(
   fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   enableAmbientModulation = false,
 ) {
+  if (!isBarAudioUnlocked()) return;
+
   track.generation += 1;
   const token = track.generation;
   track.targetVolume = volume;
@@ -564,6 +569,7 @@ export const barAudioEngine = {
 
   dispose() {
     jazzDuckedForRecording = false;
+    barAudioUserGestureUnlocked = false;
     stopLooping(outsideTrack, true);
     stopLooping(jazzTrack, true);
 

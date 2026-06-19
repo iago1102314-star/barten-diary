@@ -1,13 +1,16 @@
 "use client";
 
-import { barAudioEngine } from "@/lib/entrance/bar-audio-engine";
+import {
+  barAudioEngine,
+  unlockBarAudioForUserGesture,
+} from "@/lib/entrance/bar-audio-engine";
 import { useEffect } from "react";
 
 let consumerCount = 0;
 
-/** ユーザー操作後に SE プールを初期化する（ロード時は呼ばない） */
+/** 扉を開ける / メモを見る — 最初の明確なユーザー操作後にのみ呼ぶ */
 export function prepareBarAudioOnUserGesture(): void {
-  void barAudioEngine.warmUp();
+  unlockBarAudioForUserGesture();
 }
 
 /** バー音声 — モジュール共有エンジン経由（SE プリロード・低遅延再生） */

@@ -400,7 +400,26 @@ body {
   }
 }
 
+.loading-gate-message {
+  animation: loading-gate-breathe 3.6s ease-in-out infinite;
+}
+
+@keyframes loading-gate-breathe {
+  0%,
+  100% {
+    opacity: 0.32;
+  }
+  50% {
+    opacity: 0.52;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .loading-gate-message {
+    animation: none;
+    opacity: 0.45;
+  }
+
   .scene-grain,
   .animate-lantern-flicker,
   .animate-ambient-breathe,

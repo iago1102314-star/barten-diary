@@ -591,7 +591,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleBackToEntry = () => {
-    unlockBarAudio();
     setSkipEntryEntrance(true);
     setEntranceState("entry");
     setEntryTransition("steadyFadeIn");
@@ -602,7 +601,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleMasterGreetingComplete = () => {
-    unlockBarAudio();
     audio.startJazz(
       BAR_AUDIO_LEVELS.jazz.counter,
       BAR_AUDIO_TIMING.jazzEntryFadeMs,
