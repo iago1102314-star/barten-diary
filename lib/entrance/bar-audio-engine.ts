@@ -23,21 +23,55 @@ function isBarAudioUnlocked(): boolean {
   return barAudioUserGestureUnlocked;
 }
 
+/** React 側の unlock 状態とモジュール状態のズレ確認（HMR 後など） */
+export function isBarAudioUnlockedByClient(): boolean {
+  return barAudioUserGestureUnlocked;
+}
+
+/** HMR でモジュールが再評価された後 — プールだけ復元（play は次のユーザー操作で） */
+export function restoreBarAudioUnlockAfterModuleReload(): void {
+  if (barAudioUserGestureUnlocked) return;
+  barAudioUserGestureUnlocked = true;
+  ensureSfxPool();
+  void warmUpBarAudio();
+}
+
 /** 扉を開ける / メモを見る等 — 最初の明確なユーザー操作後にのみ呼ぶ */
 export function unlockBarAudioForUserGesture(): void {
   if (barAudioUserGestureUnlocked) return;
   barAudioUserGestureUnlocked = true;
+  prefetchLoopingSource(ENTRANCE_SOUNDS.jazz);
+  prefetchLoopingSource(ENTRANCE_SOUNDS.outside);
   void warmUpBarAudio();
 }
 
-function createAudio(src: string): HTMLAudioElement | null {
+function createAudio(src: string, preload: "none" | "auto" = "none"): HTMLAudioElement | null {
   if (typeof window === "undefined") return null;
   try {
     const audio = new Audio(src);
-    audio.preload = "none";
+    audio.preload = preload;
     return audio;
   } catch {
     return null;
+  }
+}
+
+const loopPrefetch = new Map<string, HTMLAudioElement>();
+
+function prefetchLoopingSource(src: string) {
+  if (loopPrefetch.has(src)) return;
+  const audio = createAudio(src, "auto");
+  if (!audio) return;
+  audio.load();
+  loopPrefetch.set(src, audio);
+}
+
+async function safePlay(audio: HTMLAudioElement): Promise<boolean> {
+  try {
+    await audio.play();
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -348,11 +382,8 @@ async function playSfx(
   volume: number,
   delayMs = 0,
 ): Promise<void> {
-  if (bgmPausedForRecording) return;
-
   if (delayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
-    if (bgmPausedForRecording) return;
   }
 
   playSfxNow(src, volume);
@@ -360,7 +391,7 @@ async function playSfx(
 
 /** ユーザー操作直後 — await なしで即再生 */
 function playSfxNow(src: string, volume: number) {
-  if (!isBarAudioUnlocked() || !sfxPoolInitialized || bgmPausedForRecording) return;
+  if (!isBarAudioUnlocked() || !sfxPoolInitialized) return;
   const slots = sfxPool.get(src);
   if (!slots?.length) return;
 
@@ -392,9 +423,7 @@ async function startLooping(
         return;
       }
       audio.currentTime = pickRandomStartTime(audio.duration);
-      try {
-        await audio.play();
-      } catch {
+      if (!(await safePlay(audio))) {
         return;
       }
       if (!isTrackAudioCurrent(track, token, audio)) {
@@ -409,13 +438,14 @@ async function startLooping(
     return;
   }
 
-  const audio = createAudio(src);
+  const audio = createAudio(src, "auto");
   if (!audio) return;
 
   audio.loop = true;
   audio.volume = 0;
   track.audio = audio;
   track.started = true;
+  audio.load();
 
   await waitForMetadata(audio);
   if (!isTrackAudioCurrent(track, token, audio)) {
@@ -437,7 +467,14 @@ async function startLooping(
   }
 
   try {
-    await audio.play();
+    if (!(await safePlay(audio))) {
+      if (track.audio === audio) {
+        clearTrackAudio(track, audio);
+      } else {
+        releaseAudio(audio);
+      }
+      return;
+    }
     if (!isTrackAudioCurrent(track, token, audio)) {
       releaseAudio(audio);
       return;
@@ -520,24 +557,62 @@ function stopAllActiveSfx() {
   }
 }
 
-function fadeOutAndStopTrack(
+/**
+ * 録音開始直後 — MediaRecorder.start() と同一ターンで pause する。
+ * 録音が始まってから非同期で pause すると iOS で MediaRecorder が中断される。
+ */
+function silenceTrackForRecording(track: LoopingTrackState) {
+  const audio = track.audio;
+  if (!audio || !track.started) return;
+
+  cancelTrackFade(track);
+  track.ambient?.pause();
+  audio.volume = 0;
+  audio.muted = true;
+  try {
+    audio.pause();
+  } catch {
+    // ignore
+  }
+}
+
+function restoreTrackAfterRecording(track: LoopingTrackState) {
+  const audio = track.audio;
+  if (!audio || !track.started) return;
+  audio.muted = false;
+}
+
+async function resumePausedLoopTrack(
   track: LoopingTrackState,
   fadeMs: number,
 ): Promise<void> {
   const audio = track.audio;
   if (!audio || !track.started) {
-    return Promise.resolve();
+    return;
   }
 
-  return new Promise((resolve) => {
-    cancelTrackFade(track);
-    track.ambient?.pause();
-    fadeVolume(audio, audio.volume, 0, fadeMs, track, () => {
-      track.generation += 1;
-      clearTrackAudio(track, audio);
-      resolve();
+  cancelTrackFade(track);
+  track.ambient?.pause();
+
+  try {
+    if (audio.paused) {
+      if (!(await safePlay(audio))) {
+        logRecordingPipeline("resumePausedLoopTrack: play failed", {
+          error: "play rejected",
+        });
+        return;
+      }
+    }
+  } catch (error) {
+    logRecordingPipeline("resumePausedLoopTrack: play failed", {
+      error: error instanceof Error ? error.message : String(error),
     });
-  });
+    return;
+  }
+
+  if (track.audio !== audio) return;
+
+  fadeVolume(audio, audio.volume, track.targetVolume, fadeMs, track);
 }
 
 function snapshotActiveSfx(): Array<Record<string, unknown>> {
@@ -612,48 +687,48 @@ export const barAudioEngine = {
   },
 
   /**
-   * 録音開始直前 — SE 即停止、BGM を短時間フェードアウトしてから完全停止。
-   * iOS / Mac 共通（duck ではなく pause + 解放）。
+   * 録音開始後 — SE 停止 + BGM 無音化（pause しない）。
+   * getUserMedia / MediaRecorder.start の成功後に同期的に呼ぶこと。
    */
-  async pauseJazzForRecording(): Promise<void> {
-    if (bgmPausedForRecording) return;
-
+  pauseJazzForRecording() {
     bgmPausedForRecording = true;
     stopAllActiveSfx();
+    silenceTrackForRecording(outsideTrack);
+    silenceTrackForRecording(jazzTrack);
 
-    const fadeMs = BAR_AUDIO_TIMING.recordingFadeOutMs;
-    logRecordingPipeline("pauseJazzForRecording: fade out + stop", {
-      fadeMs,
-      audio: getBarAudioDiagnostics(),
-    });
-
-    await Promise.all([
-      fadeOutAndStopTrack(outsideTrack, fadeMs),
-      fadeOutAndStopTrack(jazzTrack, fadeMs),
-    ]);
-
-    logRecordingPipeline("pauseJazzForRecording: stopped", {
+    logRecordingPipeline("pauseJazzForRecording: silenced (no pause)", {
       audio: getBarAudioDiagnostics(),
     });
   },
 
-  /** 録音終了後 — 店内 BGM を通常音量（0.03）でフェードイン再開 */
+  /** 録音終了後 — 保持していた jazz を通常音量（0.03）でフェードイン再開 */
   resumeJazzAfterRecording() {
     if (!bgmPausedForRecording) return;
     bgmPausedForRecording = false;
+    restoreTrackAfterRecording(outsideTrack);
+    restoreTrackAfterRecording(jazzTrack);
 
-    logRecordingPipeline("resumeJazzAfterRecording: restart jazz", {
-      targetVolume: BAR_AUDIO_LEVELS.jazz.counter,
+    if (!jazzTrack.started || !jazzTrack.audio) {
+      logRecordingPipeline("resumeJazzAfterRecording: restart jazz (no track)", {
+        targetVolume: BAR_AUDIO_LEVELS.jazz.counter,
+        fadeMs: BAR_AUDIO_TIMING.fadeMs,
+      });
+      void startLooping(
+        ENTRANCE_SOUNDS.jazz,
+        BAR_AUDIO_LEVELS.jazz.counter,
+        jazzTrack,
+        BAR_AUDIO_TIMING.fadeMs,
+        true,
+      );
+      return;
+    }
+
+    logRecordingPipeline("resumeJazzAfterRecording: fade in existing track", {
+      targetVolume: jazzTrack.targetVolume,
       fadeMs: BAR_AUDIO_TIMING.fadeMs,
     });
 
-    void startLooping(
-      ENTRANCE_SOUNDS.jazz,
-      BAR_AUDIO_LEVELS.jazz.counter,
-      jazzTrack,
-      BAR_AUDIO_TIMING.fadeMs,
-      true,
-    );
+    void resumePausedLoopTrack(jazzTrack, BAR_AUDIO_TIMING.fadeMs);
   },
 
   playDoor() {

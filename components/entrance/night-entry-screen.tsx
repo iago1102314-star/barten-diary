@@ -5,7 +5,6 @@ import { GlowAnchorMarker } from "@/components/entrance/glow-anchor-marker";
 import { SceneFrame } from "@/components/entrance/scene-frame";
 import { BarButton } from "@/components/ui/bar-button";
 import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
-import { isEntryImagePreloaded } from "@/lib/entrance/entry-image-preload";
 import { resolveLampGlowRgb } from "@/lib/entrance/lamp-glow-color";
 import {
   getLampBreatheClassName,
@@ -54,7 +53,7 @@ import {
 } from "@/lib/entrance/start-lamp-glows";
 import { motion } from "motion/react";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 // ─── 開発用フラグ ──────────────────────────────────────────────────────────────
 /** true にするとボケ入場画面で止まる（デザイン確認用） */
@@ -189,6 +188,8 @@ function PairedStartEntranceGlow({
 type NightEntryScreenProps = {
   onEnterCounter: () => void;
   onOpenMemories: () => void;
+  /** 最初のタップ — 路地 BGM 用に Audio を unlock */
+  onUserGesture?: () => void;
   skipImageEntrance?: boolean;
   /** メモから戻る — 定常ホームをフェードイン */
   steadyFadeIn?: boolean;
@@ -214,6 +215,7 @@ type NightEntryScreenProps = {
 export function NightEntryScreen({
   onEnterCounter,
   onOpenMemories,
+  onUserGesture,
   skipImageEntrance = false,
   steadyFadeIn = false,
   onSteadyFadeInComplete,
@@ -232,7 +234,6 @@ export function NightEntryScreen({
   const showBokehOnlyMarkers = SHOW_START_BOKEH_ONLY_POSITION_MARKERS;
   const showGlow = SHOW_START_LAMP_GLOW_LIGHT || showMarkers;
   const interactionLocked = doorExiting || memoriesFadeOut;
-  const entryImagePreloaded = isEntryImagePreloaded();
 
   const [phase, setPhase] = useState<EntryScreenPhase>(
     skipImageEntrance ? "normal" : "bokeh",
@@ -240,6 +241,13 @@ export function NightEntryScreen({
   const [revealProgress, setRevealProgress] = useState(
     skipImageEntrance ? 1 : 0,
   );
+  const userGesturePrimedRef = useRef(false);
+
+  const handleUserGesture = () => {
+    if (userGesturePrimedRef.current || interactionLocked) return;
+    userGesturePrimedRef.current = true;
+    onUserGesture?.();
+  };
 
   const glowPairs = useMemo(
     () => pairStartGlowsById(bokehLampGlows, steadyLampGlows),
@@ -339,7 +347,7 @@ export function NightEntryScreen({
   };
 
   return (
-    <SceneFrame>
+    <SceneFrame onPointerDown={handleUserGesture}>
       <motion.div
         className="absolute inset-0"
         initial={false}
@@ -396,7 +404,8 @@ export function NightEntryScreen({
                 src={ENTRANCE_ASSETS.start}
                 alt=""
                 fill
-                priority={!entryImagePreloaded}
+                priority
+                loading="eager"
                 sizes="440px"
                 className="object-cover"
                 style={{

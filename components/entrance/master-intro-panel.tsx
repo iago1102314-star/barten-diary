@@ -2,7 +2,7 @@
 
 import { DialogueBox } from "@/components/entrance/dialogue-box";
 import { Typewriter } from "@/components/motion/typewriter";
-import { barAudioEngine } from "@/lib/entrance/bar-audio-engine";
+import { barAudioEngine, unlockBarAudioForUserGesture } from "@/lib/entrance/bar-audio-engine";
 import { useDialogueAdvance } from "@/hooks/use-dialogue-advance";
 import { BAR_AUDIO_TIMING } from "@/lib/entrance/audio-levels";
 import { MASTER_DIALOGUE_TYPOGRAPHY } from "@/lib/entrance/master-dialogue-typography";
@@ -48,6 +48,7 @@ export function MasterIntroPanel({
   }, [bubbleDelayMs]);
 
   const handlePointerDown = useCallback(() => {
+    unlockBarAudioForUserGesture();
     if (!bubbleVisible || !done) return;
     barAudioEngine.playClick();
   }, [bubbleVisible, done]);

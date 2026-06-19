@@ -22,36 +22,63 @@ export type RecordingPipelineDiagnosticSnapshot = {
   jazz?: RecordingPipelineJazzSnapshot;
 };
 
-let snapshot: RecordingPipelineDiagnosticSnapshot = { updatedAt: 0 };
-const listeners = new Set<() => void>();
+declare global {
+  interface Window {
+    __RECORDING_PIPELINE_DIAGNOSTIC__?: RecordingPipelineDiagnosticSnapshot;
+    __RECORDING_PIPELINE_DIAGNOSTIC_LISTENERS__?: Set<() => void>;
+  }
+}
 
-function notify() {
-  for (const listener of listeners) {
+function getListenerSet(): Set<() => void> {
+  if (typeof window === "undefined") {
+    return new Set();
+  }
+  if (!window.__RECORDING_PIPELINE_DIAGNOSTIC_LISTENERS__) {
+    window.__RECORDING_PIPELINE_DIAGNOSTIC_LISTENERS__ = new Set();
+  }
+  return window.__RECORDING_PIPELINE_DIAGNOSTIC_LISTENERS__;
+}
+
+/** Turbopack HMR でモジュールが複製されても window を単一の真実源にする */
+function readSnapshot(): RecordingPipelineDiagnosticSnapshot {
+  if (typeof window === "undefined") {
+    return { updatedAt: 0 };
+  }
+  if (!window.__RECORDING_PIPELINE_DIAGNOSTIC__) {
+    window.__RECORDING_PIPELINE_DIAGNOSTIC__ = { updatedAt: 0 };
+  }
+  return window.__RECORDING_PIPELINE_DIAGNOSTIC__;
+}
+
+function writeSnapshot(next: RecordingPipelineDiagnosticSnapshot): void {
+  if (typeof window !== "undefined") {
+    window.__RECORDING_PIPELINE_DIAGNOSTIC__ = next;
+  }
+  for (const listener of getListenerSet()) {
     listener();
   }
 }
 
 export function getRecordingPipelineDiagnostic(): RecordingPipelineDiagnosticSnapshot {
-  return snapshot;
+  return readSnapshot();
 }
 
 export function subscribeRecordingPipelineDiagnostic(listener: () => void): () => void {
+  const listeners = getListenerSet();
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
 export function resetRecordingPipelineDiagnostic(): void {
   if (!isRecordingDiagnosticEnabled()) return;
-  snapshot = { updatedAt: Date.now() };
-  notify();
+  writeSnapshot({ updatedAt: Date.now() });
 }
 
 export function updateRecordingPipelineDiagnostic(
   patch: Partial<Omit<RecordingPipelineDiagnosticSnapshot, "updatedAt">>,
 ): void {
   if (!isRecordingDiagnosticEnabled()) return;
-  snapshot = { ...snapshot, ...patch, updatedAt: Date.now() };
-  notify();
+  writeSnapshot({ ...readSnapshot(), ...patch, updatedAt: Date.now() });
 }
 
 export function extractJazzFromAudioDiagnostics(
@@ -80,7 +107,7 @@ function formatValue(value: unknown): string {
 }
 
 export function formatRecordingPipelineDiagnostic(
-  data: RecordingPipelineDiagnosticSnapshot = snapshot,
+  data: RecordingPipelineDiagnosticSnapshot = readSnapshot(),
 ): string {
   const lines = [
     "=== Recording Pipeline Diagnostic ===",
@@ -114,7 +141,7 @@ export function formatRecordingPipelineDiagnostic(
 }
 
 export function hasRecordingPipelineDiagnosticData(
-  data: RecordingPipelineDiagnosticSnapshot = snapshot,
+  data: RecordingPipelineDiagnosticSnapshot = readSnapshot(),
 ): boolean {
   return (
     data.blobSize !== undefined ||

@@ -5,6 +5,7 @@ type SceneFrameProps = {
   className?: string;
   /** ヴィネット・グレイン等の空気感レイヤーを重ねる（既定: true） */
   atmosphere?: boolean;
+  onPointerDown?: React.ComponentProps<"div">["onPointerDown"];
 };
 
 /**
@@ -14,12 +15,14 @@ export function SceneFrame({
   children,
   className = "",
   atmosphere = true,
+  onPointerDown,
 }: SceneFrameProps) {
   return (
     <div
       className={`stage relative overflow-hidden bg-black ${
         atmosphere ? "grain vignette" : ""
       } ${className}`}
+      onPointerDown={onPointerDown}
     >
       {children}
 

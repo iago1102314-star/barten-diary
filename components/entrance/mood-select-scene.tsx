@@ -3,7 +3,7 @@
 import { MoodCurtain, type MoodCurtainPhase } from "@/components/entrance/mood-curtain";
 import { MoodSelectPanel } from "@/components/entrance/mood-select-panel";
 import type { MoodOption } from "@/components/entrance/bar-seat-mood-picker";
-import { barAudioEngine } from "@/lib/entrance/bar-audio-engine";
+import { barAudioEngine, unlockBarAudioForUserGesture } from "@/lib/entrance/bar-audio-engine";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -49,6 +49,7 @@ export function MoodSelectScene({
     (option: MoodOption, proceed: () => void) => {
       proceedPourRef.current = proceed;
       onSelectionStart?.();
+      unlockBarAudioForUserGesture();
       barAudioEngine.playThink();
       setCurtainPhase("closing");
     },

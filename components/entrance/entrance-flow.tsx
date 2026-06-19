@@ -23,7 +23,7 @@ import { NightEntryScreen, type EntryScreenPhase } from "@/components/entrance/n
 import { PastBottlePanel } from "@/components/entrance/past-bottle-panel";
 import { RecordingPanel } from "@/components/entrance/recording-panel";
 import { SceneFrame } from "@/components/entrance/scene-frame";
-import { prepareBarAudioOnUserGesture, useBarAudio } from "@/hooks/use-bar-audio";
+import { prepareBarAudioOnUserGesture, syncBarAudioUnlockFromClient, useBarAudio } from "@/hooks/use-bar-audio";
 import {
   BAR_AUDIO_LEVELS,
   BAR_AUDIO_TIMING,
@@ -235,6 +235,17 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     });
   }, []);
 
+  const primeEntryAmbience = useCallback(() => {
+    unlockBarAudio();
+    if (entranceState !== "entry" || entryTransition !== "idle") return;
+    audio.startOutside(
+      BAR_AUDIO_LEVELS.outside.alley,
+      skipEntryEntrance
+        ? BAR_AUDIO_TIMING.fadeMs
+        : BAR_AUDIO_TIMING.entryOutsideFadeMs,
+    );
+  }, [unlockBarAudio, entranceState, entryTransition, skipEntryEntrance, audio]);
+
   const handleGlowPatch = useCallback(
     (id: string, patch: Partial<LampGlowShapeFields>) => {
       setSelectedGlowId(id);
@@ -395,6 +406,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   }, []);
 
   useEffect(() => {
+    syncBarAudioUnlockFromClient(audioUnlocked);
     if (!audioUnlocked) return;
 
     if (entranceState === "entry" && entryTransition === "idle") {
@@ -565,8 +577,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const handleEnterCounter = () => {
     if (entryTransition !== "idle") return;
     resetNightRefs();
-    unlockBarAudio();
-    audio.stopOutside(false, BAR_AUDIO_TIMING.outsideStopFadeMs);
+    primeEntryAmbience();
     setEntryTransition("doorExit");
   };
 
@@ -581,7 +592,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
   const handleOpenMemories = () => {
     if (entryTransition !== "idle") return;
-    unlockBarAudio();
+    primeEntryAmbience();
     setEntryTransition("toMemories");
   };
 
@@ -601,6 +612,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleMasterGreetingComplete = () => {
+    unlockBarAudio();
     audio.startJazz(
       BAR_AUDIO_LEVELS.jazz.counter,
       BAR_AUDIO_TIMING.jazzEntryFadeMs,
@@ -648,7 +660,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
   const handleFinishTalk = () => {
     session.stopSpeaking();
-    setEntranceState("processing");
   };
 
   const handleLeaveWithoutRecord = () => {
@@ -698,6 +709,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
           <NightEntryScreen
             onEnterCounter={handleEnterCounter}
             onOpenMemories={handleOpenMemories}
+            onUserGesture={primeEntryAmbience}
             skipImageEntrance={skipEntryEntrance}
             steadyFadeIn={entryTransition === "steadyFadeIn"}
             onSteadyFadeInComplete={handleSteadyFadeInComplete}

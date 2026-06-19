@@ -11,6 +11,7 @@ import type { DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
 import { barAudioEngine, getBarAudioDiagnostics } from "@/lib/entrance/bar-audio-engine";
 import { MIN_RECORDING_BYTES } from "@/lib/recorder/recorder-platform";
 import {
+  getRecordingPipelineDiagnostic,
   resetRecordingPipelineDiagnostic,
   updateRecordingPipelineDiagnostic,
 } from "@/lib/recorder/recording-pipeline-diagnostic";
@@ -55,11 +56,14 @@ export function useNightSession() {
   const pipelineLock = useRef(false);
   const inflightGenerationKeyRef = useRef<string | null>(null);
   const registerListenFailureRef = useRef<
-    (options?: { advanceCount?: boolean }) => void
+    (options?: { advanceCount?: boolean; reason?: string }) => void
   >(() => {});
 
   const recorder = useRecorder({
-    onFatalError: ({ hadRecordingAttempt }) => {
+    onRecordingStarted: () => {
+      barAudioEngine.pauseJazzForRecording();
+    },
+    onFatalError: ({ hadRecordingAttempt, message }) => {
       if (
         phaseRef.current !== "recording" &&
         phaseRef.current !== "processing"
@@ -68,12 +72,17 @@ export function useNightSession() {
       }
       registerListenFailureRef.current({
         advanceCount: hadRecordingAttempt,
+        reason:
+          message ??
+          (hadRecordingAttempt
+            ? "recorder fatal error after recording started"
+            : "recorder fatal error before recording completed"),
       });
     },
   });
 
   const registerListenFailure = useCallback(
-    (options?: { advanceCount?: boolean }) => {
+    (options?: { advanceCount?: boolean; reason?: string }) => {
       pipelineLock.current = false;
       inflightGenerationKeyRef.current = null;
       barAudioEngine.resumeJazzAfterRecording();
@@ -82,6 +91,19 @@ export function useNightSession() {
       setTranscript(null);
       setRecordedAt(null);
       setGenerationFailed(false);
+      if (options?.reason) {
+        const current = getRecordingPipelineDiagnostic();
+        if (!current.pipelineError) {
+          updateRecordingPipelineDiagnostic({ pipelineError: options.reason });
+        }
+      } else {
+        const current = getRecordingPipelineDiagnostic();
+        if (!current.pipelineError) {
+          updateRecordingPipelineDiagnostic({
+            pipelineError: "listen failure (no detail recorded)",
+          });
+        }
+      }
       if (options?.advanceCount !== false) {
         setListenFailureCount((count) => count + 1);
       }
@@ -149,31 +171,35 @@ export function useNightSession() {
     pipelineLock.current = false;
     inflightGenerationKeyRef.current = null;
     setGenerationFailed(false);
-    recorder.reset();
     generation.reset();
     setTranscript(null);
     setRecordedAt(null);
     resetRecordingPipelineDiagnostic();
     setPhase("recording");
-    logRecordingPipeline("startSpeaking: before pauseJazzForRecording", {
-      audio: getBarAudioDiagnostics(),
-    });
-    await barAudioEngine.pauseJazzForRecording();
-    logRecordingPipeline("startSpeaking: after pauseJazzForRecording", {
-      audio: getBarAudioDiagnostics(),
-    });
-    await recorder.start();
-    logRecordingPipeline("startSpeaking: after recorder.start", {
-      audio: getBarAudioDiagnostics(),
-      recorderStatus: recorder.status,
-    });
-  }, [recorder, generation, selectedCategoryId, resetListenFailure]);
+    const started = await recorder.start();
+    if (!started) {
+      registerListenFailure({ advanceCount: false });
+      return;
+    }
+  }, [recorder, generation, selectedCategoryId, resetListenFailure, registerListenFailure]);
 
   const stopSpeaking = useCallback(() => {
-    if (recorder.status !== "recording" && recorder.status !== "paused") return;
-    setRecordedAt(new Date().toISOString());
-    recorder.stop();
-  }, [recorder]);
+    if (recorder.status === "recording" || recorder.status === "paused") {
+      setRecordedAt(new Date().toISOString());
+      recorder.stop();
+      return;
+    }
+
+    if (phaseRef.current !== "recording") return;
+
+    updateRecordingPipelineDiagnostic({
+      pipelineError: "stopSpeaking called while recorder was not active",
+    });
+    registerListenFailure({
+      advanceCount: true,
+      reason: "stopSpeaking called while recorder was not active",
+    });
+  }, [recorder, registerListenFailure]);
 
   const pauseSpeaking = useCallback((): boolean => {
     return recorder.pause();
@@ -190,13 +216,16 @@ export function useNightSession() {
     inflightGenerationKeyRef.current = null;
     resetRecordingPipelineDiagnostic();
     setPhase("recording");
-    await barAudioEngine.pauseJazzForRecording();
     recorder.reset();
     generation.reset();
     setTranscript(null);
     setRecordedAt(null);
-    await recorder.start();
-  }, [recorder, generation]);
+    const started = await recorder.start();
+    if (!started) {
+      registerListenFailure({ advanceCount: false });
+      return;
+    }
+  }, [recorder, generation, registerListenFailure]);
 
   const retryGeneration = useCallback(() => {
     if (!transcript || !selectedCategoryId) return;

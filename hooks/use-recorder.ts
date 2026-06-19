@@ -6,13 +6,15 @@ import {
   updateRecordingPipelineDiagnostic,
 } from "@/lib/recorder/recording-pipeline-diagnostic";
 import {
+  acquireMicStream,
+  formatRecorderStartError,
   getRecorderFinalizeDelayMs,
   getRecorderTimesliceMs,
   getSupportedRecorderMimeType,
   isAppleMediaRecorder,
+  isRecordingLikelyTooQuiet,
   MIN_RECORDING_BYTES,
   resolveRecordedMimeType,
-  waitForMicRelease,
 } from "@/lib/recorder/recorder-platform";
 import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -53,21 +55,29 @@ function formatElapsed(ms: number) {
 export type UseRecorderReturn = ReturnType<typeof useRecorder>;
 
 type UseRecorderOptions = {
-  onFatalError?: (context: { hadRecordingAttempt: boolean }) => void;
+  onFatalError?: (context: {
+    hadRecordingAttempt: boolean;
+    message?: string;
+  }) => void;
+  /** MediaRecorder.start() と同一ターンで呼ぶ — BGM 停止等 */
+  onRecordingStarted?: () => void;
 };
 
 export function useRecorder(options: UseRecorderOptions = {}) {
   const onFatalErrorRef = useRef(options.onFatalError);
   onFatalErrorRef.current = options.onFatalError;
-  const suppressFatalErrorRef = useRef(false);
+  const onRecordingStartedRef = useRef(options.onRecordingStarted);
+  onRecordingStartedRef.current = options.onRecordingStarted;
+  const sessionGenerationRef = useRef(0);
 
-  const notifyFatalError = useCallback((hadRecordingAttempt: boolean) => {
-    if (suppressFatalErrorRef.current) return;
-    queueMicrotask(() => {
-      if (suppressFatalErrorRef.current) return;
-      onFatalErrorRef.current?.({ hadRecordingAttempt });
-    });
-  }, []);
+  const notifyFatalError = useCallback(
+    (hadRecordingAttempt: boolean, message?: string) => {
+      queueMicrotask(() => {
+        onFatalErrorRef.current?.({ hadRecordingAttempt, message });
+      });
+    },
+    [],
+  );
   const [state, setState] = useState<UseRecorderState>({
     status: "idle",
     error: null,
@@ -165,18 +175,17 @@ export function useRecorder(options: UseRecorderOptions = {}) {
   }, []);
 
   const reset = useCallback(() => {
-    suppressFatalErrorRef.current = true;
+    sessionGenerationRef.current += 1;
     clearTimers();
     stopRequestedRef.current = false;
     finalizeStartedRef.current = false;
 
-    if (
-      mediaRecorderRef.current &&
-      mediaRecorderRef.current.state !== "inactive"
-    ) {
-      mediaRecorderRef.current.stop();
-    }
+    const staleRecorder = mediaRecorderRef.current;
     mediaRecorderRef.current = null;
+
+    if (staleRecorder && staleRecorder.state !== "inactive") {
+      staleRecorder.stop();
+    }
 
     stopMediaTracks();
     chunksRef.current = [];
@@ -194,12 +203,6 @@ export function useRecorder(options: UseRecorderOptions = {}) {
       elapsedMs: 0,
       mimeType: null,
       canPauseRecording: false,
-    });
-
-    queueMicrotask(() => {
-      queueMicrotask(() => {
-        suppressFatalErrorRef.current = false;
-      });
     });
   }, [clearTimers, revokeAudioUrl, stopMediaTracks]);
 
@@ -268,21 +271,25 @@ export function useRecorder(options: UseRecorderOptions = {}) {
     }
   }, [startElapsedTimer, startMaxDurationTimer]);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (): Promise<boolean> => {
     if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setState((prev) => ({
         ...prev,
         status: "error",
         error: "このブラウザでは録音がサポートされていません。",
       }));
-      notifyFatalError(false);
-      return;
+      updateRecordingPipelineDiagnostic({
+        pipelineError: "browser does not support getUserMedia",
+      });
+      notifyFatalError(false, "browser does not support getUserMedia");
+      return false;
     }
 
     reset();
 
+    const sessionGeneration = sessionGenerationRef.current;
+
     try {
-      await waitForMicRelease();
       const timesliceMs = getRecorderTimesliceMs();
       logRecordingPipeline("recorder.start: before getUserMedia", {
         audio: getBarAudioDiagnostics(),
@@ -291,7 +298,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
         timesliceMs,
         finalizeDelayMs: getRecorderFinalizeDelayMs(),
       });
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await acquireMicStream();
       mediaStreamRef.current = stream;
 
       logRecordingPipeline("recorder.start: after getUserMedia", {
@@ -369,10 +376,12 @@ export function useRecorder(options: UseRecorderOptions = {}) {
           belowMinBytes: blob.size < MIN_RECORDING_BYTES,
         });
 
+        const durationSec = Math.max(1, Math.round(elapsedMs / 1000));
+
         updateRecordingPipelineDiagnostic({
           blobSize: blob.size,
           chunkCount: chunkSizes.length,
-          durationSec: Math.round(elapsedMs / 1000),
+          durationSec,
           blobType: blob.type || recordedMimeType,
         });
 
@@ -388,7 +397,26 @@ export function useRecorder(options: UseRecorderOptions = {}) {
             mimeType: recordedMimeType,
             canPauseRecording: false,
           });
-          notifyFatalError(true);
+          notifyFatalError(true, "recording blob below minimum bytes");
+          return;
+        }
+
+        if (isRecordingLikelyTooQuiet(blob.size, durationSec)) {
+          revokeAudioUrl();
+          setState({
+            status: "error",
+            error:
+              "声が小さすぎるか、マイクが拾えていません。もう少し大きな声で、マイクに近づいてお試しください。",
+            blob: null,
+            audioUrl: null,
+            elapsedMs,
+            mimeType: recordedMimeType,
+            canPauseRecording: false,
+          });
+          notifyFatalError(
+            true,
+            `recording too quiet: ${blob.size} bytes / ${durationSec}s`,
+          );
           return;
         }
 
@@ -454,21 +482,74 @@ export function useRecorder(options: UseRecorderOptions = {}) {
       };
 
       recorder.onerror = () => {
+        if (
+          sessionGeneration !== sessionGenerationRef.current ||
+          mediaRecorderRef.current !== recorder
+        ) {
+          logRecordingPipeline("recorder.onerror: stale instance ignored");
+          return;
+        }
+
         clearTimers();
         stopRequestedRef.current = false;
         stopMediaTracks();
         pauseStartedAtRef.current = null;
+        mediaRecorderRef.current = null;
+
+        updateRecordingPipelineDiagnostic({
+          pipelineError: "MediaRecorder.onerror fired during recording",
+        });
+
         setState((prev) => ({
           ...prev,
           status: "error",
           error: "録音中にエラーが発生しました。",
         }));
-        notifyFatalError(true);
+        notifyFatalError(true, "MediaRecorder.onerror fired during recording");
       };
 
       recorder.onstop = () => {
+        if (
+          sessionGeneration !== sessionGenerationRef.current ||
+          mediaRecorderRef.current !== recorder
+        ) {
+          logRecordingPipeline("recorder.onstop: stale instance ignored", {
+            recorderState: recorder.state,
+          });
+          return;
+        }
+
         if (!stopRequestedRef.current) {
           clearPendingFinalize();
+          clearTimers();
+          stopMediaTracks();
+          pauseStartedAtRef.current = null;
+          mediaRecorderRef.current = null;
+
+          const errorMessage =
+            "MediaRecorder stopped unexpectedly before user finished";
+
+          logRecordingPipeline("recorder.onstop: unexpected (not user-initiated)", {
+            chunkCount: chunksRef.current.length,
+            recorderState: recorder.state,
+            audio: getBarAudioDiagnostics(),
+          });
+
+          updateRecordingPipelineDiagnostic({
+            chunkCount: chunksRef.current.length,
+            pipelineError: errorMessage,
+          });
+
+          setState({
+            status: "error",
+            error: "録音が途中で中断されました。もう一度お試しください。",
+            blob: null,
+            audioUrl: null,
+            elapsedMs: getActiveElapsedMs(),
+            mimeType: null,
+            canPauseRecording: false,
+          });
+          notifyFatalError(true, errorMessage);
           return;
         }
 
@@ -509,6 +590,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
 
       startTimeRef.current = Date.now();
       recorder.start(timesliceMs);
+      onRecordingStartedRef.current?.();
 
       logRecordingPipeline("recorder.start: MediaRecorder started", {
         state: recorder.state,
@@ -530,27 +612,32 @@ export function useRecorder(options: UseRecorderOptions = {}) {
         mimeType: recorder.mimeType || mimeType || null,
         canPauseRecording: supportsPause,
       });
+      return true;
     } catch (err) {
       clearTimers();
       stopMediaTracks();
       pauseStartedAtRef.current = null;
       stopRequestedRef.current = false;
 
-      const message =
-        err instanceof DOMException && err.name === "NotAllowedError"
-          ? "マイクの使用が許可されていません。ブラウザの設定を確認してください。"
-          : "録音の開始に失敗しました。マイクが接続されているか確認してください。";
+      const message = formatRecorderStartError(err);
 
       setState({
         status: "error",
-        error: message,
+        error:
+          err instanceof DOMException && err.name === "NotAllowedError"
+            ? "マイクの使用が許可されていません。ブラウザの設定を確認してください。"
+            : "録音の開始に失敗しました。マイクが接続されているか確認してください。",
         blob: null,
         audioUrl: null,
         elapsedMs: 0,
         mimeType: null,
         canPauseRecording: false,
       });
-      notifyFatalError(false);
+      updateRecordingPipelineDiagnostic({
+        pipelineError: message,
+      });
+      notifyFatalError(false, message);
+      return false;
     }
   }, [
     clearPendingFinalize,

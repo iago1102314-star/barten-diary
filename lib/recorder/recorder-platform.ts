@@ -65,8 +65,18 @@ export function resolveRecordedMimeType(
   return isAppleMediaRecorder() ? "audio/mp4" : "audio/webm";
 }
 
-/** コンテナだけで中身が無い mp4 等を弾く目安（バイト） */
 export const MIN_RECORDING_BYTES = 2048;
+
+/** 正常な音声なら概ね 2KB/s 以上（46s で ~34KB は無音に近い） */
+export const MIN_RECORDING_BYTES_PER_SEC = 2000;
+
+export function isRecordingLikelyTooQuiet(
+  blobSize: number,
+  durationSec: number,
+): boolean {
+  if (durationSec <= 0) return true;
+  return blobSize / durationSec < MIN_RECORDING_BYTES_PER_SEC;
+}
 
 /** WebKit — 前回の MediaStream 解放後に getUserMedia する待ち（ms） */
 export const MIC_RELEASE_DELAY_MS = 300;
@@ -74,4 +84,69 @@ export const MIC_RELEASE_DELAY_MS = 300;
 export async function waitForMicRelease(): Promise<void> {
   if (!isAppleMediaRecorder()) return;
   await new Promise((resolve) => setTimeout(resolve, MIC_RELEASE_DELAY_MS));
+}
+
+function isMicReleaseRetryError(error: unknown): boolean {
+  if (!(error instanceof DOMException)) return false;
+  return (
+    error.name === "NotReadableError" ||
+    error.name === "AbortError" ||
+    error.name === "TrackStartError"
+  );
+}
+
+async function requestMicStream(): Promise<MediaStream> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    throw new Error("getUserMedia not supported");
+  }
+
+  const withProcessing: MediaStreamConstraints = {
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+  };
+
+  try {
+    return await navigator.mediaDevices.getUserMedia(withProcessing);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "OverconstrainedError") {
+      return await navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+    throw error;
+  }
+}
+
+/**
+ * ユーザー操作の直後に getUserMedia する。WebKit では先に待つと gesture が切れて失敗しやすい。
+ * デバイス解放待ちが必要な場合のみ、失敗後に 1 回だけリトライする。
+ */
+export async function acquireMicStream(): Promise<MediaStream> {
+  try {
+    return await requestMicStream();
+  } catch (firstError) {
+    if (!isAppleMediaRecorder() || !isMicReleaseRetryError(firstError)) {
+      throw firstError;
+    }
+
+    await waitForMicRelease();
+    return await requestMicStream();
+  }
+}
+
+export function formatRecorderStartError(error: unknown): string {
+  if (error instanceof DOMException) {
+    if (error.name === "NotAllowedError") {
+      return "NotAllowedError: マイクの使用が許可されていません。ブラウザの設定を確認してください。";
+    }
+    if (error.name === "NotFoundError") {
+      return "NotFoundError: マイクが見つかりません。";
+    }
+    return `${error.name}: ${error.message}`;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }

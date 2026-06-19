@@ -1,3 +1,5 @@
+import { isWhisperPromptHallucination } from "@/lib/transcribe/whisper-context";
+
 export const MIN_TRANSCRIPT_LENGTH = 20;
 
 export type TranscriptValidationCode =
@@ -6,7 +8,8 @@ export type TranscriptValidationCode =
   | "symbols_only"
   | "repetition_only"
   | "same_char_run"
-  | "filler_only";
+  | "filler_only"
+  | "prompt_echo";
 
 const MESSAGES: Record<TranscriptValidationCode, string> = {
   empty: "うまく拾えなかった。\nもう一度だけ頼む。",
@@ -15,6 +18,7 @@ const MESSAGES: Record<TranscriptValidationCode, string> = {
   repetition_only: "うまく拾えなかった。\nもう一度だけ頼む。",
   same_char_run: "うまく拾えなかった。\nもう一度だけ頼む。",
   filler_only: "まだ少し言葉が足りないみたいだ。\nもう少しだけ聞かせてくれ。",
+  prompt_echo: "うまく拾えなかった。\nもう一度だけ頼む。",
 };
 
 const FILLER_PATTERN =
@@ -91,6 +95,10 @@ export function validateTranscriptInput(
 
   if (isFillerOnly(trimmed)) {
     return { ok: false, code: "filler_only", message: MESSAGES.filler_only };
+  }
+
+  if (isWhisperPromptHallucination(trimmed)) {
+    return { ok: false, code: "prompt_echo", message: MESSAGES.prompt_echo };
   }
 
   if (isSymbolsOnly(trimmed)) {
