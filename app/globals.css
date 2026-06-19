@@ -407,17 +407,17 @@ body {
 @keyframes loading-gate-breathe {
   0%,
   100% {
-    opacity: 0.32;
+    opacity: 0.72;
   }
   50% {
-    opacity: 0.52;
+    opacity: 0.92;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .loading-gate-message {
     animation: none;
-    opacity: 0.45;
+    opacity: 0.8;
   }
 
   .scene-grain,
