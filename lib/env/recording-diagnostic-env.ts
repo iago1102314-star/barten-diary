@@ -1,9 +1,9 @@
-import { APP_ENV } from "@/lib/env/app-env";
+import { APP_ENV, isProd } from "@/lib/env/app-env";
 
 /**
  * 録音パイプライン診断 UI / debug API / 診断データ収集。
  *
- * - local dev（npm run dev）ではデフォルト ON
+ * - local / dev ではデフォルト ON（local の npm run dev と Vercel dev を揃える）
  * - 明示的に OFF にする: NEXT_PUBLIC_RECORDING_DIAGNOSTIC=false
  * - 本番でも ON にする: NEXT_PUBLIC_RECORDING_DIAGNOSTIC=true
  */
@@ -13,7 +13,7 @@ export function isRecordingDiagnosticEnabled(): boolean {
   if (flag === "false") return false;
   if (flag === "true") return true;
 
-  return process.env.NODE_ENV === "development";
+  return !isProd;
 }
 
 export function recordingDiagnosticEnvLabel(): string {

@@ -1,11 +1,11 @@
-import { isLocal } from "@/lib/env/app-env";
+import { isProd } from "@/lib/env/app-env";
 
 /**
  * 気分選択入場 —「今日はどうしようか？」確定後〜定常表示までの全体倍率。
  *
- * local 環境では 4（確認用スロー）、dev / production では 1（本番速度）。
+ * local / dev では 4（調整・確認用）、production のみ 1（本番速度）。
  */
-export const MOOD_SELECT_ENTRANCE_DURATION_SCALE = isLocal ? 4 : 1;
+export const MOOD_SELECT_ENTRANCE_DURATION_SCALE = isProd ? 1 : 4;
 
 /**
  * パララックス + 黒ビネット — 同時開始・同時完了（秒 @ scale=1）。
