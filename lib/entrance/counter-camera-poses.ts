@@ -1,4 +1,4 @@
-import { MOOD_CURTAIN } from "@/lib/entrance/mood-curtain";
+import { MOOD_SELECT_CAMERA_VIGNETTE_BASE_SEC } from "@/lib/entrance/mood-select-entrance-tuning";
 
 /** カウンター奥 → 手前のレイヤー ID */
 export type CounterLayerId =
@@ -71,8 +71,8 @@ function ponderingScale(baseScale: number): number {
  * pondering = 視線をカウンターへ落とす（気分選択 UX）。
  */
 export const COUNTER_CAMERA = {
-  /** 幕の下ろしと同期 */
-  transitionSec: MOOD_CURTAIN.dropDurationSec,
+  /** 気分選択 pondering — 黒ビネットと同時完了 */
+  transitionSec: MOOD_SELECT_CAMERA_VIGNETTE_BASE_SEC,
   origin: COUNTER_CAMERA_ORIGIN,
   poses: {
     neutral: {

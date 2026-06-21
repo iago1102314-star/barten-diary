@@ -81,7 +81,12 @@ export function RecordingPipelineDiagnosticPanel() {
 
             <textarea
               readOnly
-              value={logText}
+              value={
+                typeof window !== "undefined" &&
+                window.__RECORDING_PIPELINE_LAST_ERROR__
+                  ? `[last error] ${window.__RECORDING_PIPELINE_LAST_ERROR__}\n\n${logText}`
+                  : logText
+              }
               className="recording-pipeline-diagnostic-textarea"
               aria-label="診断ログ全文"
             />

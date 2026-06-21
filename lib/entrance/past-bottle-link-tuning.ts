@@ -13,7 +13,7 @@ export const PAST_BOTTLE_LINK_TUNING = {
     letterSpacingEm: 0.2,
     color: "#B78A5A",
     /** リンク全体（アイコン＋文字）の位置調整（px） */
-    offsetXpx: -26,
+    offsetXpx: -76,
     offsetYpx: -40,
     /** 「過去のボトルから」文字のみ — アイコン・装飾線は動かさない */
     labelOffsetXpx: 50,
@@ -35,7 +35,7 @@ export const PAST_BOTTLE_LINK_TUNING = {
     /** 文字との横間隔（px） */
     gapPx: 12,
     /** 文字行に対する追加オフセット（px） */
-    offsetXpx: 65,
+    offsetXpx: 75,
     offsetYpx: 0,
   },
 
@@ -52,6 +52,11 @@ export const PAST_BOTTLE_LINK_TUNING = {
     brightnessMin: 0.8,
     durationSec: 0.22,
     ease: "easeOut" as const,
+  },
+
+  /** タップ確定後、画面遷移まで — ホバー＋封蝋タップ演出を見せる */
+  navigate: {
+    delaySec: 0.28,
   },
 
   /**
@@ -74,7 +79,7 @@ export const PAST_BOTTLE_LINK_TUNING = {
   divider: {
     marginTopPx: 6,
     /** ライン全体の位置（px） */
-    offsetXpx: 0,
+    offsetXpx: 40,
     offsetYpx: -12,
   },
 

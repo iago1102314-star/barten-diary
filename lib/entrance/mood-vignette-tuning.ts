@@ -1,22 +1,26 @@
+import { MOOD_SELECT_CAMERA_VIGNETTE_BASE_SEC } from "@/lib/entrance/mood-select-entrance-tuning";
+
 /**
  * 気分選択画面 — 上下ビネット（影レイヤー）の見た目・位置。
  * 調整はこのファイルだけ触ればよい。
  *
- * 5 ゾーン構成:
- * ─ 上固定帯（top.fixedPx）
- * ─ 上グラデ（top.color → 透明, top.gradPx）
- * ─ 中クリア（何もなし）
- * ─ 下グラデ（透明 → bottom.color, bottom.gradPx）
- * ─ 下固定帯（bottom.fixedPx）
- *
- * 上下とも T=0 スタート・同一速度（100px/s @scale=1）。
- * 移動距離が短い上から先に完了する。
+ * 入場時間は MOOD_SELECT_CAMERA_VIGNETTE_BASE_SEC と同期（パララックスと同時完了）。
  */
 
+/** 溶解〜明転シーンの全画面暗幕（上下ビネットと同系） */
+export const MOOD_SELECT_BACKDROP_COLOR = "#120b08";
+
 export const MOOD_VIGNETTE_TUNING = {
-  /** 影レイヤーの z-index（UI は uiLayerZIndex でこれより上） */
+  /** entrance-flow — 黒ビネット shell（UI より下） */
+  vignetteShellZIndex: 34,
+  /** entrance-flow — 気分選択・過去ボトル UI shell */
+  uiShellZIndex: 40,
+  /** entrance-flow —「過去のボトルから」リンク */
+  pastBottleLinkZIndex: 45,
+
+  /** 影レイヤー内部 z-index */
   layerZIndex: 2,
-  /** ボタン・リンク等 UI の z-index */
+  /** BarSeatMoodPicker 内 UI の z-index */
   uiLayerZIndex: 10,
 
   top: {
@@ -33,10 +37,9 @@ export const MOOD_VIGNETTE_TUNING = {
     opacity: 0.98,
     /** 入場 — 上から滑り込む開始オフセット（px） */
     enterY: -100,
-    /** T=0 スタート */
+    /** T=0 スタート — パララックスと同時完了 */
     delaySec: 0,
-    /** 100px ÷ 100px/s = 1.0s @ scale=1 */
-    durationSec: 0.22,
+    durationSec: MOOD_SELECT_CAMERA_VIGNETTE_BASE_SEC,
   },
 
   bottom: {
@@ -51,14 +54,12 @@ export const MOOD_VIGNETTE_TUNING = {
   },
 
   /**
-   * 下部グラデ — 複数レイヤーが同一速度（100px/s @scale=1）で下から滑り込む。
-   * enterY に比例した duration → 上下ビネットが同じ px/s で動く。
-   * gradScale: bottom.gradPx に対する倍率（1 = そのまま、0.85 = 15% 浅い）
+   * 下部グラデ — 全レイヤー同一 duration（パララックスと同時完了）
    */
   bottomLayers: [
-    { gradScale: 1.0, enterY: 48, delaySec: 0, durationSec: 0.10 },
-    { gradScale: 0.85, enterY: 82, delaySec: 0, durationSec: 0.18 },
-    { gradScale: 0.7, enterY: 122, delaySec: 0, durationSec: 0.26 },
+    { gradScale: 1.0, enterY: 48, delaySec: 0, durationSec: MOOD_SELECT_CAMERA_VIGNETTE_BASE_SEC },
+    { gradScale: 0.85, enterY: 82, delaySec: 0, durationSec: MOOD_SELECT_CAMERA_VIGNETTE_BASE_SEC },
+    { gradScale: 0.7, enterY: 122, delaySec: 0, durationSec: MOOD_SELECT_CAMERA_VIGNETTE_BASE_SEC },
   ],
 } as const;
 

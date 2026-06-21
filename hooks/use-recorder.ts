@@ -16,7 +16,7 @@ import {
   MIN_RECORDING_BYTES,
   resolveRecordedMimeType,
 } from "@/lib/recorder/recorder-platform";
-import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
+import { logRecordingPipeline, logRecordingPipelineError } from "@/lib/recorder/recording-pipeline-log";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const MAX_DURATION_MS = 3 * 60 * 1000;
@@ -272,16 +272,32 @@ export function useRecorder(options: UseRecorderOptions = {}) {
   }, [startElapsedTimer, startMaxDurationTimer]);
 
   const start = useCallback(async (): Promise<boolean> => {
-    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    if (typeof window === "undefined") {
+      logRecordingPipelineError("recorder.start: SSR context");
+      notifyFatalError(false, "recorder.start called outside browser");
+      return false;
+    }
+
+    if (typeof navigator.mediaDevices?.getUserMedia !== "function") {
+      const reason = window.isSecureContext
+        ? "browser does not support getUserMedia"
+        : "getUserMedia requires HTTPS or localhost (LAN の http:// では使えません)";
       setState((prev) => ({
         ...prev,
         status: "error",
-        error: "このブラウザでは録音がサポートされていません。",
+        error: window.isSecureContext
+          ? "このブラウザでは録音がサポートされていません。"
+          : "録音には HTTPS または localhost が必要です。LAN IP の http:// ではマイクが使えません。",
       }));
       updateRecordingPipelineDiagnostic({
-        pipelineError: "browser does not support getUserMedia",
+        pipelineError: reason,
       });
-      notifyFatalError(false, "browser does not support getUserMedia");
+      logRecordingPipelineError("recorder.start: getUserMedia unavailable", {
+        reason,
+        isSecureContext: window.isSecureContext,
+        hostname: window.location.hostname,
+      });
+      notifyFatalError(false, reason);
       return false;
     }
 
@@ -636,6 +652,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
       updateRecordingPipelineDiagnostic({
         pipelineError: message,
       });
+      logRecordingPipelineError("recorder.start: failed", { message });
       notifyFatalError(false, message);
       return false;
     }

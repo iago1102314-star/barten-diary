@@ -13,14 +13,21 @@ const ring: PipelineLogEntry[] = [];
 declare global {
   interface Window {
     __RECORDING_PIPELINE_LOG__?: PipelineLogEntry[];
+    __RECORDING_PIPELINE_LAST_ERROR__?: string;
   }
 }
 
-/** local / Vercel dev のみ — production PWA 実機計測を汚さない */
+/** local / dev — production PWA 実機計測を汚さない。エラーは常に console へ */
 export function logRecordingPipeline(
   message: string,
   detail?: Record<string, unknown>,
 ) {
+  if (detail) {
+    console.info(`[RecordingPipeline] ${message}`, detail);
+  } else {
+    console.info(`[RecordingPipeline] ${message}`);
+  }
+
   if (!isRecordingDiagnosticEnabled()) return;
 
   const entry: PipelineLogEntry = { t: Date.now(), message, detail };
@@ -32,13 +39,24 @@ export function logRecordingPipeline(
   if (typeof window !== "undefined") {
     window.__RECORDING_PIPELINE_LOG__ = ring;
   }
+}
 
-  if (detail) {
-    console.info(`[RecordingPipeline] ${message}`, detail);
-    return;
+/** 失敗時 — 診断 OFF でも console.error と lastError を残す */
+export function logRecordingPipelineError(
+  message: string,
+  detail?: Record<string, unknown>,
+) {
+  const detailText =
+    detail && Object.keys(detail).length > 0
+      ? ` ${JSON.stringify(detail)}`
+      : "";
+  console.error(`[RecordingPipeline] ${message}${detailText}`, detail ?? "");
+
+  if (typeof window !== "undefined") {
+    window.__RECORDING_PIPELINE_LAST_ERROR__ = `${message}${detailText}`.trim();
   }
 
-  console.info(`[RecordingPipeline] ${message}`);
+  logRecordingPipeline(message, detail);
 }
 
 export function logRecordingPipelineServer(

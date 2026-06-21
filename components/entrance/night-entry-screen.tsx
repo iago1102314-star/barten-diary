@@ -53,7 +53,7 @@ import {
 } from "@/lib/entrance/start-lamp-glows";
 import { motion } from "motion/react";
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 // ─── 開発用フラグ ──────────────────────────────────────────────────────────────
 /** true にするとボケ入場画面で止まる（デザイン確認用） */
@@ -188,8 +188,8 @@ function PairedStartEntranceGlow({
 type NightEntryScreenProps = {
   onEnterCounter: () => void;
   onOpenMemories: () => void;
-  /** 最初のタップ — 路地 BGM 用に Audio を unlock */
-  onUserGesture?: () => void;
+  /** 背景タップ — 路地 BGM 開始（ボタン押下は対象外） */
+  onBackgroundTap?: () => void;
   skipImageEntrance?: boolean;
   /** メモから戻る — 定常ホームをフェードイン */
   steadyFadeIn?: boolean;
@@ -215,7 +215,7 @@ type NightEntryScreenProps = {
 export function NightEntryScreen({
   onEnterCounter,
   onOpenMemories,
-  onUserGesture,
+  onBackgroundTap,
   skipImageEntrance = false,
   steadyFadeIn = false,
   onSteadyFadeInComplete,
@@ -241,12 +241,16 @@ export function NightEntryScreen({
   const [revealProgress, setRevealProgress] = useState(
     skipImageEntrance ? 1 : 0,
   );
-  const userGesturePrimedRef = useRef(false);
-
-  const handleUserGesture = () => {
-    if (userGesturePrimedRef.current || interactionLocked) return;
-    userGesturePrimedRef.current = true;
-    onUserGesture?.();
+  const handleBackgroundTap = (event: React.PointerEvent) => {
+    if (interactionLocked) return;
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest("button, a, [role='button']")
+    ) {
+      return;
+    }
+    onBackgroundTap?.();
   };
 
   const glowPairs = useMemo(
@@ -347,7 +351,7 @@ export function NightEntryScreen({
   };
 
   return (
-    <SceneFrame onPointerDown={handleUserGesture}>
+    <SceneFrame onPointerDown={handleBackgroundTap}>
       <motion.div
         className="absolute inset-0"
         initial={false}

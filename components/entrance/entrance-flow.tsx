@@ -2,7 +2,8 @@
 
 import { saveAiDiary } from "@/app/(app)/diaries/actions";
 import { CounterScene } from "@/components/entrance/counter-scene";
-import { DrinkServedPanel } from "@/components/entrance/drink-served-panel";
+import { DrinkRecordIntroPanel } from "@/components/entrance/drink-record-intro-panel";
+import { RecordCounterScene } from "@/components/entrance/record-counter-scene";
 import { MasterHeadDevTapZone } from "@/components/entrance/master-head-dev-tap";
 import { EnteringReveal } from "@/components/entrance/entering-reveal";
 import { GeneratingPanel } from "@/components/entrance/generating-panel";
@@ -21,6 +22,7 @@ import { MoodSelectScene } from "@/components/entrance/mood-select-scene";
 import { NightAlleyScreen } from "@/components/entrance/night-alley-screen";
 import { NightEntryScreen, type EntryScreenPhase } from "@/components/entrance/night-entry-screen";
 import { PastBottlePanel } from "@/components/entrance/past-bottle-panel";
+import { PastBottleLink } from "@/components/entrance/past-bottle-link";
 import { RecordingPanel } from "@/components/entrance/recording-panel";
 import { SceneFrame } from "@/components/entrance/scene-frame";
 import { prepareBarAudioOnUserGesture, syncBarAudioUnlockFromClient, useBarAudio } from "@/hooks/use-bar-audio";
@@ -88,6 +90,18 @@ import type {
 } from "@/lib/entrance/night-outcome";
 import { getDrinkImagePath } from "@/lib/entrance/drink-image-path";
 import { pickPastBottleMasterLine } from "@/lib/entrance/past-bottle-master-line";
+import { MoodVignetteOverlay } from "@/components/entrance/mood-vignette-overlay";
+import { PAST_BOTTLE_LINK_TUNING } from "@/lib/entrance/past-bottle-link-tuning";
+import { PAST_BOTTLE_PANEL_TUNING } from "@/lib/entrance/past-bottle-panel-tuning";
+import {
+  MOOD_SELECT_ENTRANCE_DURATION_SCALE,
+  PAST_BOTTLE_ENTRANCE_DELAY_SEC,
+} from "@/lib/entrance/mood-select-entrance-tuning";
+import { MOOD_SELECT_EXIT_SCALED } from "@/lib/entrance/mood-select-exit-timing";
+import {
+  MOOD_SELECT_BACKDROP_COLOR,
+  MOOD_VIGNETTE_TUNING,
+} from "@/lib/entrance/mood-vignette-tuning";
 import type { BottleTagItem } from "@/lib/diaries/bottle-tag-item";
 import {
   fallbackDrinkFromName,
@@ -98,6 +112,8 @@ import { parseBottleTag } from "@/lib/bottle-tag/parse-bottle-tag";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
 import { pickCounterFarewellLine } from "@/lib/night/counter-farewell-lines";
+import { MASTER_DECLINE_FAREWELL } from "@/lib/entrance/master-greetings";
+import { DECLINE_NIGHT_TUNING } from "@/lib/entrance/decline-night-tuning";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -111,6 +127,7 @@ type EntranceState =
   | "moodSelect"
   | "pastBottleSelect"
   | "decliningNight"
+  | "declineFarewellOnBlack"
   | "unheldNight"
   | "drinkServed"
   | "recording"
@@ -119,8 +136,9 @@ type EntranceState =
   | "leaving"
   | "alley";
 
-const DECLINE_FADE_MS = 800;
 const COUNTER_FAREWELL_MS = 2000;
+
+type DeclineOrigin = "moodSelect" | "pastBottleSelect";
 
 const sceneExit = {
   exit: { opacity: 0, filter: "blur(10px)" },
@@ -179,6 +197,9 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   );
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const declineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const declineOriginRef = useRef<DeclineOrigin>("moodSelect");
+  const [declineBlackoutReady, setDeclineBlackoutReady] = useState(false);
+  const [declineFarewellExiting, setDeclineFarewellExiting] = useState(false);
   const counterFarewellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -189,7 +210,11 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const backgroundWorkRef = useRef<BackgroundWorkState>("idle");
   const savedDiaryIdRef = useRef<string | null>(null);
   const [moodCameraPose, setMoodCameraPose] = useState<CameraPose>("neutral");
+  const [moodSelectExitActive, setMoodSelectExitActive] = useState(false);
   const moodSelectVisitedRef = useRef(false);
+  const moodThinkPlayedRef = useRef(false);
+  const moodGrassPlayedRef = useRef(false);
+  const [drinkEnteringReveal, setDrinkEnteringReveal] = useState(false);
   const [lampGlows, setLampGlows] = useState<CounterLampGlowConfig[]>(() =>
     mergeLampGlowsForShapeEdit().map((glow) => ({ ...glow })),
   );
@@ -235,16 +260,38 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     });
   }, []);
 
-  const primeEntryAmbience = useCallback(() => {
+  const primeBarAudioUnlock = useCallback(() => {
     unlockBarAudio();
+  }, [unlockBarAudio]);
+
+  /** 扉を開ける — jazz を無音で先行ロード（outside とは分離） */
+  const primeCounterEntryAudio = useCallback(() => {
+    primeBarAudioUnlock();
+    audio.prepareJazzForCounterEntry();
+  }, [primeBarAudioUnlock, audio]);
+
+  const entryOutsideStartedRef = useRef(false);
+
+  const resetEntryOutsideStarted = useCallback(() => {
+    entryOutsideStartedRef.current = false;
+  }, []);
+
+  const startEntryOutsideAmbience = useCallback(() => {
     if (entranceState !== "entry" || entryTransition !== "idle") return;
-    audio.startOutside(
-      BAR_AUDIO_LEVELS.outside.alley,
+    if (entryOutsideStartedRef.current && audio.isOutsidePlaying()) return;
+    entryOutsideStartedRef.current = true;
+    primeBarAudioUnlock();
+    audio.primeOutsidePlayOnUserGesture();
+    audio.prepareOutsideForEntry(
       skipEntryEntrance
         ? BAR_AUDIO_TIMING.fadeMs
         : BAR_AUDIO_TIMING.entryOutsideFadeMs,
     );
-  }, [unlockBarAudio, entranceState, entryTransition, skipEntryEntrance, audio]);
+  }, [entranceState, entryTransition, skipEntryEntrance, audio, primeBarAudioUnlock]);
+
+  const handleBackgroundTapForOutside = useCallback(() => {
+    startEntryOutsideAmbience();
+  }, [startEntryOutsideAmbience]);
 
   const handleGlowPatch = useCallback(
     (id: string, patch: Partial<LampGlowShapeFields>) => {
@@ -358,6 +405,10 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     backgroundWorkRef.current = "idle";
     savedDiaryIdRef.current = null;
     moodSelectVisitedRef.current = false;
+    moodThinkPlayedRef.current = false;
+    moodGrassPlayedRef.current = false;
+    setDrinkEnteringReveal(false);
+    setMoodSelectExitActive(false);
     setMoodCameraPose("neutral");
     setCounterFarewellLine(null);
     setAlleyOutcome(null);
@@ -369,13 +420,16 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     setPickedDrink(null);
     setPastMasterLine(null);
     resetNightRefs();
+    resetEntryOutsideStarted();
+    setDeclineBlackoutReady(false);
+    setDeclineFarewellExiting(false);
     setEntranceState("entry");
     audio.stopJazz();
     audio.startOutside(
       BAR_AUDIO_LEVELS.outside.alley,
       BAR_AUDIO_TIMING.entryOutsideFadeMs,
     );
-  }, [clearTimers, session, audio, resetNightRefs]);
+  }, [clearTimers, session, audio, resetNightRefs, resetEntryOutsideStarted]);
 
   const attemptGoToAlley = useCallback(() => {
     if (!leaveAnimationDoneRef.current) return;
@@ -409,16 +463,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     syncBarAudioUnlockFromClient(audioUnlocked);
     if (!audioUnlocked) return;
 
-    if (entranceState === "entry" && entryTransition === "idle") {
-      audio.startOutside(
-        BAR_AUDIO_LEVELS.outside.alley,
-        skipEntryEntrance
-          ? BAR_AUDIO_TIMING.fadeMs
-          : BAR_AUDIO_TIMING.entryOutsideFadeMs,
-      );
-      return;
-    }
-
     if (entranceState === "memories") {
       audio.startOutside(BAR_AUDIO_LEVELS.outside.alley);
       return;
@@ -427,7 +471,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     if (!OUTSIDE_AMBIENT_STATES.has(entranceState)) {
       audio.stopOutside();
     }
-  }, [entranceState, entryTransition, skipEntryEntrance, audio, audioUnlocked]);
+  }, [entranceState, entryTransition, audio, audioUnlocked]);
 
   useEffect(() => {
     if (entranceState === "moodSelect") {
@@ -436,7 +480,20 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   }, [entranceState]);
 
   useEffect(() => {
+    if (entranceState !== "moodSelect") return;
+    if (moodSelectVisitedRef.current) return;
+    if (moodThinkPlayedRef.current) return;
+
+    moodThinkPlayedRef.current = true;
+    audio.playThink();
+  }, [entranceState, audio]);
+
+  useEffect(() => {
     if (entranceState !== "drinkServed") return;
+    if (moodGrassPlayedRef.current) {
+      moodGrassPlayedRef.current = false;
+      return;
+    }
     audio.playGlassSlide();
   }, [entranceState, audio]);
 
@@ -566,18 +623,50 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     session.reset();
     setPickedDrink(null);
     setPastMasterLine(null);
-    resetNightRefs();
+    declineOriginRef.current =
+      entranceState === "pastBottleSelect" ? "pastBottleSelect" : "moodSelect";
+    setDeclineBlackoutReady(false);
+    setDeclineFarewellExiting(false);
+    audio.stopJazz();
     setEntranceState("decliningNight");
 
     declineTimerRef.current = setTimeout(() => {
-      resetToAlley();
-    }, DECLINE_FADE_MS);
+      setDeclineBlackoutReady(true);
+
+      declineTimerRef.current = setTimeout(() => {
+        declineTimerRef.current = null;
+        setDeclineBlackoutReady(false);
+        resetNightRefs();
+        setEntranceState("declineFarewellOnBlack");
+      }, DECLINE_NIGHT_TUNING.blackoutHoldMs);
+    }, DECLINE_NIGHT_TUNING.fadeMs);
+  };
+
+  const handleDeclineFarewellComplete = () => {
+    setDeclineFarewellExiting(true);
+  };
+
+  const handleDeclineReturnFadeComplete = () => {
+    clearTimers();
+    session.reset();
+    setPickedDrink(null);
+    setPastMasterLine(null);
+    resetNightRefs();
+    resetEntryOutsideStarted();
+    setDeclineBlackoutReady(false);
+    setDeclineFarewellExiting(false);
+    setSkipEntryEntrance(true);
+    setEntranceState("entry");
+    setEntryTransition("steadyFadeIn");
+    audio.stopJazz();
   };
 
   const handleEnterCounter = () => {
     if (entryTransition !== "idle") return;
     resetNightRefs();
-    primeEntryAmbience();
+    resetEntryOutsideStarted();
+    primeCounterEntryAudio();
+    audio.stopOutside(false, BAR_AUDIO_TIMING.doorExitOutsideFadeMs);
     setEntryTransition("doorExit");
   };
 
@@ -592,7 +681,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
   const handleOpenMemories = () => {
     if (entryTransition !== "idle") return;
-    primeEntryAmbience();
+    startEntryOutsideAmbience();
     setEntryTransition("toMemories");
   };
 
@@ -602,6 +691,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleBackToEntry = () => {
+    resetEntryOutsideStarted();
     setSkipEntryEntrance(true);
     setEntranceState("entry");
     setEntryTransition("steadyFadeIn");
@@ -609,6 +699,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
   const handleSteadyFadeInComplete = () => {
     setEntryTransition("idle");
+    startEntryOutsideAmbience();
   };
 
   const handleMasterGreetingComplete = () => {
@@ -628,10 +719,33 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     setPastMasterLine(null);
     session.selectCategory(categoryId, drink.id);
     setPickedDrink(drink);
-    setEntranceState("drinkServed");
+
+    const finishToDrinkServed = () => {
+      setMoodSelectExitActive(false);
+      moodGrassPlayedRef.current = true;
+      setEntranceState("drinkServed");
+      setDrinkEnteringReveal(true);
+    };
+
+    const fallbackMs = MOOD_SELECT_EXIT_SCALED.grassFallbackDurationSec * 1000;
+    const fallbackTimer = window.setTimeout(finishToDrinkServed, fallbackMs);
+
+    let finished = false;
+    const finishOnce = () => {
+      if (finished) return;
+      finished = true;
+      window.clearTimeout(fallbackTimer);
+      finishToDrinkServed();
+    };
+
+    audio.playGlassSlide({
+      delayMs: 0,
+      onEnded: finishOnce,
+    });
   };
 
   const handlePastBottleOpen = () => {
+    moodSelectVisitedRef.current = true;
     setEntranceState("pastBottleSelect");
   };
 
@@ -654,8 +768,12 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleSip = () => {
-    void session.startSpeaking();
-    setEntranceState("recording");
+    unlockBarAudio();
+    void session.startSpeaking().then((started) => {
+      if (started) {
+        setEntranceState("recording");
+      }
+    });
   };
 
   const handleFinishTalk = () => {
@@ -676,7 +794,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       audio.stopJazz();
       audio.startOutside(BAR_AUDIO_LEVELS.outside.leaving);
       setEntranceState("leaving");
-    }, DECLINE_FADE_MS);
+    }, DECLINE_NIGHT_TUNING.fadeMs);
   };
 
   const handleLeavingComplete = () => {
@@ -709,7 +827,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
           <NightEntryScreen
             onEnterCounter={handleEnterCounter}
             onOpenMemories={handleOpenMemories}
-            onUserGesture={primeEntryAmbience}
+            onBackgroundTap={handleBackgroundTapForOutside}
             skipImageEntrance={skipEntryEntrance}
             steadyFadeIn={entryTransition === "steadyFadeIn"}
             onSteadyFadeInComplete={handleSteadyFadeInComplete}
@@ -853,6 +971,18 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     );
   }
 
+  if (entranceState === "declineFarewellOnBlack") {
+    return (
+      <MasterOnBlackScreen
+        lines={MASTER_DECLINE_FAREWELL}
+        onComplete={handleDeclineFarewellComplete}
+        exiting={declineFarewellExiting}
+        onExitComplete={handleDeclineReturnFadeComplete}
+        bubbleDelayMs={0}
+      />
+    );
+  }
+
   if (entranceState === "leaving") {
     return (
       <AnimatePresence mode="wait">
@@ -897,11 +1027,59 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     !lampGlowHomeEditing &&
     (entranceState === "moodSelect" || entranceState === "pastBottleSelect");
 
+  const hideCounterDuringMoodExit = moodSelectExitActive;
+
+  const declineOrigin = declineOriginRef.current;
+  const isDeclineFading =
+    entranceState === "decliningNight" && !declineBlackoutReady;
+  const showMoodParallaxCamera =
+    (entranceState === "moodSelect" ||
+      entranceState === "pastBottleSelect" ||
+      isDeclineFading) &&
+    !moodSelectExitActive;
+  const showMoodSelectChrome =
+    (entranceState === "moodSelect" ||
+      (isDeclineFading && declineOrigin === "moodSelect")) &&
+    !lampGlowHomeEditing;
+  const showPastBottleChrome =
+    entranceState === "pastBottleSelect" ||
+    (isDeclineFading && declineOrigin === "pastBottleSelect");
+  const showMoodVignette =
+    (showMoodParallaxCamera || moodSelectExitActive) && !lampGlowHomeEditing;
+  const showPastBottleLink =
+    (entranceState === "moodSelect" ||
+      entranceState === "pastBottleSelect" ||
+      isDeclineFading) &&
+    !moodSelectExitActive;
+  const declineOverlayVisible =
+    entranceState === "decliningNight" || entranceState === "unheldNight";
+
+  const showRecordCounterScene =
+    entranceState === "drinkServed" ||
+    entranceState === "recording" ||
+    entranceState === "processing";
+
+  const showLegacyCounterScene = showCounter && !showRecordCounterScene;
+
   return (
     <AnimatePresence mode="wait">
       <motion.div key={getSceneMotionKey(entranceState)} {...sceneExit}>
         {showCounter && (
+          entranceState === "decliningNight" && declineBlackoutReady ? (
+            <SceneFrame className="bg-black" atmosphere={false}>
+              {null}
+            </SceneFrame>
+          ) : (
           <SceneFrame atmosphere={!reduceCounterGpuLoad && !lampGlowHomeEditing}>
+            <div
+              className="absolute inset-0"
+              style={{
+                opacity: hideCounterDuringMoodExit ? 0 : 1,
+                visibility: hideCounterDuringMoodExit ? "hidden" : "visible",
+                transition: `opacity ${MOOD_SELECT_EXIT_SCALED.vignetteCloseDurationSec}s ease-in`,
+              }}
+            >
+            {showLegacyCounterScene && (
             <CounterScene
               drinkImageSrc={showDrinkImage ? drinkImageSrc : null}
               drinkName={pickedDrink?.name ?? null}
@@ -913,16 +1091,15 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
               reduceGpuLoad={reduceCounterGpuLoad}
               lampGlows={lampGlowHomeEditing ? lampGlows : undefined}
               showLampGlowLight
-              cameraPose={
-                entranceState === "moodSelect" ||
-                entranceState === "pastBottleSelect"
-                  ? moodCameraPose
-                  : "neutral"
-              }
-              masterMode={
-                entranceState === "recording" ? "talking" : "idle"
-              }
+              cameraPose={showMoodParallaxCamera ? moodCameraPose : "neutral"}
+              masterMode="idle"
             />
+            )}
+
+            {showRecordCounterScene && (
+              <RecordCounterScene drinkId={pickedDrink?.id ?? null} />
+            )}
+            </div>
 
             {lampGlowHomeEditing && LAMP_GLOW_SHAPE_EDIT_ON_HOME && (
               <HomeLampGlowShapeEditor
@@ -937,18 +1114,77 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
               <EnteringReveal onComplete={handleCounterRevealComplete} />
             )}
 
+            {entranceState === "drinkServed" && drinkEnteringReveal && (
+              <EnteringReveal
+                backdropColor={MOOD_SELECT_BACKDROP_COLOR}
+                onComplete={() => setDrinkEnteringReveal(false)}
+              />
+            )}
+
             <MasterHeadDevTapZone onTripleTap={handleDevSkipNight} />
 
             <div
-              className={`pointer-events-none absolute inset-0 z-20 bg-black transition-opacity duration-[800ms] ${
-                entranceState === "decliningNight" ||
-                entranceState === "unheldNight"
-                  ? "opacity-100"
-                  : "opacity-0"
+              className={`pointer-events-none absolute inset-0 flex flex-col ${
+                isDeclineFading ? "pointer-events-none" : ""
               }`}
-            />
+              style={{ zIndex: MOOD_VIGNETTE_TUNING.uiShellZIndex }}
+            >
+            {showMoodVignette && (
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{ zIndex: MOOD_VIGNETTE_TUNING.vignetteShellZIndex }}
+                >
+                  <MoodVignetteOverlay
+                    durationScale={MOOD_SELECT_ENTRANCE_DURATION_SCALE}
+                    instant={moodSelectVisitedRef.current || isDeclineFading}
+                    exiting={moodSelectExitActive}
+                  />
+                </div>
+              )}
 
-            <div className="pointer-events-none absolute inset-0 z-30 flex flex-col">
+            {moodSelectExitActive && (
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  zIndex: MOOD_VIGNETTE_TUNING.vignetteShellZIndex - 1,
+                  backgroundColor: MOOD_SELECT_BACKDROP_COLOR,
+                }}
+              />
+            )}
+
+            {showPastBottleLink && !lampGlowHomeEditing && (
+                <div
+                  className="pointer-events-none absolute inset-x-0 top-0 overflow-visible px-7"
+                  style={{
+                    paddingTop: `${PAST_BOTTLE_LINK_TUNING.headerTopPercent}%`,
+                    zIndex: MOOD_VIGNETTE_TUNING.pastBottleLinkZIndex,
+                  }}
+                >
+                  <div
+                    className={`overflow-visible ${
+                      isDeclineFading || entranceState === "pastBottleSelect"
+                        ? "pointer-events-none"
+                        : "pointer-events-auto"
+                    }`}
+                  >
+                    <PastBottleLink
+                      onClick={handlePastBottleOpen}
+                      skipEntrance={moodSelectVisitedRef.current || isDeclineFading}
+                      entranceDelaySec={
+                        moodSelectVisitedRef.current || isDeclineFading
+                          ? 0
+                          : PAST_BOTTLE_ENTRANCE_DELAY_SEC
+                      }
+                      locked={
+                        entranceState === "pastBottleSelect" ||
+                        (isDeclineFading &&
+                          declineOrigin === "pastBottleSelect")
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+
             {entranceState === "moodPrompt" && !lampGlowHomeEditing && (
               <div className="pointer-events-auto absolute inset-0">
                 <MasterMoodPromptPanel
@@ -957,17 +1193,26 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
               </div>
             )}
 
-            {entranceState === "moodSelect" && !lampGlowHomeEditing && (
+            {entranceState === "drinkServed" && !drinkEnteringReveal && (
               <div className="pointer-events-auto absolute inset-0">
+                <DrinkRecordIntroPanel onSip={handleSip} />
+              </div>
+            )}
+
+            {showMoodSelectChrome && (
+              <div
+                className={`absolute inset-0 ${
+                  isDeclineFading ? "pointer-events-none" : "pointer-events-auto"
+                }`}
+                style={{ zIndex: MOOD_VIGNETTE_TUNING.uiShellZIndex }}
+              >
                 <MoodSelectScene
-                  skipCurtainEntrance={moodSelectVisitedRef.current}
                   skipPastBottleEntrance={moodSelectVisitedRef.current}
-                  onCurtainEntranceComplete={() => {
-                    moodSelectVisitedRef.current = true;
+                  onSelectionStart={() => {
+                    setMoodSelectExitActive(true);
+                    setMoodCameraPose("neutral");
                   }}
-                  onSelectionStart={() => setMoodCameraPose("neutral")}
                   onSelect={handleMoodSelect}
-                  onPastBottle={handlePastBottleOpen}
                   onDecline={handleDeclineNight}
                 />
               </div>
@@ -975,34 +1220,41 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
             <div className="flex-1" />
 
-            <div className="pointer-events-auto space-y-5 px-5 pb-[12%] pt-4">
-              {entranceState === "pastBottleSelect" && (
+            {showPastBottleChrome && (
+              <div
+                className={`absolute inset-x-0 flex items-center justify-center ${
+                  isDeclineFading ? "pointer-events-none" : "pointer-events-auto"
+                }`}
+                style={{
+                  top: `${PAST_BOTTLE_PANEL_TUNING.topInsetPercent}%`,
+                  bottom: `${PAST_BOTTLE_PANEL_TUNING.bottomInsetPercent}%`,
+                  paddingLeft: PAST_BOTTLE_PANEL_TUNING.horizontalPaddingPx,
+                  paddingRight: PAST_BOTTLE_PANEL_TUNING.horizontalPaddingPx,
+                  zIndex: MOOD_VIGNETTE_TUNING.uiShellZIndex,
+                }}
+              >
                 <PastBottlePanel
                   onSelect={handlePastBottleSelect}
                   onBackToMood={() => setEntranceState("moodSelect")}
                   onDecline={handleDeclineNight}
                 />
-              )}
+              </div>
+            )}
 
-              {entranceState === "decliningNight" && (
-                <MasterLine>……そういう日もある。</MasterLine>
-              )}
-
+            <div
+              className={`space-y-5 px-5 pb-[12%] pt-4 ${
+                isDeclineFading ? "pointer-events-none" : "pointer-events-auto"
+              }`}
+            >
               {entranceState === "unheldNight" && (
                 <MasterLine>……そういう夜もある。</MasterLine>
-              )}
-
-              {entranceState === "drinkServed" && (
-                <DrinkServedPanel
-                  pastMasterLine={pastMasterLine}
-                  onSip={handleSip}
-                />
               )}
 
               {entranceState === "recording" && (
                 <RecordingPanel
                   listenFailureCount={session.listenFailureCount}
                   listenFailureVisible={session.listenFailureVisible}
+                  listenFailureReason={session.listenFailureReason}
                   onFinish={handleFinishTalk}
                   onRetrySpeaking={() => void session.retrySpeaking()}
                   onLeaveWithoutRecord={handleLeaveWithoutRecord}
@@ -1022,8 +1274,19 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
                 <MasterLine>{counterFarewellLine}</MasterLine>
               )}
             </div>
-          </div>
-        </SceneFrame>
+            </div>
+
+            <div
+              className={`pointer-events-none absolute inset-0 bg-black transition-opacity ${
+                declineOverlayVisible ? "opacity-100" : "opacity-0"
+              }`}
+              style={{
+                zIndex: DECLINE_NIGHT_TUNING.overlayZIndex,
+                transitionDuration: `${DECLINE_NIGHT_TUNING.fadeMs}ms`,
+              }}
+            />
+          </SceneFrame>
+          )
         )}
       </motion.div>
     </AnimatePresence>

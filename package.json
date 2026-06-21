@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "dev:lan": "next dev -H 0.0.0.0",
+    "dev:tunnel": "npx --yes cloudflared tunnel --url http://127.0.0.1:3000",
+    "dev:lan:https": "next dev -H 0.0.0.0 --experimental-https",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

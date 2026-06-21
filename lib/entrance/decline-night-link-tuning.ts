@@ -42,6 +42,34 @@ export const DECLINE_NIGHT_LINK_TUNING = {
     offsetXpx: 0,
     offsetYpx: 10,
   },
+
+  /**
+   * 気分選択 — 5つの選択肢入場後に始まる SVG + テキスト入場。
+   * 星 → 左右の線 →「また今度にする」の順。
+   */
+  entrance: {
+    /** 中央の星 — 出現 */
+    star: {
+      delayAfterStartSec: 0,
+      durationSec: 0.15,
+      initialScale: 0.82,
+      ease: [0.22, 1, 0.36, 1] as const,
+    },
+    /** 左右の線 — 星の出現開始から */
+    line: {
+      delayAfterStarSec: 0.1,
+      durationSec: 0.5,
+      ease: "easeOut" as const,
+    },
+    /** テキスト — 星の出現開始から */
+    text: {
+      delayAfterStarSec: 0.18,
+      durationSec: 0.45,
+      ease: "easeOut" as const,
+    },
+    /** entranceDelaySec から入場完了まで（scale 前） */
+    totalAfterStartSec: 0.63,
+  },
 } as const;
 
 export function declineLinkTextStyle(

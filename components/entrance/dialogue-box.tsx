@@ -1,6 +1,7 @@
 "use client";
 
 import { DialogueAdvanceCue } from "@/components/entrance/dialogue-advance-cue";
+import { MasterDialogueBody } from "@/components/entrance/master-dialogue-body";
 import {
   MASTER_DIALOGUE_TYPOGRAPHY,
   SHOW_DIALOGUE_ADVANCE_CUE,
@@ -9,7 +10,11 @@ import { motion } from "motion/react";
 import type { ReactNode } from "react";
 
 type DialogueBoxProps = {
-  children: ReactNode;
+  /** タイプライター + 折り返しレイアウト用 */
+  text?: string;
+  typewriterSpeed?: number;
+  onTypewriterDone?: () => void;
+  children?: ReactNode;
   lineKey: number | string;
   label?: string;
   showAdvanceCue?: boolean;
@@ -17,6 +22,9 @@ type DialogueBoxProps = {
 
 /** マスター吹き出し — 画面端から端までの細い帯 */
 export function DialogueBox({
+  text,
+  typewriterSpeed,
+  onTypewriterDone,
   children,
   lineKey,
   label = "マスター",
@@ -24,7 +32,6 @@ export function DialogueBox({
 }: DialogueBoxProps) {
   const t = MASTER_DIALOGUE_TYPOGRAPHY;
   const horizontalPadding = `${t.horizontalPaddingRem}rem`;
-  const bodyIndent = `calc(${t.bodyTextIndentRem}rem + ${t.bodyTextIndentExtraPx}px)`;
 
   return (
     <motion.div
@@ -72,21 +79,15 @@ export function DialogueBox({
           }}
           aria-hidden
         />
-        <p
-          className="flex-1 font-serif-jp"
-          style={{
-            color: t.bodyColor,
-            fontSize: t.bodyFontSize,
-            lineHeight: t.bodyLineHeight,
-            letterSpacing: t.bodyLetterSpacing,
-            minHeight: `${t.bodyMinHeightRem}rem`,
-            marginLeft: bodyIndent,
-            paddingRight: `${t.bodyPaddingRightRem}rem`,
-            paddingBottom: `${t.bodyPaddingBottomRem}rem`,
-          }}
-        >
-          {children}
-        </p>
+        {text != null ? (
+          <MasterDialogueBody
+            text={text}
+            speed={typewriterSpeed}
+            onDone={onTypewriterDone}
+          />
+        ) : (
+          children
+        )}
       </div>
 
       {showAdvanceCue && SHOW_DIALOGUE_ADVANCE_CUE && <DialogueAdvanceCue />}

@@ -42,6 +42,8 @@ type CounterSceneProps = {
   lampGlows?: CounterLampGlowConfig[];
   /** 光本体の強制表示（未指定時は SHOW_LAMP_GLOW_LIGHT） */
   showLampGlowLight?: boolean;
+  /** @experimental マスター画像レイヤーを非表示 */
+  hideMaster?: boolean;
 };
 
 function KenBurnsWrap({
@@ -283,6 +285,7 @@ export function CounterScene({
   reduceGpuLoad = false,
   lampGlows,
   showLampGlowLight,
+  hideMaster = false,
 }: CounterSceneProps) {
   const accent = moodAccent(moodCategoryId ?? null);
   const masterAnim =
@@ -323,9 +326,11 @@ export function CounterScene({
         pose={cameraPose}
         className="absolute inset-0 z-[1]"
       >
-        <div className={`absolute inset-0 ${masterAnim}`}>
-          <SceneLayer src={ENTRANCE_ASSETS.masterIdle} alt="" priority={priority} />
-        </div>
+        {!hideMaster && (
+          <div className={`absolute inset-0 ${masterAnim}`}>
+            <SceneLayer src={ENTRANCE_ASSETS.masterIdle} alt="" priority={priority} />
+          </div>
+        )}
       </ParallaxLayer>
 
       <ParallaxLayer layer="lantern" pose={cameraPose} className="absolute inset-0 z-[2]">

@@ -2,17 +2,22 @@
 
 import { MoodOrnamentalDivider } from "@/components/entrance/mood-ornamental-divider";
 import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
-import { MOOD_SELECT_ENTRANCE_DURATION_SCALE } from "@/lib/entrance/mood-select-entrance-tuning";
+import {
+  MOOD_SELECT_ENTRANCE_DURATION_SCALE,
+  moodSelectUiAnimScaledSec,
+} from "@/lib/entrance/mood-select-entrance-tuning";
 import {
   moodLinkTextStyle,
   PAST_BOTTLE_LINK_TUNING,
 } from "@/lib/entrance/past-bottle-link-tuning";
 import { motion } from "motion/react";
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 type PastBottleLinkProps = {
   onClick: () => void;
   disabled?: boolean;
+  /** 遷移後も同位置に固定（操作不可・通常見た目を維持） */
+  locked?: boolean;
   /** 過去ボトル画面から戻る等 — 出現演出を省略 */
   skipEntrance?: boolean;
   /**
@@ -26,18 +31,22 @@ type PastBottleLinkProps = {
 export function PastBottleLink({
   onClick,
   disabled = false,
+  locked = false,
   skipEntrance = false,
   entranceDelaySec = 0,
 }: PastBottleLinkProps) {
-  const { text, icon, hover, tap, hit, divider, entrance } = PAST_BOTTLE_LINK_TUNING;
+  const { text, icon, hover, tap, hit, divider, entrance, navigate } =
+    PAST_BOTTLE_LINK_TUNING;
   const playEntrance = !skipEntrance || MOOD_SELECT_ENTRANCE_DURATION_SCALE > 1;
   const [isHovered, setIsHovered] = useState(false);
   const [tapTick, setTapTick] = useState(0);
   const [entranceDone, setEntranceDone] = useState(!playEntrance);
-  const timeScale = MOOD_SELECT_ENTRANCE_DURATION_SCALE;
-  const t = (sec: number) => sec * timeScale;
-  const active = isHovered && !disabled;
-  const interactive = entranceDone && !disabled;
+  const navigatingRef = useRef(false);
+  const navigateTimerRef = useRef<number | null>(null);
+  const t = (sec: number) => moodSelectUiAnimScaledSec(sec);
+  const active =
+    navigatingRef.current || (isHovered && !locked && !disabled);
+  const interactive = entranceDone && !locked && !disabled;
   const hoverTransition = {
     duration: hover.durationMs / 1000,
     ease: hover.ease,
@@ -69,14 +78,38 @@ export function PastBottleLink({
     return () => window.clearTimeout(timer);
   }, [playEntrance, textEntranceDelay, textEntranceTotalSec]);
 
-  const handlePointerDown = () => {
+  useEffect(() => {
+    if (locked) {
+      setIsHovered(false);
+    }
+  }, [locked]);
+
+  useEffect(
+    () => () => {
+      if (navigateTimerRef.current !== null) {
+        window.clearTimeout(navigateTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const handleIconPointerDown = () => {
     if (!interactive) return;
-    setTapTick((tick) => tick + 1);
+    setIsHovered(true);
   };
 
   const handleActivate = () => {
-    if (!interactive) return;
-    onClick();
+    if (!interactive || navigatingRef.current) return;
+
+    setIsHovered(true);
+    setTapTick((tick) => tick + 1);
+    navigatingRef.current = true;
+
+    navigateTimerRef.current = window.setTimeout(() => {
+      navigateTimerRef.current = null;
+      navigatingRef.current = false;
+      onClick();
+    }, navigate.delaySec * 1000);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -96,7 +129,15 @@ export function PastBottleLink({
 
   return (
     <div
-      className={`mx-auto w-fit ${disabled ? "cursor-not-allowed opacity-40" : ""} ${interactive ? "" : "pointer-events-none"}`}
+      className={`mx-auto w-fit ${
+        disabled
+          ? "cursor-not-allowed opacity-40"
+          : locked
+            ? "pointer-events-none"
+            : interactive
+              ? ""
+              : "pointer-events-none"
+      }`}
       style={{
         transform: `translate(${text.offsetXpx}px, ${text.offsetYpx}px)`,
       }}
@@ -104,7 +145,9 @@ export function PastBottleLink({
       <motion.div
         animate={{ scale: active ? hover.scale : 1 }}
         transition={hoverTransition}
-        onMouseLeave={() => setIsHovered(false)}
+        onMouseLeave={() => {
+          if (!locked && !navigatingRef.current) setIsHovered(false);
+        }}
         className="flex items-center py-2 font-serif-jp"
         style={{ gap: icon.gapPx }}
       >
@@ -114,6 +157,7 @@ export function PastBottleLink({
             width: iconDisplayPx,
             height: iconDisplayPx,
             transform: `translate(${icon.offsetXpx}px, ${icon.offsetYpx}px)`,
+            zIndex: 1,
           }}
           aria-hidden
         >
@@ -202,19 +246,23 @@ export function PastBottleLink({
               top: hit.icon.offsetYpx,
             }}
             {...hitProps}
-            onPointerDown={handlePointerDown}
+            onPointerDown={handleIconPointerDown}
           />
         </span>
 
-        <span className="flex min-w-0 flex-col items-stretch">
+        <span
+          className="flex min-w-0 flex-col items-stretch"
+          style={{ zIndex: 0 }}
+        >
           <motion.button
             type="button"
-            disabled={disabled}
+            aria-disabled={locked}
+            tabIndex={locked ? -1 : 0}
             aria-label="過去のボトルから"
             onKeyDown={handleKeyDown}
             onFocus={() => interactive && setIsHovered(true)}
             onBlur={() => setIsHovered(false)}
-            className="mx-0 block border-0 bg-transparent p-0 font-serif-jp select-none whitespace-nowrap outline-none disabled:cursor-not-allowed disabled:opacity-40 [-webkit-tap-highlight-color:transparent]"
+            className="mx-0 block border-0 bg-transparent p-0 font-serif-jp select-none whitespace-nowrap outline-none [-webkit-tap-highlight-color:transparent]"
             style={{
               ...moodLinkTextStyle(text),
               padding: `${hit.text.paddingYpx}px 0`,

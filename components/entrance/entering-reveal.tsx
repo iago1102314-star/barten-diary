@@ -7,10 +7,15 @@ import { useEffect, useRef } from "react";
 
 type EnteringRevealProps = {
   onComplete?: () => void;
+  /** 暗幕の色（省略時は真っ黒） */
+  backdropColor?: string;
 };
 
 /** 扉を開けて店内の明るさが滲む — EnteringScene 相当 */
-export function EnteringReveal({ onComplete }: EnteringRevealProps) {
+export function EnteringReveal({
+  onComplete,
+  backdropColor = "#000000",
+}: EnteringRevealProps) {
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
@@ -28,7 +33,8 @@ export function EnteringReveal({ onComplete }: EnteringRevealProps) {
 
   return (
     <motion.div
-      className="pointer-events-none absolute inset-0 z-[19] bg-black"
+      className="pointer-events-none absolute inset-0 z-[19]"
+      style={{ backgroundColor: backdropColor }}
       initial={{ opacity: 1 }}
       animate={{ opacity: 0 }}
       transition={{

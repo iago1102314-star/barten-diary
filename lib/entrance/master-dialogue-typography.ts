@@ -28,10 +28,21 @@ export const MASTER_DIALOGUE_TYPOGRAPHY = {
   bodyTextIndentRem: 0.5,
   /** 本文インデントの追加（px） */
   bodyTextIndentExtraPx: 50,
+  /**
+   * 1行目 — 左へ詰めきる下限（px）。
+   * 0 = 縦線＋ gap の直後。負値 = gap 内へ寄せて縦線に近づける。
+   * 例: -12 なら通常 gap（0.75rem）の約半分ぶん左へ。
+   */
+  bodyTextIndentMinPx: -19,
+  /** 1行目が溢れそうなとき、左インデントを1段ずつ詰める幅（px） */
+  bodyTextIndentSqueezeStepPx: 3,
   /** 本文下の余白（rem） */
   bodyPaddingBottomRem: 0,
-  /** 矢印用 — 本文右側の空け（rem） */
-  bodyPaddingRightRem: 2.75,
+  /**
+   * 本文右側の空け（rem）— 折り返し・行幅の右限。
+   * 次へ矢印（advanceCue）と被らない範囲で小さくすると1行が長くなる。
+   */
+  bodyPaddingRightRem: 1.5,
 
   /** 左右余白（rem） */
   horizontalPaddingRem: 1.75,

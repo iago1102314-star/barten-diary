@@ -1,7 +1,6 @@
 "use client";
 
 import { DialogueBox } from "@/components/entrance/dialogue-box";
-import { Typewriter } from "@/components/motion/typewriter";
 import { barAudioEngine } from "@/lib/entrance/bar-audio-engine";
 import { useDialogueAdvance } from "@/hooks/use-dialogue-advance";
 import { MASTER_DIALOGUE_TYPOGRAPHY } from "@/lib/entrance/master-dialogue-typography";
@@ -37,14 +36,13 @@ export function MasterMoodPromptPanel({ onComplete }: MasterMoodPromptPanelProps
       className="flex h-full w-full flex-col items-stretch justify-end text-left [-webkit-tap-highlight-color:transparent]"
     >
       <div className="w-full self-stretch pb-12">
-        <DialogueBox lineKey={index} showAdvanceCue={done}>
-          <Typewriter
-            key={index}
-            text={currentLine}
-            speed={MASTER_DIALOGUE_TYPOGRAPHY.typewriterSpeedMs}
-            onDone={() => setDone(true)}
-          />
-        </DialogueBox>
+        <DialogueBox
+          lineKey={index}
+          showAdvanceCue={done}
+          text={currentLine}
+          typewriterSpeed={MASTER_DIALOGUE_TYPOGRAPHY.typewriterSpeedMs}
+          onTypewriterDone={() => setDone(true)}
+        />
       </div>
     </button>
   );

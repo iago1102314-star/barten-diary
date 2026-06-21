@@ -1,10 +1,8 @@
 "use client";
 
 import { DialogueBox } from "@/components/entrance/dialogue-box";
-import { Typewriter } from "@/components/motion/typewriter";
 import { barAudioEngine, unlockBarAudioForUserGesture } from "@/lib/entrance/bar-audio-engine";
 import { useDialogueAdvance } from "@/hooks/use-dialogue-advance";
-import { BAR_AUDIO_TIMING } from "@/lib/entrance/audio-levels";
 import { MASTER_DIALOGUE_TYPOGRAPHY } from "@/lib/entrance/master-dialogue-typography";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -14,6 +12,8 @@ import {
 
 type MasterIntroPanelProps = {
   returning?: boolean;
+  /** 省略時は初回 / 再訪の挨拶 */
+  lines?: readonly string[];
   onComplete: () => void;
   /** 扉 SE 後に吹き出しを出すまでの遅延（ms）。省略時は即表示 */
   bubbleDelayMs?: number;
@@ -25,13 +25,16 @@ type MasterIntroPanelProps = {
  */
 export function MasterIntroPanel({
   returning = false,
+  lines,
   onComplete,
   bubbleDelayMs = 0,
 }: MasterIntroPanelProps) {
-  const lines = returning ? MASTER_GREETINGS_RETURNING : MASTER_GREETINGS_FIRST;
+  const dialogueLines =
+    lines ??
+    (returning ? MASTER_GREETINGS_RETURNING : MASTER_GREETINGS_FIRST);
   const [bubbleVisible, setBubbleVisible] = useState(bubbleDelayMs === 0);
   const { index, done, setDone, advance, currentLine } =
-    useDialogueAdvance(lines, onComplete);
+    useDialogueAdvance(dialogueLines, onComplete);
 
   useEffect(() => {
     if (bubbleDelayMs <= 0) {
@@ -67,14 +70,13 @@ export function MasterIntroPanel({
     >
       {bubbleVisible && (
         <div className="w-full self-stretch pb-12">
-          <DialogueBox lineKey={index} showAdvanceCue={done}>
-            <Typewriter
-              key={index}
-              text={currentLine}
-              speed={MASTER_DIALOGUE_TYPOGRAPHY.typewriterSpeedMs}
-              onDone={() => setDone(true)}
-            />
-          </DialogueBox>
+          <DialogueBox
+            lineKey={index}
+            showAdvanceCue={done}
+            text={currentLine}
+            typewriterSpeed={MASTER_DIALOGUE_TYPOGRAPHY.typewriterSpeedMs}
+            onTypewriterDone={() => setDone(true)}
+          />
         </div>
       )}
     </button>

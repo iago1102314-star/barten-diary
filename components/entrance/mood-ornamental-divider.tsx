@@ -1,4 +1,5 @@
 import {
+  getPastBottleDividerMetrics,
   MOOD_ORNAMENTAL_DIVIDER_TUNING,
   ornamentalDiamondPath,
 } from "@/lib/entrance/mood-ornamental-divider-tuning";
@@ -31,16 +32,20 @@ export function MoodOrnamentalDivider({
   };
 
   if (variant === "pastBottle") {
-    const { line, diamond } = MOOD_ORNAMENTAL_DIVIDER_TUNING.pastBottle;
+    const { viewBoxMinX, viewBoxWidth, lineStartX, lineEndX, strokeWidth, diamond } =
+      getPastBottleDividerMetrics();
     return (
-      <svg {...svgProps}>
+      <svg
+        {...svgProps}
+        viewBox={`${viewBoxMinX} 0 ${viewBoxWidth} ${viewBoxHeight}`}
+      >
         <line
-          x1={line.lineStartX}
+          x1={lineStartX}
           y1={centerY}
-          x2={line.lineEndX}
+          x2={lineEndX}
           y2={centerY}
           stroke="currentColor"
-          strokeWidth={line.strokeWidth}
+          strokeWidth={strokeWidth}
         />
         <path
           d={ornamentalDiamondPath(

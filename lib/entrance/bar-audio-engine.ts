@@ -2,6 +2,8 @@ import { ENTRANCE_SOUNDS } from "@/lib/entrance/asset-paths";
 import {
   BAR_AUDIO_LEVELS,
   BAR_AUDIO_TIMING,
+  getSfxPlayVolume,
+  type BarSfxKind,
 } from "@/lib/entrance/audio-levels";
 import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
 
@@ -9,15 +11,144 @@ const SFX_SOURCES = [
   ENTRANCE_SOUNDS.door,
   ENTRANCE_SOUNDS.click,
   ENTRANCE_SOUNDS.glassSlide,
+  ENTRANCE_SOUNDS.send,
   ENTRANCE_SOUNDS.think,
 ] as const;
 
-let bgmPausedForRecording = false;
+const SFX_SRC_BY_KIND: Record<BarSfxKind, string> = {
+  door: ENTRANCE_SOUNDS.door,
+  click: ENTRANCE_SOUNDS.click,
+  glassSlide: ENTRANCE_SOUNDS.glassSlide,
+  send: ENTRANCE_SOUNDS.send,
+  think: ENTRANCE_SOUNDS.think,
+};
 
 const sfxPool = new Map<string, HTMLAudioElement[]>();
 let sfxPoolInitialized = false;
+
+let bgmPausedForRecording = false;
+let appBackgroundSuspended = false;
+let barAudioLifecycleAttached = false;
 let warmUpPromise: Promise<void> | null = null;
 let barAudioUserGestureUnlocked = false;
+let barAudioContext: AudioContext | null = null;
+
+function getBarAudioContextClass(): typeof AudioContext | null {
+  if (typeof window === "undefined") return null;
+
+  return (
+    window.AudioContext ??
+    (
+      window as unknown as {
+        webkitAudioContext?: typeof AudioContext;
+      }
+    ).webkitAudioContext ??
+    null
+  );
+}
+
+async function ensureBarAudioContext(): Promise<AudioContext | null> {
+  const Ctx = getBarAudioContextClass();
+  if (!Ctx) return null;
+
+  if (!barAudioContext) {
+    barAudioContext = new Ctx();
+  }
+
+  if (barAudioContext.state === "suspended") {
+    try {
+      await barAudioContext.resume();
+    } catch {
+      // ignore
+    }
+  }
+
+  return barAudioContext;
+}
+
+function isDocumentHidden(): boolean {
+  return typeof document !== "undefined" && document.visibilityState === "hidden";
+}
+
+/** ユーザー操作後 — バックグラウンド停止フラグを解除（BGM 再開は各シーン側で明示的に） */
+function markBarAudioUserInteraction(): void {
+  appBackgroundSuspended = false;
+}
+
+function pauseLoopTrackForAppBackground(track: LoopingTrackState) {
+  const audio = track.audio;
+  if (!audio || !track.started) return;
+
+  cancelTrackFade(track);
+  track.ambient?.pause();
+  try {
+    audio.pause();
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * ホーム画面・他アプリ・画面ロック — BGM / SE を即停止。
+ * フォアグラウンド復帰時の自動再開は行わない（ユーザー操作後のみ）。
+ */
+export function suspendBarAudioForAppBackground(): void {
+  if (typeof document === "undefined") return;
+
+  appBackgroundSuspended = true;
+  outsideTrack.generation += 1;
+  jazzTrack.generation += 1;
+  outsidePreparePromise = null;
+  jazzPreparePromise = null;
+
+  pauseLoopTrackForAppBackground(outsideTrack);
+  pauseLoopTrackForAppBackground(jazzTrack);
+  stopAllActiveSfx();
+
+  if (barAudioContext?.state === "running") {
+    void barAudioContext.suspend();
+  }
+}
+
+/**
+ * iOS Safari / PWA — visibilitychange + pagehide（blur/focus は誤発火が多いため不使用）
+ */
+export function attachBarAudioAppLifecycle(): void {
+  if (barAudioLifecycleAttached || typeof document === "undefined") return;
+  barAudioLifecycleAttached = true;
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      suspendBarAudioForAppBackground();
+    }
+  });
+
+  window.addEventListener("pagehide", () => {
+    suspendBarAudioForAppBackground();
+  });
+}
+
+function isLoopTrackPlaying(track: LoopingTrackState): boolean {
+  const audio = track.audio;
+  if (!track.started || !audio || audio.paused) return false;
+  return getTrackOutputLevel(audio, track) > 0.001;
+}
+
+function shouldBlockBackgroundBgmPlayback(): boolean {
+  return appBackgroundSuspended || isDocumentHidden();
+}
+
+/** 扉を開ける / メモを見る等 — 最初の明確なユーザー操作後にのみ呼ぶ */
+export function unlockBarAudioForUserGesture(): void {
+  markBarAudioUserInteraction();
+  if (barAudioUserGestureUnlocked) return;
+  barAudioUserGestureUnlocked = true;
+  prefetchLoopingSource(ENTRANCE_SOUNDS.jazz);
+  prefetchLoopingSource(ENTRANCE_SOUNDS.outside);
+  beginOutsideAlleyPreload();
+  void ensureBarAudioContext();
+  void warmUpBarAudio();
+}
 
 function isBarAudioUnlocked(): boolean {
   return barAudioUserGestureUnlocked;
@@ -33,15 +164,9 @@ export function restoreBarAudioUnlockAfterModuleReload(): void {
   if (barAudioUserGestureUnlocked) return;
   barAudioUserGestureUnlocked = true;
   ensureSfxPool();
-  void warmUpBarAudio();
-}
-
-/** 扉を開ける / メモを見る等 — 最初の明確なユーザー操作後にのみ呼ぶ */
-export function unlockBarAudioForUserGesture(): void {
-  if (barAudioUserGestureUnlocked) return;
-  barAudioUserGestureUnlocked = true;
-  prefetchLoopingSource(ENTRANCE_SOUNDS.jazz);
   prefetchLoopingSource(ENTRANCE_SOUNDS.outside);
+  beginOutsideAlleyPreload();
+  void ensureBarAudioContext();
   void warmUpBarAudio();
 }
 
@@ -122,12 +247,18 @@ type AmbientVolumeController = {
   dispose: () => void;
 };
 
+type LoopWebAudioRouting = {
+  source: MediaElementAudioSourceNode;
+  gain: GainNode;
+};
+
 type LoopingTrackState = {
   audio: HTMLAudioElement | null;
   started: boolean;
-  fade: ReturnType<typeof setInterval> | null;
+  fade: number | null;
   targetVolume: number;
   ambient: AmbientVolumeController | null;
+  webAudio: LoopWebAudioRouting | null;
   /** stop / 新規 start で進め、await 後の stale 再生を防ぐ */
   generation: number;
 };
@@ -139,8 +270,67 @@ function createInitialTrackState(defaultVolume: number): LoopingTrackState {
     fade: null,
     targetVolume: defaultVolume,
     ambient: null,
+    webAudio: null,
     generation: 0,
   };
+}
+
+function disconnectTrackWebAudio(track: LoopingTrackState) {
+  if (!track.webAudio) return;
+
+  try {
+    track.webAudio.source.disconnect();
+    track.webAudio.gain.disconnect();
+  } catch {
+    // ignore
+  }
+
+  track.webAudio = null;
+}
+
+async function ensureTrackWebAudio(
+  audio: HTMLAudioElement,
+  track: LoopingTrackState,
+): Promise<GainNode | null> {
+  if (track.webAudio) return track.webAudio.gain;
+
+  const ctx = await ensureBarAudioContext();
+  if (!ctx) return null;
+
+  try {
+    audio.volume = 1;
+    audio.muted = false;
+    const source = ctx.createMediaElementSource(audio);
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    track.webAudio = { source, gain };
+    return gain;
+  } catch {
+    return null;
+  }
+}
+
+function setTrackOutputLevel(
+  audio: HTMLAudioElement,
+  track: LoopingTrackState,
+  level: number,
+) {
+  const clamped = clampVolume(level);
+  if (track.webAudio) {
+    track.webAudio.gain.gain.value = clamped;
+    return;
+  }
+  audio.volume = clamped;
+}
+
+function getTrackOutputLevel(
+  audio: HTMLAudioElement,
+  track: LoopingTrackState,
+): number {
+  if (track.webAudio) return track.webAudio.gain.gain.value;
+  return audio.volume;
 }
 
 function releaseAudio(audio: HTMLAudioElement | null) {
@@ -239,7 +429,11 @@ function createJazzAmbientModulation(
       audio.currentTime,
       duration,
     );
-    audio.volume = clampVolume(track.targetVolume * multiplier);
+    setTrackOutputLevel(
+      audio,
+      track,
+      clampVolume(track.targetVolume * multiplier),
+    );
   };
 
   const tick = () => {
@@ -270,20 +464,45 @@ function createJazzAmbientModulation(
 }
 
 function cancelTrackFade(track: LoopingTrackState) {
-  if (track.fade) {
-    clearInterval(track.fade);
+  if (track.fade !== null) {
+    cancelAnimationFrame(track.fade);
     track.fade = null;
   }
 }
 
-function clearTrackAudio(track: LoopingTrackState, audio: HTMLAudioElement) {
-  cancelTrackFade(track);
-  disposeAmbientController(track);
-  releaseAudio(audio);
-  if (track.audio === audio) {
-    track.audio = null;
-    track.started = false;
+/** iOS Safari — play() 直前に無音化（Web Audio 優先） */
+function primeLoopAudioSilence(
+  audio: HTMLAudioElement,
+  track: LoopingTrackState,
+) {
+  if (track.webAudio) {
+    track.webAudio.gain.gain.value = 0;
+    audio.muted = false;
+    audio.volume = 1;
+    return;
   }
+
+  audio.volume = 0;
+  audio.muted = true;
+}
+
+function computeFadeLevel(
+  audio: HTMLAudioElement,
+  track: LoopingTrackState,
+  from: number,
+  to: number,
+  progress: number,
+): number {
+  if (track.ambient && to > 0 && from === 0) {
+    const duration = audio.duration;
+    const ambientMult =
+      Number.isFinite(duration) && duration > 0
+        ? computeJazzAmbientMultiplier(audio.currentTime, duration)
+        : 1;
+    return clampVolume(track.targetVolume * ambientMult * progress);
+  }
+
+  return from + (to - from) * progress;
 }
 
 function fadeVolume(
@@ -297,42 +516,215 @@ function fadeVolume(
   cancelTrackFade(track);
   track.ambient?.pause();
 
-  const steps = Math.max(
-    1,
-    Math.round(durationMs / BAR_AUDIO_TIMING.fadeStepMs),
-  );
-  let step = 0;
-  audio.volume = from;
+  const fadeIn = to > 0 && from === 0;
+  const usesWebAudio = track.webAudio !== null;
 
-  track.fade = setInterval(() => {
-    step += 1;
-    const progress = step / steps;
+  if (fadeIn) {
+    primeLoopAudioSilence(audio, track);
+  } else {
+    setTrackOutputLevel(audio, track, from);
+  }
 
-    if (track.ambient && to > 0 && from === 0) {
-      const duration = audio.duration;
-      const ambientMult =
-        Number.isFinite(duration) && duration > 0
-          ? computeJazzAmbientMultiplier(audio.currentTime, duration)
-          : 1;
-      audio.volume = clampVolume(track.targetVolume * ambientMult * progress);
-    } else {
-      audio.volume = from + (to - from) * progress;
+  const startTime = performance.now();
+
+  const tick = (now: number) => {
+    if (track.audio !== audio) {
+      track.fade = null;
+      return;
     }
 
-    if (step >= steps) {
-      cancelTrackFade(track);
-      audio.volume = to;
+    const linearProgress = Math.min(
+      1,
+      (now - startTime) / Math.max(1, durationMs),
+    );
+    const progress = easeInOut(linearProgress);
+    const level = computeFadeLevel(audio, track, from, to, progress);
+
+    if (!usesWebAudio && fadeIn && progress > 0) {
+      audio.muted = false;
+    }
+
+    setTrackOutputLevel(audio, track, level);
+
+    if (linearProgress >= 1) {
+      track.fade = null;
+      setTrackOutputLevel(audio, track, to);
+      if (!usesWebAudio && fadeIn) {
+        audio.muted = false;
+      }
       if (track.ambient && to > 0) {
         track.ambient.applyNow();
         track.ambient.resume();
       }
       onComplete?.();
+      return;
     }
-  }, BAR_AUDIO_TIMING.fadeStepMs);
+
+    track.fade = requestAnimationFrame(tick);
+  };
+
+  track.fade = requestAnimationFrame(tick);
+}
+
+function clearTrackAudio(track: LoopingTrackState, audio: HTMLAudioElement) {
+  cancelTrackFade(track);
+  disposeAmbientController(track);
+  disconnectTrackWebAudio(track);
+  releaseAudio(audio);
+  if (track.audio === audio) {
+    track.audio = null;
+    track.started = false;
+  }
 }
 
 const outsideTrack = createInitialTrackState(BAR_AUDIO_LEVELS.outside.alley);
 const jazzTrack = createInitialTrackState(BAR_AUDIO_LEVELS.jazz.counter);
+let jazzPreparePromise: Promise<void> | null = null;
+let outsidePreparePromise: Promise<void> | null = null;
+
+function beginOutsideAlleyPreload() {
+  if (outsideTrack.started && outsideTrack.audio) return;
+
+  const audio = createAudio(ENTRANCE_SOUNDS.outside, "auto");
+  if (!audio) return;
+
+  audio.loop = true;
+  audio.volume = 0;
+  audio.muted = true;
+  outsideTrack.audio = audio;
+  outsideTrack.started = true;
+  outsideTrack.targetVolume = BAR_AUDIO_LEVELS.outside.alley;
+  audio.load();
+}
+
+/**
+ * ユーザー操作の同期コンテキスト内 — outside を無音で play 開始。
+ * iOS では await 後の play() が拒否されるため、操作ハンドラから直接呼ぶ。
+ */
+function primeOutsidePlayOnUserGesture() {
+  markBarAudioUserInteraction();
+  if (!isBarAudioUnlocked() || isDocumentHidden()) return;
+
+  beginOutsideAlleyPreload();
+  const audio = outsideTrack.audio;
+  if (!audio) return;
+
+  primeLoopAudioSilence(audio, outsideTrack);
+  void ensureBarAudioContext();
+  void audio.play().catch(() => {});
+}
+
+async function prepareOutsideForEntry(
+  fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
+  volume: number = BAR_AUDIO_LEVELS.outside.alley,
+): Promise<void> {
+  if (!isBarAudioUnlocked() || shouldBlockBackgroundBgmPlayback()) return;
+
+  if (outsidePreparePromise) {
+    await outsidePreparePromise;
+    return;
+  }
+
+  outsidePreparePromise = (async () => {
+    if (shouldBlockBackgroundBgmPlayback()) return;
+
+    beginOutsideAlleyPreload();
+    const audio = outsideTrack.audio;
+    if (!audio) {
+      await startLooping(ENTRANCE_SOUNDS.outside, volume, outsideTrack, fadeMs);
+      return;
+    }
+
+    outsideTrack.generation += 1;
+    const token = outsideTrack.generation;
+    outsideTrack.targetVolume = volume;
+
+    await waitForMetadata(audio);
+    if (!isTrackAudioCurrent(outsideTrack, token, audio)) return;
+    if (shouldBlockBackgroundBgmPlayback()) return;
+
+    await ensureTrackWebAudio(audio, outsideTrack);
+    primeLoopAudioSilence(audio, outsideTrack);
+
+    if (audio.paused) {
+      if (!(await safePlay(audio))) {
+        clearTrackAudio(outsideTrack, audio);
+        return;
+      }
+    }
+    primeLoopAudioSilence(audio, outsideTrack);
+
+    if (!isTrackAudioCurrent(outsideTrack, token, audio)) return;
+    if (shouldBlockBackgroundBgmPlayback()) return;
+
+    fadeVolume(
+      audio,
+      getTrackOutputLevel(audio, outsideTrack),
+      volume,
+      fadeMs,
+      outsideTrack,
+    );
+  })();
+
+  try {
+    await outsidePreparePromise;
+  } finally {
+    outsidePreparePromise = null;
+  }
+}
+
+/**
+ * 扉を開ける等のユーザー操作内 — jazz を gain 0 で先行 play→pause。
+ * 挨拶完了後の startJazz は resume + フェードのみ（iOS の play 制限を避ける）。
+ */
+async function prepareJazzForCounterEntry(): Promise<void> {
+  markBarAudioUserInteraction();
+  if (!isBarAudioUnlocked() || shouldBlockBackgroundBgmPlayback()) return;
+  if (jazzTrack.started && jazzTrack.audio) return;
+  if (jazzPreparePromise) {
+    await jazzPreparePromise;
+    return;
+  }
+
+  jazzPreparePromise = (async () => {
+    const audio = createAudio(ENTRANCE_SOUNDS.jazz, "auto");
+    if (!audio) return;
+
+    jazzTrack.generation += 1;
+    jazzTrack.targetVolume = BAR_AUDIO_LEVELS.jazz.counter;
+    audio.loop = true;
+    audio.volume = 0;
+    jazzTrack.audio = audio;
+    jazzTrack.started = true;
+    audio.load();
+
+    await waitForMetadata(audio);
+    if (jazzTrack.audio !== audio) return;
+
+    audio.currentTime = pickRandomStartTime(audio.duration);
+    disposeAmbientController(jazzTrack);
+    jazzTrack.ambient = createJazzAmbientModulation(audio, jazzTrack);
+    jazzTrack.ambient.pause();
+
+    await ensureTrackWebAudio(audio, jazzTrack);
+    primeLoopAudioSilence(audio, jazzTrack);
+
+    if (!(await safePlay(audio))) {
+      clearTrackAudio(jazzTrack, audio);
+      return;
+    }
+
+    primeLoopAudioSilence(audio, jazzTrack);
+    audio.pause();
+    primeLoopAudioSilence(audio, jazzTrack);
+  })();
+
+  try {
+    await jazzPreparePromise;
+  } finally {
+    jazzPreparePromise = null;
+  }
+}
 
 function ensureSfxPool() {
   if (sfxPoolInitialized) return;
@@ -378,27 +770,55 @@ export function warmUpBarAudio(): Promise<void> {
 }
 
 async function playSfx(
-  src: string,
-  volume: number,
+  kind: BarSfxKind,
   delayMs = 0,
+  onEnded?: () => void,
 ): Promise<void> {
   if (delayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 
-  playSfxNow(src, volume);
+  if (isDocumentHidden()) {
+    onEnded?.();
+    return;
+  }
+
+  playSfxNow(kind, onEnded);
 }
 
 /** ユーザー操作直後 — await なしで即再生 */
-function playSfxNow(src: string, volume: number) {
-  if (!isBarAudioUnlocked() || !sfxPoolInitialized) return;
+function playSfxNow(
+  kind: BarSfxKind,
+  onEnded?: () => void,
+) {
+  if (!isBarAudioUnlocked() || !sfxPoolInitialized || isDocumentHidden()) {
+    onEnded?.();
+    return;
+  }
+
+  const src = SFX_SRC_BY_KIND[kind];
   const slots = sfxPool.get(src);
-  if (!slots?.length) return;
+  if (!slots?.length) {
+    onEnded?.();
+    return;
+  }
 
   const audio = slots.find((slot) => slot.paused) ?? slots[0];
-  audio.volume = volume;
+  audio.volume = getSfxPlayVolume(kind);
+  audio.muted = false;
   audio.currentTime = 0;
-  void audio.play().catch(() => {});
+
+  if (onEnded) {
+    const handleEnded = () => {
+      audio.removeEventListener("ended", handleEnded);
+      onEnded();
+    };
+    audio.addEventListener("ended", handleEnded);
+  }
+
+  void audio.play().catch(() => {
+    onEnded?.();
+  });
 }
 
 async function startLooping(
@@ -408,7 +828,17 @@ async function startLooping(
   fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   enableAmbientModulation = false,
 ) {
-  if (!isBarAudioUnlocked()) return;
+  if (!isBarAudioUnlocked() || shouldBlockBackgroundBgmPlayback()) return;
+
+  if (src === ENTRANCE_SOUNDS.jazz && jazzPreparePromise) {
+    await jazzPreparePromise;
+  }
+
+  if (src === ENTRANCE_SOUNDS.outside && outsidePreparePromise) {
+    await outsidePreparePromise;
+  }
+
+  if (shouldBlockBackgroundBgmPlayback()) return;
 
   track.generation += 1;
   const token = track.generation;
@@ -416,6 +846,14 @@ async function startLooping(
 
   if (track.started && track.audio) {
     const audio = track.audio;
+
+    if (enableAmbientModulation && !track.ambient) {
+      track.ambient = createJazzAmbientModulation(audio, track);
+      track.ambient.pause();
+    }
+
+    let fadeFrom = getTrackOutputLevel(audio, track);
+
     if (audio.paused) {
       await waitForMetadata(audio);
       if (!isTrackAudioCurrent(track, token, audio)) {
@@ -423,6 +861,8 @@ async function startLooping(
         return;
       }
       audio.currentTime = pickRandomStartTime(audio.duration);
+      await ensureTrackWebAudio(audio, track);
+      primeLoopAudioSilence(audio, track);
       if (!(await safePlay(audio))) {
         return;
       }
@@ -430,11 +870,14 @@ async function startLooping(
         releaseAudio(audio);
         return;
       }
+      primeLoopAudioSilence(audio, track);
+      fadeFrom = 0;
     }
+
     if (!isTrackAudioCurrent(track, token, audio)) {
       return;
     }
-    fadeVolume(audio, audio.volume, volume, fadeMs, track);
+    fadeVolume(audio, fadeFrom, volume, fadeMs, track);
     return;
   }
 
@@ -467,6 +910,9 @@ async function startLooping(
   }
 
   try {
+    await ensureTrackWebAudio(audio, track);
+    primeLoopAudioSilence(audio, track);
+
     if (!(await safePlay(audio))) {
       if (track.audio === audio) {
         clearTrackAudio(track, audio);
@@ -479,6 +925,7 @@ async function startLooping(
       releaseAudio(audio);
       return;
     }
+    primeLoopAudioSilence(audio, track);
     fadeVolume(audio, 0, volume, fadeMs, track);
   } catch {
     if (track.audio === audio) {
@@ -491,13 +938,14 @@ async function startLooping(
 
 function setLoopingVolume(volume: number, track: LoopingTrackState) {
   track.targetVolume = volume;
-  if (!track.audio) return;
+  const audio = track.audio;
+  if (!audio) return;
   cancelTrackFade(track);
   if (track.ambient) {
     track.ambient.applyNow();
     return;
   }
-  track.audio.volume = volume;
+  setTrackOutputLevel(audio, track, volume);
 }
 
 function stopLooping(
@@ -567,6 +1015,9 @@ function silenceTrackForRecording(track: LoopingTrackState) {
 
   cancelTrackFade(track);
   track.ambient?.pause();
+  if (track.webAudio) {
+    track.webAudio.gain.gain.value = 0;
+  }
   audio.volume = 0;
   audio.muted = true;
   try {
@@ -579,7 +1030,13 @@ function silenceTrackForRecording(track: LoopingTrackState) {
 function restoreTrackAfterRecording(track: LoopingTrackState) {
   const audio = track.audio;
   if (!audio || !track.started) return;
-  audio.muted = false;
+  if (track.webAudio) {
+    track.webAudio.gain.gain.value = 0;
+    audio.muted = false;
+    audio.volume = 1;
+    return;
+  }
+  audio.volume = 0;
 }
 
 async function resumePausedLoopTrack(
@@ -596,12 +1053,15 @@ async function resumePausedLoopTrack(
 
   try {
     if (audio.paused) {
+      await ensureTrackWebAudio(audio, track);
+      primeLoopAudioSilence(audio, track);
       if (!(await safePlay(audio))) {
         logRecordingPipeline("resumePausedLoopTrack: play failed", {
           error: "play rejected",
         });
         return;
       }
+      primeLoopAudioSilence(audio, track);
     }
   } catch (error) {
     logRecordingPipeline("resumePausedLoopTrack: play failed", {
@@ -612,7 +1072,8 @@ async function resumePausedLoopTrack(
 
   if (track.audio !== audio) return;
 
-  fadeVolume(audio, audio.volume, track.targetVolume, fadeMs, track);
+  primeLoopAudioSilence(audio, track);
+  fadeVolume(audio, 0, track.targetVolume, fadeMs, track);
 }
 
 function snapshotActiveSfx(): Array<Record<string, unknown>> {
@@ -646,11 +1107,33 @@ export function getBarAudioDiagnostics(): Record<string, unknown> {
 export const barAudioEngine = {
   warmUp: warmUpBarAudio,
 
+  isOutsidePlaying() {
+    return isLoopTrackPlaying(outsideTrack);
+  },
+
+  /** 扉を開ける操作内 — jazz を無音で先行ロード */
+  prepareJazzForCounterEntry() {
+    void prepareJazzForCounterEntry();
+  },
+
+  /** ユーザー操作の同期コンテキスト内 — outside を無音で play 開始 */
+  primeOutsidePlayOnUserGesture() {
+    primeOutsidePlayOnUserGesture();
+  },
+
+  /** メタデータ待ち + Web Audio フェード（play は primeOutsidePlayOnUserGesture 側） */
+  prepareOutsideForEntry(
+    fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
+    volume: number = BAR_AUDIO_LEVELS.outside.alley,
+  ) {
+    void prepareOutsideForEntry(fadeMs, volume);
+  },
+
   startOutside(
     volume: number = BAR_AUDIO_LEVELS.outside.alley,
     fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   ) {
-    void startLooping(ENTRANCE_SOUNDS.outside, volume, outsideTrack, fadeMs);
+    void prepareOutsideForEntry(fadeMs, volume);
   },
 
   setOutsideVolume(volume: number) {
@@ -704,6 +1187,7 @@ export const barAudioEngine = {
   /** 録音終了後 — 保持していた jazz を通常音量（0.03）でフェードイン再開 */
   resumeJazzAfterRecording() {
     if (!bgmPausedForRecording) return;
+    if (shouldBlockBackgroundBgmPlayback()) return;
     bgmPausedForRecording = false;
     restoreTrackAfterRecording(outsideTrack);
     restoreTrackAfterRecording(jazzTrack);
@@ -732,23 +1216,35 @@ export const barAudioEngine = {
   },
 
   playDoor() {
-    void playSfx(ENTRANCE_SOUNDS.door, BAR_AUDIO_LEVELS.sfx.door);
+    void playSfx("door");
   },
 
-  playGlassSlide(delayMs = BAR_AUDIO_TIMING.glassSlideDelayMs) {
-    void playSfx(ENTRANCE_SOUNDS.glassSlide, BAR_AUDIO_LEVELS.sfx.glassSlide, delayMs);
+  playGlassSlide(
+    options?: number | { delayMs?: number; onEnded?: () => void },
+  ) {
+    const delayMs =
+      typeof options === "number"
+        ? options
+        : (options?.delayMs ?? BAR_AUDIO_TIMING.glassSlideDelayMs);
+    const onEnded = typeof options === "object" ? options?.onEnded : undefined;
+    void playSfx("glassSlide", delayMs, onEnded);
   },
 
   playClick() {
-    playSfxNow(ENTRANCE_SOUNDS.click, BAR_AUDIO_LEVELS.sfx.click);
+    playSfxNow("click");
+  },
+
+  playSend() {
+    playSfxNow("send");
   },
 
   playThink() {
-    void playSfx(ENTRANCE_SOUNDS.think, BAR_AUDIO_LEVELS.sfx.think);
+    playSfxNow("think");
   },
 
   dispose() {
     bgmPausedForRecording = false;
+    appBackgroundSuspended = false;
     barAudioUserGestureUnlocked = false;
     stopLooping(outsideTrack, true);
     stopLooping(jazzTrack, true);

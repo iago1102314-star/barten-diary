@@ -8,10 +8,7 @@ import {
   declineLinkTextStyle,
   DECLINE_NIGHT_LINK_TUNING,
 } from "@/lib/entrance/decline-night-link-tuning";
-import {
-  DECLINE_ENTRANCE_BASE_SEC,
-  MOOD_SELECT_ENTRANCE_DURATION_SCALE,
-} from "@/lib/entrance/mood-select-entrance-tuning";
+import { moodSelectUiAnimScaledSec } from "@/lib/entrance/mood-select-entrance-tuning";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 
@@ -34,7 +31,7 @@ export function DeclineNightLink({
   showDivider = false,
   entranceDelaySec,
 }: DeclineNightLinkProps) {
-  const { text, back, opacity, hoverOpacity, hover, tap, divider } =
+  const { text, back, opacity, hoverOpacity, hover, tap, divider, entrance } =
     DECLINE_NIGHT_LINK_TUNING;
   const [isHovered, setIsHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
@@ -42,6 +39,7 @@ export function DeclineNightLink({
   const textStyle = declineLinkTextStyle(text);
 
   const isEntranceMode = entranceDelaySec !== undefined;
+  const playEntrance = isEntranceMode && !entranceDone;
   const interactive = entranceDone && !disabled;
 
   const contentOpacity = isPressed ? tap.opacity : isHovered ? hoverOpacity : opacity;
@@ -49,22 +47,16 @@ export function DeclineNightLink({
   const contentColor = isPressed ? tap.color : text.color;
   const cssTransition = `opacity ${hover.durationSec}s ease, color ${hover.durationSec}s ease`;
 
-  // ── 入場アニメーション タイミング（scale 適用後の実効秒）────────────────────
-  const scale = MOOD_SELECT_ENTRANCE_DURATION_SCALE;
-  const t = (base: number) => base * scale;
+  const t = (sec: number) => moodSelectUiAnimScaledSec(sec);
   const base = entranceDelaySec ?? 0;
 
-  // 星: まず出現
-  const starDelay = base;
-  const starDuration = t(0.15);
-  // 線: 星が出始めてから少し後
-  const lineDelay = base + t(0.10);
-  const lineDuration = t(0.50);
-  // テキスト（ボタン）: 線が伸び始める頃にフェードイン
-  const textDelay = base + t(0.18);
-  const textDuration = t(0.45);
-  // 合計 ≒ DECLINE_ENTRANCE_BASE_SEC × scale
-  const totalSec = base + DECLINE_ENTRANCE_BASE_SEC * scale;
+  const starDelay = base + t(entrance.star.delayAfterStartSec);
+  const starDuration = t(entrance.star.durationSec);
+  const lineDelay = base + t(entrance.star.delayAfterStartSec + entrance.line.delayAfterStarSec);
+  const lineDuration = t(entrance.line.durationSec);
+  const textDelay = base + t(entrance.star.delayAfterStartSec + entrance.text.delayAfterStarSec);
+  const textDuration = t(entrance.text.durationSec);
+  const totalSec = base + t(entrance.totalAfterStartSec);
 
   useEffect(() => {
     if (!isEntranceMode) {
@@ -74,15 +66,21 @@ export function DeclineNightLink({
     setEntranceDone(false);
     const timer = window.setTimeout(() => setEntranceDone(true), totalSec * 1000);
     return () => window.clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEntranceMode, totalSec]);
 
-  // ── SVG 定数 ─────────────────────────────────────────────────────────────────
   const { viewBoxWidth, viewBoxHeight, centerY, moodFooter } =
     MOOD_ORNAMENTAL_DIVIDER_TUNING;
   const { line, diamond } = moodFooter;
-  // 左右とも同じ長さ（viewBox 座標系）
-  const lineLen = line.leftLineEndX - line.leftLineStartX; // = 67
+
+  const starTransition = playEntrance
+    ? { delay: starDelay, duration: starDuration, ease: entrance.star.ease }
+    : { duration: 0 };
+  const lineTransition = playEntrance
+    ? { delay: lineDelay, duration: lineDuration, ease: entrance.line.ease }
+    : { duration: 0 };
+  const textTransition = playEntrance
+    ? { delay: textDelay, duration: textDuration, ease: entrance.text.ease }
+    : { duration: 0 };
 
   return (
     <div
@@ -105,46 +103,49 @@ export function DeclineNightLink({
             display: "block",
             marginBottom: divider.marginBottomPx,
             transform: `translate(${divider.offsetXpx}px, ${divider.offsetYpx}px)`,
-            ...(entranceDone
-              ? { opacity: contentOpacity, transition: cssTransition }
-              : {}),
+            opacity: playEntrance ? opacity : contentOpacity,
+            transition: playEntrance ? undefined : cssTransition,
           }}
           aria-hidden
         >
-          {isEntranceMode && !entranceDone ? (
+          {playEntrance ? (
             <>
-              {/* 左ライン — ダイヤ側(x=98) から外側(x=31) へ伸びる */}
-              <motion.path
-                d={`M ${line.leftLineEndX} ${centerY} L ${line.leftLineStartX} ${centerY}`}
-                stroke="currentColor"
-                strokeWidth={line.strokeWidth}
-                initial={{ pathLength: 0, opacity: opacity }}
-                animate={{ pathLength: 1, opacity: opacity }}
-                transition={{ delay: lineDelay, duration: lineDuration, ease: "easeOut" }}
-              />
-              {/* 右ライン — ダイヤ側(x=122) から外側(x=189) へ伸びる */}
-              <motion.path
-                d={`M ${line.rightLineStartX} ${centerY} L ${line.rightLineEndX} ${centerY}`}
-                stroke="currentColor"
-                strokeWidth={line.strokeWidth}
-                initial={{ pathLength: 0, opacity: opacity }}
-                animate={{ pathLength: 1, opacity: opacity }}
-                transition={{ delay: lineDelay, duration: lineDuration, ease: "easeOut" }}
-              />
-              {/* 星（ダイヤ） — 最初に出現 */}
               <motion.g
-                initial={{ opacity: 0 }}
-                animate={{ opacity: opacity }}
-                transition={{ delay: starDelay, duration: starDuration, ease: "easeOut" }}
+                initial={{ opacity: 0, scaleX: 0 }}
+                animate={{ opacity: opacity, scaleX: 1 }}
+                transition={lineTransition}
+                style={{
+                  transformOrigin: `${line.leftLineEndX}px ${centerY}px`,
+                  transformBox: "fill-box",
+                }}
               >
-                <path
-                  d={ornamentalDiamondPath(
-                    diamond.centerX,
-                    centerY,
-                    diamond.halfWidth,
-                    diamond.halfHeight,
-                  )}
-                  fill="currentColor"
+                <line
+                  x1={line.leftLineStartX}
+                  y1={centerY}
+                  x2={line.leftLineEndX}
+                  y2={centerY}
+                  stroke="currentColor"
+                  strokeWidth={line.strokeWidth}
+                  strokeLinecap="round"
+                />
+              </motion.g>
+              <motion.g
+                initial={{ opacity: 0, scaleX: 0 }}
+                animate={{ opacity: opacity, scaleX: 1 }}
+                transition={lineTransition}
+                style={{
+                  transformOrigin: `${line.rightLineStartX}px ${centerY}px`,
+                  transformBox: "fill-box",
+                }}
+              >
+                <line
+                  x1={line.rightLineStartX}
+                  y1={centerY}
+                  x2={line.rightLineEndX}
+                  y2={centerY}
+                  stroke="currentColor"
+                  strokeWidth={line.strokeWidth}
+                  strokeLinecap="round"
                 />
               </motion.g>
             </>
@@ -157,6 +158,8 @@ export function DeclineNightLink({
                 y2={centerY}
                 stroke="currentColor"
                 strokeWidth={line.strokeWidth}
+                strokeLinecap="round"
+                opacity={contentOpacity}
               />
               <line
                 x1={line.rightLineStartX}
@@ -165,31 +168,39 @@ export function DeclineNightLink({
                 y2={centerY}
                 stroke="currentColor"
                 strokeWidth={line.strokeWidth}
-              />
-              <path
-                d={ornamentalDiamondPath(
-                  diamond.centerX,
-                  centerY,
-                  diamond.halfWidth,
-                  diamond.halfHeight,
-                )}
-                fill="currentColor"
+                strokeLinecap="round"
+                opacity={contentOpacity}
               />
             </>
           )}
+          <motion.g
+            initial={
+              playEntrance
+                ? { opacity: 0, scale: entrance.star.initialScale }
+                : false
+            }
+            animate={{ opacity: opacity, scale: 1 }}
+            transition={starTransition}
+            style={{ transformOrigin: `${diamond.centerX}px ${centerY}px` }}
+          >
+            <path
+              d={ornamentalDiamondPath(
+                diamond.centerX,
+                centerY,
+                diamond.halfWidth,
+                diamond.halfHeight,
+              )}
+              fill="currentColor"
+            />
+          </motion.g>
         </svg>
       )}
 
-      {/* ボタン本体 — 入場中はフェードイン、完了後は CSS hover */}
       <motion.div
         className={interactive ? "" : "pointer-events-none"}
-        initial={isEntranceMode ? { opacity: 0 } : false}
+        initial={playEntrance ? { opacity: 0 } : false}
         animate={{ opacity: 1 }}
-        transition={
-          isEntranceMode && !entranceDone
-            ? { delay: textDelay, duration: textDuration, ease: "easeOut" }
-            : { duration: 0 }
-        }
+        transition={textTransition}
       >
         <button
           type="button"
@@ -228,7 +239,7 @@ export function DeclineNightLink({
             style={{
               ...textStyle,
               color: contentColor,
-              opacity: contentOpacity,
+              opacity: playEntrance ? 1 : contentOpacity,
               transition: cssTransition,
             }}
           >

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  attachBarAudioAppLifecycle,
   barAudioEngine,
   isBarAudioUnlockedByClient,
   restoreBarAudioUnlockAfterModuleReload,
@@ -25,6 +26,7 @@ export function syncBarAudioUnlockFromClient(wasUnlockedByClient: boolean): void
 export function useBarAudio() {
   useEffect(() => {
     consumerCount += 1;
+    attachBarAudioAppLifecycle();
 
     return () => {
       consumerCount -= 1;

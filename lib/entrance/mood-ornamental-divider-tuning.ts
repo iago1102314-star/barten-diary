@@ -14,15 +14,15 @@ export const MOOD_ORNAMENTAL_DIVIDER_TUNING = {
 
   /** 過去のボトルから — 下のライン（1本 + 右端ダイヤ） */
   pastBottle: {
+    viewBoxMinX: -10,
     line: {
       /** 線の太さ — 1 より細くて OK（例: 0.5） */
       strokeWidth: 0.5,
       lineStartX: -10,
-      lineEndX: 300,
     },
-    /** 右端ダイヤ — 線の strokeWidth とは無関係 */
+    /** 右端ダイヤ — lineEndX = centerX + halfWidth で連動 */
     diamond: {
-      centerX: 256,
+      centerX: 260,
       halfWidth: 4,
       halfHeight: 4,
     },
@@ -33,7 +33,8 @@ export const MOOD_ORNAMENTAL_DIVIDER_TUNING = {
    */
   moodFooter: {
     line: {
-      strokeWidth: 0.2,
+      /** viewBox 高さ 12px 表示 — 0.5 未満は実質見えない */
+      strokeWidth: 0.5,
       leftLineStartX: 31,
       leftLineEndX: 98,
       rightLineStartX: 122,
@@ -46,6 +47,22 @@ export const MOOD_ORNAMENTAL_DIVIDER_TUNING = {
     },
   },
 } as const;
+
+/** 過去ボトル — 線端と星を同期した viewBox / 線座標 */
+export function getPastBottleDividerMetrics() {
+  const { viewBoxMinX, line, diamond } =
+    MOOD_ORNAMENTAL_DIVIDER_TUNING.pastBottle;
+  const lineEndX = diamond.centerX + diamond.halfWidth;
+
+  return {
+    viewBoxMinX,
+    viewBoxWidth: lineEndX - viewBoxMinX,
+    lineStartX: line.lineStartX,
+    lineEndX,
+    strokeWidth: line.strokeWidth,
+    diamond,
+  };
+}
 
 export function ornamentalDiamondPath(
   centerX: number,

@@ -15,7 +15,7 @@ import {
   resetRecordingPipelineDiagnostic,
   updateRecordingPipelineDiagnostic,
 } from "@/lib/recorder/recording-pipeline-diagnostic";
-import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
+import { logRecordingPipeline, logRecordingPipelineError } from "@/lib/recorder/recording-pipeline-log";
 import { transcribeAudio } from "@/lib/transcribe/transcribe-audio";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -43,6 +43,9 @@ export function useNightSession() {
   const generation = useGenerateDiary();
   const [listenFailureCount, setListenFailureCount] = useState(0);
   const [listenFailureVisible, setListenFailureVisible] = useState(false);
+  const [listenFailureReason, setListenFailureReason] = useState<string | null>(
+    null,
+  );
   const [transcript, setTranscript] = useState<string | null>(null);
   const [recordedAt, setRecordedAt] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] =
@@ -91,23 +94,22 @@ export function useNightSession() {
       setTranscript(null);
       setRecordedAt(null);
       setGenerationFailed(false);
-      if (options?.reason) {
-        const current = getRecordingPipelineDiagnostic();
-        if (!current.pipelineError) {
-          updateRecordingPipelineDiagnostic({ pipelineError: options.reason });
-        }
-      } else {
-        const current = getRecordingPipelineDiagnostic();
-        if (!current.pipelineError) {
-          updateRecordingPipelineDiagnostic({
-            pipelineError: "listen failure (no detail recorded)",
-          });
-        }
+      const reason =
+        options?.reason ?? "listen failure (no detail recorded)";
+      logRecordingPipelineError("listen failure", {
+        reason,
+        advanceCount: options?.advanceCount !== false,
+      });
+      const current = getRecordingPipelineDiagnostic();
+      if (!current.pipelineError) {
+        updateRecordingPipelineDiagnostic({ pipelineError: reason });
       }
       if (options?.advanceCount !== false) {
         setListenFailureCount((count) => count + 1);
       }
+      setListenFailureReason(reason);
       setListenFailureVisible(true);
+      phaseRef.current = "recording";
       setPhase("recording");
     },
     [recorder, generation],
@@ -118,6 +120,7 @@ export function useNightSession() {
   const resetListenFailure = useCallback(() => {
     setListenFailureCount(0);
     setListenFailureVisible(false);
+    setListenFailureReason(null);
   }, []);
 
   const clearListenFailureUi = useCallback(() => {
@@ -164,8 +167,14 @@ export function useNightSession() {
     [resetListenFailure],
   );
 
-  const startSpeaking = useCallback(async () => {
-    if (!selectedCategoryId) return;
+  const startSpeaking = useCallback(async (): Promise<boolean> => {
+    if (!selectedCategoryId) {
+      registerListenFailure({
+        advanceCount: false,
+        reason: "startSpeaking: category not selected",
+      });
+      return false;
+    }
 
     resetListenFailure();
     pipelineLock.current = false;
@@ -175,12 +184,15 @@ export function useNightSession() {
     setTranscript(null);
     setRecordedAt(null);
     resetRecordingPipelineDiagnostic();
+    recorder.reset();
+    phaseRef.current = "recording";
     setPhase("recording");
     const started = await recorder.start();
     if (!started) {
-      registerListenFailure({ advanceCount: false });
-      return;
+      // phaseRef を先に更新していれば onFatalError 経由で UI 化済み
+      return false;
     }
+    return true;
   }, [recorder, generation, selectedCategoryId, resetListenFailure, registerListenFailure]);
 
   const stopSpeaking = useCallback(() => {
@@ -209,12 +221,13 @@ export function useNightSession() {
     return recorder.resume();
   }, [recorder]);
 
-  const retrySpeaking = useCallback(async () => {
+  const retrySpeaking = useCallback(async (): Promise<boolean> => {
     setListenFailureVisible(false);
     setGenerationFailed(false);
     pipelineLock.current = false;
     inflightGenerationKeyRef.current = null;
     resetRecordingPipelineDiagnostic();
+    phaseRef.current = "recording";
     setPhase("recording");
     recorder.reset();
     generation.reset();
@@ -222,10 +235,10 @@ export function useNightSession() {
     setRecordedAt(null);
     const started = await recorder.start();
     if (!started) {
-      registerListenFailure({ advanceCount: false });
-      return;
+      return false;
     }
-  }, [recorder, generation, registerListenFailure]);
+    return true;
+  }, [recorder, generation]);
 
   const retryGeneration = useCallback(() => {
     if (!transcript || !selectedCategoryId) return;
@@ -304,8 +317,9 @@ export function useNightSession() {
 
         const validation = validateTranscriptInput(text);
         if (!validation.ok) {
+          const reason = `validation:${validation.code} — ${validation.message}`;
           updateRecordingPipelineDiagnostic({
-            pipelineError: `validation:${validation.code} — ${validation.message}`,
+            pipelineError: reason,
           });
           logRecordingPipeline("transcribe pipeline: validation failed", {
             code: validation.code,
@@ -313,7 +327,10 @@ export function useNightSession() {
             transcriptLength: text.length,
             transcript: text,
           });
-          registerListenFailure();
+          registerListenFailure({
+            advanceCount: true,
+            reason,
+          });
           return;
         }
 
@@ -328,7 +345,10 @@ export function useNightSession() {
         logRecordingPipeline("transcribe pipeline: error", {
           error: message,
         });
-        registerListenFailure();
+        registerListenFailure({
+          advanceCount: true,
+          reason: `transcribe: ${message}`,
+        });
       } finally {
         pipelineLock.current = false;
       }
@@ -425,6 +445,7 @@ export function useNightSession() {
     isDevSimulated,
     listenFailureCount,
     listenFailureVisible,
+    listenFailureReason,
     transcript,
     record: generation.result,
     generationStatus: generation.status,

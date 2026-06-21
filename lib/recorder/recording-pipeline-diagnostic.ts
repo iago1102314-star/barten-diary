@@ -77,6 +77,10 @@ export function resetRecordingPipelineDiagnostic(): void {
 export function updateRecordingPipelineDiagnostic(
   patch: Partial<Omit<RecordingPipelineDiagnosticSnapshot, "updatedAt">>,
 ): void {
+  if (typeof window !== "undefined") {
+    writeSnapshot({ ...readSnapshot(), ...patch, updatedAt: Date.now() });
+    return;
+  }
   if (!isRecordingDiagnosticEnabled()) return;
   writeSnapshot({ ...readSnapshot(), ...patch, updatedAt: Date.now() });
 }

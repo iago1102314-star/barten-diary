@@ -3,12 +3,18 @@
 import { motion } from "motion/react";
 import { barAudioEngine } from "@/lib/entrance/bar-audio-engine";
 import { PAST_BOTTLE_LINK_TUNING } from "@/lib/entrance/past-bottle-link-tuning";
-import {
-  hexToRgba,
-  MOOD_VIGNETTE_TUNING,
-} from "@/lib/entrance/mood-vignette-tuning";
+import { MOOD_VIGNETTE_TUNING } from "@/lib/entrance/mood-vignette-tuning";
+import { MoodConfirmButtonExit } from "@/components/entrance/mood-confirm-button-exit";
 import { MOOD_SELECT_LAYOUT_TUNING } from "@/lib/entrance/mood-select-layout-tuning";
-import { useEffect, useState, type ReactNode } from "react";
+import { MOOD_SELECT_EXIT_SCALED } from "@/lib/entrance/mood-select-exit-timing";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 export type MoodOption = {
   id: string;
@@ -25,8 +31,12 @@ export type BarSeatMoodPickerProps = {
   options: MoodOption[];
   promptText?: string;
   onSelect: (option: MoodOption) => void;
-  /** 選択確定前（幕を上げる等）。第2引数で注ぎ演出を開始 */
+  /** @deprecated 確定退場演出 — onConfirmStart / onConfirmExitComplete を使用 */
   onBeforeSelect?: (option: MoodOption, proceed: () => void) => void;
+  /** 選択確定 — 退場演出開始（他 UI 逆再生） */
+  onConfirmStart?: (option: MoodOption) => void;
+  /** 選ばれたボタンが闇に溶け終わった */
+  onConfirmExitComplete?: (option: MoodOption) => void;
   showPourAnimation?: boolean;
   pourCompleteDelay?: number;
   className?: string;
@@ -34,10 +44,16 @@ export type BarSeatMoodPickerProps = {
   transparentBackground?: boolean;
   /** true のとき入場フェード・選択肢遅延を省略 */
   instantEntrance?: boolean;
+  /** true のとき選択肢スライド入場を省略（過去ボトル画面から戻る等） */
+  skipOptionEntrance?: boolean;
   /** 選択確定時 — 注ぎ演出に使う杯を決める（省略時は option の表示のまま） */
   resolveOption?: (option: MoodOption) => MoodOption;
   /** 入場演出の時間倍率（2 = 0.5倍速） */
   entranceDurationScale?: number;
+  /** 選択肢入場開始 — 秒（scale 込み）。未指定時は instantEntrance / TIMING.optionBaseDelay */
+  optionEntranceBaseDelaySec?: number;
+  /** 選択肢スライド・間隔の速度倍率（1.6 = 1.6倍速） */
+  optionEntranceSpeedFactor?: number;
   children?: ReactNode;
   /** 画面上部 — 幕より上 */
   header?: ReactNode;
@@ -132,56 +148,6 @@ function moodOptionInsetShadowBlurPx() {
 
 function moodOptionHoverInsetShadowBlurPx() {
   return MOOD_OPTION_BLUR.enabled ? MOOD_OPTION_BLUR.hoverInsetShadowBlurPx : 0;
-}
-
-/** 5ゾーンビネット — 背景と UI の間に挟まる影レイヤー */
-function VignetteOverlay({ durationScale = 1 }: { durationScale?: number }) {
-  const { top, bottom, bottomLayers, layerZIndex } = MOOD_VIGNETTE_TUNING;
-  const t = (sec: number) => sec * durationScale;
-  const topTotalPx = top.fixedPx + top.gradPx;
-  const topSolid = hexToRgba(top.color, top.opacity);
-  const bottomSolid = hexToRgba(bottom.color, bottom.opacity);
-
-  const topBg = `linear-gradient(to bottom, ${topSolid} 0px, ${topSolid} ${top.fixedPx}px, transparent 100%)`;
-  const bottomBg = `linear-gradient(to top, ${bottomSolid} 0px, ${bottomSolid} ${bottom.fixedPx}px, transparent 100%)`;
-
-  return (
-    <>
-      <motion.div
-        className="pointer-events-none absolute inset-x-0 top-0"
-        style={{
-          zIndex: layerZIndex,
-          height: topTotalPx,
-          background: topBg,
-        }}
-        initial={{ opacity: 0, y: top.enterY }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{
-          delay: t(top.delaySec),
-          duration: t(top.durationSec),
-          ease: "easeOut",
-        }}
-      />
-      {bottomLayers.map((layer, i) => (
-        <motion.div
-          key={i}
-          className="pointer-events-none absolute inset-x-0 bottom-0"
-          style={{
-            zIndex: layerZIndex,
-            height: `${bottom.fixedPx + bottom.gradPx * layer.gradScale}px`,
-            background: bottomBg,
-          }}
-          initial={{ opacity: 0, y: layer.enterY }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            delay: t(layer.delaySec),
-            duration: t(layer.durationSec),
-            ease: "easeOut",
-          }}
-        />
-      ))}
-    </>
-  );
 }
 
 function MoodPickerStyles() {
@@ -313,12 +279,19 @@ function Glass({ color, level }: { color: string; level: number }) {
 export type MoodOptionButtonProps = {
   option: MoodOption;
   index: number;
-  onClick: (option: MoodOption) => void;
+  onClick: (option: MoodOption, buttonEl: HTMLButtonElement) => void;
   disabled?: boolean;
   entranceBaseDelay?: number;
   optionStagger?: number;
   slideDuration?: number;
+  skipEntrance?: boolean;
   exiting?: boolean;
+  /** 確定退場中 — 他ボタンが消えても残す */
+  holdVisible?: boolean;
+  /** 確定退場 — 幅を px 固定（移動中の改行防止） */
+  lockWidthPx?: number;
+  /** 確定退場 — ラベルを改行しない */
+  nowrapText?: boolean;
   totalOptions?: number;
 };
 
@@ -338,7 +311,9 @@ function moodOptionAccentStyles(glow: string) {
   };
 }
 
-export function MoodOptionButton({
+export const MoodOptionButton = forwardRef<HTMLButtonElement, MoodOptionButtonProps>(
+function MoodOptionButton(
+  {
   option,
   index,
   onClick,
@@ -346,9 +321,15 @@ export function MoodOptionButton({
   entranceBaseDelay = TIMING.optionBaseDelay,
   optionStagger = TIMING.optionStagger,
   slideDuration = TIMING.optionSlideDuration,
+  skipEntrance = false,
   exiting = false,
+  holdVisible = false,
+  lockWidthPx,
+  nowrapText = false,
   totalOptions = 1,
-}: MoodOptionButtonProps) {
+}: MoodOptionButtonProps,
+  ref,
+) {
   const entranceDelay = entranceBaseDelay + index * optionStagger;
   const exitDelay = (totalOptions - 1 - index) * optionStagger;
   const slideOffset =
@@ -360,6 +341,21 @@ export function MoodOptionButton({
     duration: TIMING.optionHoverDurationSec,
     ease: "easeOut" as const,
   };
+  const entranceTransition = skipEntrance
+    ? {
+        opacity: { duration: 0 },
+        x: { duration: 0 },
+        scale: hoverTransition,
+        borderColor: hoverTransition,
+        boxShadow: hoverTransition,
+      }
+    : {
+        opacity: { delay: entranceDelay, duration: slideDuration },
+        x: { delay: entranceDelay, duration: slideDuration },
+        scale: hoverTransition,
+        borderColor: hoverTransition,
+        boxShadow: hoverTransition,
+      };
   const insetGlow = option.glow
     .replace("0.35", String(TIMING.optionBorderGlowAlpha))
     .replace("0.4", String(TIMING.optionBorderGlowAlpha));
@@ -370,17 +366,24 @@ export function MoodOptionButton({
 
   return (
     <motion.button
+      ref={ref}
       type="button"
-      onClick={() => onClick(option)}
+      onClick={(event) => onClick(option, event.currentTarget)}
       disabled={disabled}
-      initial={{
-        opacity: 0,
-        x: slideOffset,
-      }}
+      initial={
+        skipEntrance && !exiting
+          ? false
+          : {
+              opacity: 0,
+              x: slideOffset,
+            }
+      }
       animate={
-        exiting
-          ? { opacity: 0, x: slideOffset }
-          : { opacity: 1, x: 0 }
+        holdVisible
+          ? { opacity: 1, x: 0 }
+          : exiting
+            ? { opacity: 0, x: slideOffset }
+            : { opacity: 1, x: 0 }
       }
       transition={
         exiting
@@ -391,13 +394,7 @@ export function MoodOptionButton({
               borderColor: hoverTransition,
               boxShadow: hoverTransition,
             }
-          : {
-              opacity: { delay: entranceDelay, duration: slideDuration },
-              x: { delay: entranceDelay, duration: slideDuration },
-              scale: hoverTransition,
-              borderColor: hoverTransition,
-              boxShadow: hoverTransition,
-            }
+          : entranceTransition
       }
       whileHover={
         disabled
@@ -409,9 +406,11 @@ export function MoodOptionButton({
             }
       }
       whileTap={{ scale: disabled ? 1 : 0.97 }}
-      className={`mood-option-btn group relative mx-auto flex items-center gap-3 overflow-hidden rounded-xl border border-white/[0.07] bg-gradient-to-r from-white/[0.04] to-transparent px-5 transition-[border-color,box-shadow] duration-75 disabled:pointer-events-none ${moodOptionButtonBlurClass()}`}
+      className={`mood-option-btn group relative mx-auto flex items-center gap-3 overflow-hidden rounded-xl border border-white/[0.07] bg-gradient-to-r from-white/[0.04] to-transparent px-5 transition-[border-color,box-shadow] duration-75 disabled:pointer-events-none ${nowrapText ? "flex-nowrap" : ""} ${moodOptionButtonBlurClass()}`}
       style={{
-        width: buttonWidth,
+        width: lockWidthPx ?? (nowrapText ? "100%" : buttonWidth),
+        minWidth: lockWidthPx,
+        maxWidth: lockWidthPx,
         paddingTop: TIMING.optionButtonPaddingYpx,
         paddingBottom: TIMING.optionButtonPaddingYpx,
         boxShadow: `inset 0 0 ${moodOptionInsetShadowBlurPx()}px ${insetGlow}`,
@@ -441,7 +440,7 @@ export function MoodOptionButton({
         aria-hidden
       />
       <span
-        className="relative z-[1] font-serif-jp"
+        className={`relative z-[1] font-serif-jp ${nowrapText ? "shrink-0 whitespace-nowrap" : ""}`}
         style={{
           color: MOOD_OPTION_TEXT.title,
           fontSize: MOOD_OPTION_TEXT.titleFontSizePx,
@@ -452,7 +451,7 @@ export function MoodOptionButton({
         {option.label}
       </span>
       <span
-        className="relative z-[1] ml-auto shrink-0 bsm-font-gothic tracking-[0.2em]"
+        className={`relative z-[1] ml-auto shrink-0 bsm-font-gothic tracking-[0.2em] ${nowrapText ? "whitespace-nowrap" : ""}`}
         style={{
           color: MOOD_OPTION_TEXT.sub,
           fontSize: MOOD_OPTION_TEXT.subFontSizePx,
@@ -462,20 +461,26 @@ export function MoodOptionButton({
       </span>
     </motion.button>
   );
-}
+});
+MoodOptionButton.displayName = "MoodOptionButton";
 
 export function BarSeatMoodPicker({
   options,
   promptText = "",
   onSelect,
   onBeforeSelect,
+  onConfirmStart,
+  onConfirmExitComplete,
   showPourAnimation = true,
   pourCompleteDelay = TIMING.pourCompleteDelay,
   className = "",
   transparentBackground = false,
   instantEntrance = false,
+  skipOptionEntrance = false,
   resolveOption,
   entranceDurationScale = 1,
+  optionEntranceBaseDelaySec,
+  optionEntranceSpeedFactor = 1,
   children,
   header,
   footer,
@@ -483,6 +488,27 @@ export function BarSeatMoodPicker({
   const [picked, setPicked] = useState<MoodOption | null>(null);
   const [isExiting, setIsExiting] = useState(false);
   const [poured, setPoured] = useState(false);
+  const [confirmedOption, setConfirmedOption] = useState<MoodOption | null>(null);
+  const [confirmPhase, setConfirmPhase] = useState<
+    null | "uiReverse" | "buttonMove" | "buttonDissolve"
+  >(null);
+  const [buttonAnchor, setButtonAnchor] = useState<{
+    centerX: number;
+    centerY: number;
+    width: number;
+  } | null>(null);
+  const selectedBtnRef = useRef<HTMLButtonElement>(null);
+  const exitCompleteFiredRef = useRef(false);
+  const useConfirmExit = Boolean(onConfirmStart && onConfirmExitComplete);
+
+  const fireConfirmExitComplete = useCallback(
+    (option: MoodOption) => {
+      if (exitCompleteFiredRef.current) return;
+      exitCompleteFiredRef.current = true;
+      onConfirmExitComplete?.(option);
+    },
+    [onConfirmExitComplete],
+  );
 
   const beginPour = (option: MoodOption) => {
     setPicked(option);
@@ -496,10 +522,31 @@ export function BarSeatMoodPicker({
     setTimeout(() => onSelect(option), pourCompleteDelay);
   };
 
-  const pick = (option: MoodOption) => {
-    if (picked || isExiting) return;
+  const captureButtonAnchor = (buttonEl: HTMLButtonElement) => {
+    const rect = buttonEl.getBoundingClientRect();
+    setButtonAnchor({
+      centerX: rect.left + rect.width / 2,
+      centerY: rect.top + rect.height / 2,
+      width: rect.width,
+    });
+  };
+
+  const pick = (option: MoodOption, clickedButton: HTMLButtonElement) => {
+    if (picked || isExiting || confirmedOption) return;
 
     barAudioEngine.playClick();
+
+    if (useConfirmExit) {
+      const resolved = resolveOption?.(option) ?? option;
+      exitCompleteFiredRef.current = false;
+      captureButtonAnchor(clickedButton);
+      setConfirmedOption(resolved);
+      setConfirmPhase("uiReverse");
+      setIsExiting(true);
+      onConfirmStart?.(resolved);
+      return;
+    }
+
     setIsExiting(true);
 
     const resolved = resolveOption?.(option) ?? option;
@@ -520,14 +567,90 @@ export function BarSeatMoodPicker({
 
   const sceneFadeIn = instantEntrance ? 0 : TIMING.sceneFadeIn;
   const entranceScale = entranceDurationScale;
+  const optionSpeed = optionEntranceSpeedFactor;
   const optionBaseDelay =
-    (instantEntrance ? 0 : TIMING.optionBaseDelay) * entranceScale;
+    optionEntranceBaseDelaySec ??
+    (instantEntrance ? 0 : TIMING.optionBaseDelay * entranceScale);
   const optionStagger =
-    TIMING.optionStagger * entranceScale * TIMING.optionStaggerFactor;
+    (TIMING.optionStagger * entranceScale * TIMING.optionStaggerFactor) /
+    optionSpeed;
   const slideDuration =
-    TIMING.optionSlideDuration *
-    entranceScale *
-    TIMING.optionSlideDurationFactor;
+    (TIMING.optionSlideDuration *
+      entranceScale *
+      TIMING.optionSlideDurationFactor) /
+    optionSpeed;
+  const exitOptionStagger = optionStagger;
+  const exitSlideDuration = slideDuration;
+
+  useEffect(() => {
+    if (confirmPhase !== "uiReverse") return;
+
+    const maxExitDelay = (options.length - 1) * exitOptionStagger;
+    const timer = window.setTimeout(() => {
+      const el = selectedBtnRef.current;
+      if (el) {
+        captureButtonAnchor(el);
+      }
+      setConfirmPhase("buttonMove");
+    }, (maxExitDelay + exitSlideDuration) * 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [confirmPhase, options.length, exitOptionStagger, exitSlideDuration]);
+
+  useEffect(() => {
+    if (confirmPhase !== "buttonMove") return;
+
+    barAudioEngine.playSend();
+
+    const moveSec = MOOD_SELECT_EXIT_SCALED.buttonMoveToCenterSec;
+    const leadSec = MOOD_SELECT_EXIT_SCALED.buttonDissolveLeadSec;
+    const dissolveStartMs = Math.max(0, (moveSec - leadSec) * 1000);
+
+    const timer = window.setTimeout(() => {
+      setConfirmPhase("buttonDissolve");
+    }, dissolveStartMs);
+
+    return () => window.clearTimeout(timer);
+  }, [confirmPhase]);
+
+  useEffect(() => {
+    if (!confirmedOption || !useConfirmExit) return;
+
+    const uiReverseSec = (options.length - 1) * exitOptionStagger + exitSlideDuration;
+    const moveSec = MOOD_SELECT_EXIT_SCALED.buttonMoveToCenterSec;
+    const leadSec = MOOD_SELECT_EXIT_SCALED.buttonDissolveLeadSec;
+    const totalSec =
+      uiReverseSec +
+      moveSec -
+      leadSec +
+      MOOD_SELECT_EXIT_SCALED.buttonDissolveSec +
+      0.5;
+
+    const timer = window.setTimeout(() => {
+      fireConfirmExitComplete(confirmedOption);
+    }, totalSec * 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    confirmedOption,
+    useConfirmExit,
+    options.length,
+    exitOptionStagger,
+    exitSlideDuration,
+    fireConfirmExitComplete,
+  ]);
+
+  const handleDissolveComplete = useCallback(() => {
+    if (!confirmedOption) return;
+    fireConfirmExitComplete(confirmedOption);
+  }, [confirmedOption, fireConfirmExitComplete]);
+
+  const showConfirmOverlay =
+    confirmedOption &&
+    buttonAnchor &&
+    (confirmPhase === "buttonMove" || confirmPhase === "buttonDissolve");
+
+  const hideInListSelected = Boolean(showConfirmOverlay);
 
   return (
     <>
@@ -540,8 +663,6 @@ export function BarSeatMoodPicker({
         transition={{ duration: sceneFadeIn }}
       >
         {background}
-
-        {!picked && <VignetteOverlay durationScale={entranceScale} />}
 
         {!picked ? (
           <div
@@ -572,33 +693,69 @@ export function BarSeatMoodPicker({
                   paddingRight: MOOD_SELECT_LAYOUT_TUNING.horizontalPaddingPx,
                 }}
               >
-                {options.map((option, i) => (
-                  <MoodOptionButton
-                    key={option.id}
-                    option={option}
-                    index={i}
-                    onClick={pick}
-                    disabled={isExiting}
-                    exiting={isExiting}
-                    totalOptions={options.length}
-                    entranceBaseDelay={optionBaseDelay}
-                    optionStagger={optionStagger}
-                    slideDuration={slideDuration}
-                  />
-                ))}
+                {options.map((option, i) => {
+                  const isSelected = confirmedOption?.id === option.id;
+                  const holdVisible = Boolean(isSelected && confirmPhase === "uiReverse");
+                  const reverseExit = Boolean(
+                    isExiting && confirmedOption && !isSelected,
+                  );
+
+                  return (
+                    <div
+                      key={option.id}
+                      style={
+                        hideInListSelected && isSelected
+                          ? { visibility: "hidden" }
+                          : undefined
+                      }
+                    >
+                      <MoodOptionButton
+                        ref={isSelected ? selectedBtnRef : undefined}
+                        option={option}
+                        index={i}
+                        onClick={pick}
+                        disabled={isExiting}
+                        exiting={reverseExit || (isExiting && !useConfirmExit)}
+                        holdVisible={holdVisible}
+                        totalOptions={options.length}
+                        entranceBaseDelay={optionBaseDelay}
+                        optionStagger={reverseExit ? exitOptionStagger : optionStagger}
+                        slideDuration={reverseExit ? exitSlideDuration : slideDuration}
+                        skipEntrance={skipOptionEntrance}
+                      />
+                    </div>
+                  );
+                })}
               </div>
 
-              {footer && (
-                <div
-                  className="pointer-events-auto absolute inset-x-0"
+              {footer && (confirmPhase === null || confirmPhase === "uiReverse") && (
+                <motion.div
+                  className={`absolute inset-x-0 ${
+                    confirmPhase === "uiReverse"
+                      ? "pointer-events-none"
+                      : "pointer-events-auto"
+                  }`}
                   style={{
                     bottom: MOOD_SELECT_LAYOUT_TUNING.footerBottomPx,
                     paddingLeft: MOOD_SELECT_LAYOUT_TUNING.horizontalPaddingPx,
                     paddingRight: MOOD_SELECT_LAYOUT_TUNING.horizontalPaddingPx,
                   }}
+                  initial={false}
+                  animate={
+                    confirmPhase === "uiReverse"
+                      ? { opacity: 0, y: 16 }
+                      : { opacity: 1, y: 0 }
+                  }
+                  transition={{
+                    duration:
+                      confirmPhase === "uiReverse"
+                        ? exitSlideDuration
+                        : slideDuration,
+                    ease: "easeIn",
+                  }}
                 >
                   {footer}
-                </div>
+                </motion.div>
               )}
             </div>
           </div>
@@ -645,6 +802,15 @@ export function BarSeatMoodPicker({
           </div>
         ) : null}
       </motion.div>
+
+      {showConfirmOverlay && confirmedOption && buttonAnchor && (
+        <MoodConfirmButtonExit
+          option={confirmedOption}
+          anchor={buttonAnchor}
+          phase={confirmPhase === "buttonMove" ? "move" : "dissolve"}
+          onDissolveComplete={handleDissolveComplete}
+        />
+      )}
     </>
   );
 }

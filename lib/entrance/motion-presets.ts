@@ -6,6 +6,9 @@
 /** ゆっくり減速する基本イージング */
 export const EASE_SOFT = [0.22, 0.61, 0.36, 1] as const;
 
+/** 到着直前で強く減速するイージング */
+export const EASE_DECELERATE = [0.16, 1, 0.3, 1] as const;
+
 /** 余韻を残してたゆたうイージング */
 export const EASE_DRIFT = [0.4, 0.0, 0.2, 1] as const;
 

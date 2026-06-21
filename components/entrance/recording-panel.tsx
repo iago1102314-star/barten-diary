@@ -5,7 +5,8 @@ import { MasterLine } from "@/components/entrance/master-line";
 import { BarButton } from "@/components/ui/bar-button";
 import {
   canLeaveWithoutRecord,
-  listenFailureMasterLines,
+  resolveListenFailureLines,
+  shouldOfferRetryAfterListenFailure,
 } from "@/lib/night/listen-failure";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
@@ -20,6 +21,7 @@ const MASTER_ASIDES = [
 type RecordingPanelProps = {
   listenFailureCount: number;
   listenFailureVisible: boolean;
+  listenFailureReason?: string | null;
   onFinish: () => void;
   onRetrySpeaking: () => void;
   onLeaveWithoutRecord: () => void;
@@ -30,6 +32,7 @@ type RecordingPanelProps = {
 export function RecordingPanel({
   listenFailureCount,
   listenFailureVisible,
+  listenFailureReason = null,
   onFinish,
   onRetrySpeaking,
   onLeaveWithoutRecord,
@@ -69,8 +72,9 @@ export function RecordingPanel({
   }, [resuming]);
 
   if (listenFailureVisible) {
-    const lines = listenFailureMasterLines(Math.max(listenFailureCount, 1));
+    const lines = resolveListenFailureLines(listenFailureCount, listenFailureReason);
     const showLeave = canLeaveWithoutRecord(listenFailureCount);
+    const showRetry = shouldOfferRetryAfterListenFailure(listenFailureReason);
 
     return (
       <div className="space-y-6 text-center">
@@ -80,9 +84,11 @@ export function RecordingPanel({
           ))}
         </div>
         <div className="flex flex-col items-center gap-5 pt-1">
-          <BarButton variant="ghost" onClick={onRetrySpeaking}>
-            もう一度話す
-          </BarButton>
+          {showRetry && (
+            <BarButton variant="ghost" onClick={onRetrySpeaking}>
+              もう一度話す
+            </BarButton>
+          )}
           {showLeave && (
             <BarButton variant="quiet" onClick={onLeaveWithoutRecord}>
               今夜はこの辺にしておく
