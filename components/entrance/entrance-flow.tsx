@@ -8,6 +8,8 @@ import { MasterHeadDevTapZone } from "@/components/entrance/master-head-dev-tap"
 import { EnteringReveal } from "@/components/entrance/entering-reveal";
 import { GeneratingPanel } from "@/components/entrance/generating-panel";
 import { LeavingScreen } from "@/components/entrance/leaving-screen";
+import { PostRecordExitBlack } from "@/components/entrance/post-record-exit-black";
+import { PostRecordThanksScene } from "@/components/entrance/post-record-thanks-scene";
 import { HomeLampGlowShapeEditor } from "@/components/entrance/home-lamp-glow-shape-editor";
 import { StartLampGlowShapeEditor } from "@/components/entrance/start-lamp-glow-shape-editor";
 import { StartBokehLampGlowShapeEditor } from "@/components/entrance/start-bokeh-lamp-glow-shape-editor";
@@ -111,7 +113,7 @@ import {
 import { parseBottleTag } from "@/lib/bottle-tag/parse-bottle-tag";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
-import { pickCounterFarewellLine } from "@/lib/night/counter-farewell-lines";
+import { POST_RECORD_EXIT_TUNING } from "@/lib/entrance/post-record-exit-tuning";
 import { MASTER_DECLINE_FAREWELL } from "@/lib/entrance/master-greetings";
 import { DECLINE_NIGHT_TUNING } from "@/lib/entrance/decline-night-tuning";
 import { AnimatePresence, motion } from "motion/react";
@@ -131,12 +133,11 @@ type EntranceState =
   | "unheldNight"
   | "drinkServed"
   | "recording"
-  | "processing"
-  | "counterFarewell"
+  | "postRecordBlackout"
+  | "postRecordThanks"
+  | "postRecordExitBlack"
   | "leaving"
   | "alley";
-
-const COUNTER_FAREWELL_MS = 2000;
 
 type DeclineOrigin = "moodSelect" | "pastBottleSelect";
 
@@ -161,8 +162,7 @@ const COUNTER_SCENE_STATES = new Set<EntranceState>([
   "unheldNight",
   "drinkServed",
   "recording",
-  "processing",
-  "counterFarewell",
+  "postRecordBlackout",
 ]);
 
 /** 路地の環境音を鳴らすシーン（それ以外は店内＝outside 停止） */
@@ -189,9 +189,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const [entranceState, setEntranceState] = useState<EntranceState>("entry");
   const [pickedDrink, setPickedDrink] = useState<Drink | null>(null);
   const [pastMasterLine, setPastMasterLine] = useState<string | null>(null);
-  const [counterFarewellLine, setCounterFarewellLine] = useState<string | null>(
-    null,
-  );
   const [alleyOutcome, setAlleyOutcome] = useState<NightAlleyOutcome | null>(
     null,
   );
@@ -200,9 +197,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const declineOriginRef = useRef<DeclineOrigin>("moodSelect");
   const [declineBlackoutReady, setDeclineBlackoutReady] = useState(false);
   const [declineFarewellExiting, setDeclineFarewellExiting] = useState(false);
-  const counterFarewellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
   const lastSavedTranscriptRef = useRef<string | null>(null);
   const farewellStartedRef = useRef(false);
   const saveExpectedRef = useRef(false);
@@ -385,11 +379,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const drinkImageSrc = getDrinkImagePath(pickedDrink?.id);
 
   const clearTimers = useCallback(() => {
-    for (const ref of [
-      fadeTimerRef,
-      declineTimerRef,
-      counterFarewellTimerRef,
-    ]) {
+    for (const ref of [fadeTimerRef, declineTimerRef]) {
       if (ref.current) {
         clearTimeout(ref.current);
         ref.current = null;
@@ -410,7 +400,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     setDrinkEnteringReveal(false);
     setMoodSelectExitActive(false);
     setMoodCameraPose("neutral");
-    setCounterFarewellLine(null);
     setAlleyOutcome(null);
   }, []);
 
@@ -502,8 +491,9 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   useEffect(() => {
     if (session.phase === "recording" && entranceState !== "recording") {
       if (
-        entranceState === "processing" ||
-        entranceState === "counterFarewell" ||
+        entranceState === "postRecordBlackout" ||
+        entranceState === "postRecordThanks" ||
+        entranceState === "postRecordExitBlack" ||
         entranceState === "leaving" ||
         entranceState === "alley"
       ) {
@@ -514,41 +504,26 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   }, [session.phase, entranceState]);
 
   useEffect(() => {
-    if (session.phase === "processing") {
-      setEntranceState("processing");
-    }
-  }, [session.phase]);
-
-  useEffect(() => {
-    if (session.phase === "recording" && session.listenFailureVisible) {
-      setEntranceState("recording");
-    }
-  }, [session.phase, session.listenFailureVisible]);
-
-  useEffect(() => {
+    if (session.isDevSimulated) return;
+    if (entranceState !== "postRecordBlackout") return;
     if (session.phase !== "revealed") return;
-    if (farewellStartedRef.current) return;
 
-    farewellStartedRef.current = true;
     saveExpectedRef.current = true;
+    farewellStartedRef.current = true;
+    backgroundWorkRef.current = "pending";
+    savedDiaryIdRef.current = null;
+    setEntranceState("postRecordThanks");
+    audio.startJazz(
+      BAR_AUDIO_LEVELS.jazz.counter,
+      BAR_AUDIO_TIMING.jazzEntryFadeMs,
+    );
+  }, [entranceState, session.phase, session.isDevSimulated, audio]);
 
-    if (session.isDevSimulated) {
-      backgroundWorkRef.current = "devSaved";
-    } else {
-      backgroundWorkRef.current = "pending";
-      savedDiaryIdRef.current = null;
-    }
-
-    setCounterFarewellLine(pickCounterFarewellLine());
-    setEntranceState("counterFarewell");
-
-    counterFarewellTimerRef.current = setTimeout(() => {
-      audio.playDoor();
-      audio.stopJazz();
-      audio.startOutside(BAR_AUDIO_LEVELS.outside.leaving);
-      setEntranceState("leaving");
-    }, COUNTER_FAREWELL_MS);
-  }, [session.phase, session.isDevSimulated, audio]);
+  useEffect(() => {
+    if (entranceState !== "postRecordBlackout") return;
+    if (session.phase !== "recording" || !session.listenFailureVisible) return;
+    setEntranceState("recording");
+  }, [entranceState, session.phase, session.listenFailureVisible]);
 
   useEffect(() => {
     if (session.isDevSimulated) return;
@@ -582,14 +557,18 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         console.error("Background save failed:", result.error);
         lastSavedTranscriptRef.current = null;
         backgroundWorkRef.current = "failed";
-        attemptGoToAlley();
+        if (leaveAnimationDoneRef.current) {
+          attemptGoToAlley();
+        }
         return;
       }
 
       savedDiaryIdRef.current = result.diaryId;
       backgroundWorkRef.current = "saved";
       router.refresh();
-      attemptGoToAlley();
+      if (leaveAnimationDoneRef.current) {
+        attemptGoToAlley();
+      }
     })();
   }, [
     session.phase,
@@ -608,7 +587,9 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     if (session.generationStatus !== "error") return;
 
     backgroundWorkRef.current = "failed";
-    attemptGoToAlley();
+    if (leaveAnimationDoneRef.current) {
+      attemptGoToAlley();
+    }
   }, [session.generationStatus, session.isDevSimulated, attemptGoToAlley]);
 
   const handleDevSkipNight = () => {
@@ -777,7 +758,19 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleFinishTalk = () => {
+    setEntranceState("postRecordBlackout");
     session.stopSpeaking();
+  };
+
+  const handlePostRecordThanksComplete = () => {
+    audio.stopJazz();
+    audio.startOutside(BAR_AUDIO_LEVELS.outside.leaving);
+    setEntranceState("postRecordExitBlack");
+  };
+
+  const handlePostRecordExitComplete = () => {
+    leaveAnimationDoneRef.current = true;
+    attemptGoToAlley();
   };
 
   const handleLeaveWithoutRecord = () => {
@@ -983,6 +976,31 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     );
   }
 
+  if (entranceState === "postRecordThanks") {
+    return (
+      <AnimatePresence mode="wait">
+        <motion.div key="postRecordThanks" {...sceneExit}>
+          <PostRecordThanksScene onComplete={handlePostRecordThanksComplete} />
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
+
+  if (entranceState === "postRecordExitBlack") {
+    return (
+      <SceneFrame className="bg-black" atmosphere={false}>
+        <PostRecordExitBlack
+          onDoor={() =>
+            audio.playDoor({
+              volumeScale: POST_RECORD_EXIT_TUNING.doorVolumeScale,
+            })
+          }
+          onComplete={handlePostRecordExitComplete}
+        />
+      </SceneFrame>
+    );
+  }
+
   if (entranceState === "leaving") {
     return (
       <AnimatePresence mode="wait">
@@ -1005,9 +1023,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
   const drinkOnCounter =
     entranceState === "drinkServed" ||
-    entranceState === "recording" ||
-    entranceState === "processing" ||
-    entranceState === "counterFarewell";
+    entranceState === "recording";
 
   const showDrinkImage = drinkOnCounter;
 
@@ -1020,8 +1036,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     entranceState === "unheldNight" ||
     entranceState === "drinkServed" ||
     entranceState === "recording" ||
-    entranceState === "processing" ||
-    entranceState === "counterFarewell";
+    entranceState === "postRecordBlackout";
 
   const reduceCounterGpuLoad =
     !lampGlowHomeEditing &&
@@ -1057,7 +1072,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const showRecordCounterScene =
     entranceState === "drinkServed" ||
     entranceState === "recording" ||
-    entranceState === "processing";
+    entranceState === "postRecordBlackout";
 
   const showLegacyCounterScene = showCounter && !showRecordCounterScene;
 
@@ -1263,18 +1278,28 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
                 />
               )}
 
-              {entranceState === "processing" && (
-                <GeneratingPanel
-                  failed={session.generationFailed}
-                  onRetry={() => void session.retryGeneration()}
-                />
+              {entranceState === "postRecordBlackout" && session.generationFailed && (
+                <div className="relative z-[45]">
+                  <GeneratingPanel
+                    failed={session.generationFailed}
+                    onRetry={() => void session.retryGeneration()}
+                  />
+                </div>
               )}
+            </div>
+            </div>
 
-              {entranceState === "counterFarewell" && counterFarewellLine && (
-                <MasterLine>{counterFarewellLine}</MasterLine>
-              )}
-            </div>
-            </div>
+            {entranceState === "postRecordBlackout" && (
+              <motion.div
+                className="pointer-events-none absolute inset-0 z-[40]"
+                style={{ backgroundColor: POST_RECORD_EXIT_TUNING.softBlackColor }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{
+                  duration: POST_RECORD_EXIT_TUNING.softBlackFadeInMs / 1000,
+                }}
+              />
+            )}
 
             <div
               className={`pointer-events-none absolute inset-0 bg-black transition-opacity ${

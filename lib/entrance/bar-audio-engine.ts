@@ -773,6 +773,7 @@ async function playSfx(
   kind: BarSfxKind,
   delayMs = 0,
   onEnded?: () => void,
+  volumeScale = 1,
 ): Promise<void> {
   if (delayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -783,13 +784,14 @@ async function playSfx(
     return;
   }
 
-  playSfxNow(kind, onEnded);
+  playSfxNow(kind, onEnded, volumeScale);
 }
 
 /** ユーザー操作直後 — await なしで即再生 */
 function playSfxNow(
   kind: BarSfxKind,
   onEnded?: () => void,
+  volumeScale = 1,
 ) {
   if (!isBarAudioUnlocked() || !sfxPoolInitialized || isDocumentHidden()) {
     onEnded?.();
@@ -804,7 +806,7 @@ function playSfxNow(
   }
 
   const audio = slots.find((slot) => slot.paused) ?? slots[0];
-  audio.volume = getSfxPlayVolume(kind);
+  audio.volume = getSfxPlayVolume(kind) * volumeScale;
   audio.muted = false;
   audio.currentTime = 0;
 
@@ -1215,8 +1217,8 @@ export const barAudioEngine = {
     void resumePausedLoopTrack(jazzTrack, BAR_AUDIO_TIMING.fadeMs);
   },
 
-  playDoor() {
-    void playSfx("door");
+  playDoor(options?: { volumeScale?: number }) {
+    void playSfx("door", 0, undefined, options?.volumeScale ?? 1);
   },
 
   playGlassSlide(
