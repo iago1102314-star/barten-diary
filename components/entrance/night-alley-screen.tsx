@@ -1,52 +1,37 @@
 "use client";
 
-import { LampGlow } from "@/components/entrance/atmosphere";
+import { AfterNightBackdrop } from "@/components/entrance/after-night-backdrop";
 import { Reveal } from "@/components/motion/reveal";
 import { SceneFrame } from "@/components/entrance/scene-frame";
 import { BarButton } from "@/components/ui/bar-button";
-import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
 import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
 import type { NightAlleyOutcome } from "@/lib/entrance/night-outcome";
+import { MEMORIES_EXIT_FADE_SEC } from "@/lib/entrance/start-entry-timing";
 import { motion } from "motion/react";
-import Image from "next/image";
 
 type NightAlleyScreenProps = {
   outcome: NightAlleyOutcome;
   onDismiss: () => void;
+  onOpenDiary?: (diaryId: string) => void;
+  /** 記録を開く — ホーム「メモを見る」と同じ暗転 */
+  diaryFadeOut?: boolean;
+  onDiaryFadeOutComplete?: () => void;
 };
 
 const outcomeTextClass =
   "font-serif-jp text-[15px] font-normal leading-[2] tracking-[0.12em] text-stone-200/85";
 
 /** 夜を終えた後の帰り道 — 入口の雨路地とは別背景・より静か */
-export function NightAlleyScreen({ outcome, onDismiss }: NightAlleyScreenProps) {
+export function NightAlleyScreen({
+  outcome,
+  onDismiss,
+  onOpenDiary,
+  diaryFadeOut = false,
+  onDiaryFadeOutComplete,
+}: NightAlleyScreenProps) {
   return (
     <SceneFrame>
-      <motion.div
-        className="absolute inset-0"
-        initial={{ opacity: 0, scale: 1.06 }}
-        animate={{ opacity: 1, scale: 1.02 }}
-        transition={{ opacity: { duration: 3 }, scale: { duration: 30, ease: EASE_DRIFT } }}
-      >
-        <Image
-          src={ENTRANCE_ASSETS.afterNight}
-          alt=""
-          fill
-          priority
-          sizes="420px"
-          className="object-cover"
-          draggable={false}
-          unoptimized
-        />
-      </motion.div>
-
-      {/* 遠い街灯・わずかな窓明かり — ほぼ動かない静けさ（雨は使わない） */}
-      <LampGlow x={58} y={29} tone="cold" size={11} intensity={0.26} speed="9s" />
-      <LampGlow x={54} y={40} tone="cold" size={7} intensity={0.18} speed="12s" />
-      <LampGlow x={11} y={18} tone="warm" size={8} intensity={0.2} speed="11s" />
-
-      <div className="absolute inset-0 bg-black/40" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/15 to-transparent" />
+      <AfterNightBackdrop />
 
       <div className="absolute inset-0 z-30 flex flex-col items-center justify-end px-8 pb-[22%] pt-16">
         <div className="w-full max-w-xs space-y-9 text-center">
@@ -60,7 +45,10 @@ export function NightAlleyScreen({ outcome, onDismiss }: NightAlleyScreenProps) 
                 duration={1.4}
                 className="flex flex-col items-center gap-6"
               >
-                <BarButton variant="ghost" href={`/diaries/${outcome.diaryId}`} onClick={onDismiss}>
+                <BarButton
+                  variant="ghost"
+                  onClick={() => onOpenDiary?.(outcome.diaryId)}
+                >
                   記録を開く
                 </BarButton>
                 <BarButton variant="quiet" onClick={onDismiss}>
@@ -110,6 +98,16 @@ export function NightAlleyScreen({ outcome, onDismiss }: NightAlleyScreenProps) 
           )}
         </div>
       </div>
+
+      {diaryFadeOut && (
+        <motion.div
+          className="absolute inset-0 z-[60] bg-black"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: MEMORIES_EXIT_FADE_SEC, ease: EASE_DRIFT }}
+          onAnimationComplete={onDiaryFadeOutComplete}
+        />
+      )}
     </SceneFrame>
   );
 }

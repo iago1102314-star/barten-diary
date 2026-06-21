@@ -114,6 +114,10 @@ import { parseBottleTag } from "@/lib/bottle-tag/parse-bottle-tag";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
 import { POST_RECORD_EXIT_TUNING } from "@/lib/entrance/post-record-exit-tuning";
+import {
+  DEFAULT_MEMORIES_LAUNCH,
+  type MemoriesLaunch,
+} from "@/lib/entrance/memories-launch";
 import { MASTER_DECLINE_FAREWELL } from "@/lib/entrance/master-greetings";
 import { DECLINE_NIGHT_TUNING } from "@/lib/entrance/decline-night-tuning";
 import { AnimatePresence, motion } from "motion/react";
@@ -245,6 +249,10 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const [bokehShapeEditGroup, setBokehShapeEditGroup] = useState<
     "paired" | "bokeh-only"
   >("bokeh-only");
+  const [memoriesLaunch, setMemoriesLaunch] = useState<MemoriesLaunch>(
+    DEFAULT_MEMORIES_LAUNCH,
+  );
+  const [alleyDiaryFadeOut, setAlleyDiaryFadeOut] = useState(false);
 
   const unlockBarAudio = useCallback(() => {
     setAudioUnlocked((unlocked) => {
@@ -410,6 +418,8 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     setPastMasterLine(null);
     resetNightRefs();
     resetEntryOutsideStarted();
+    setMemoriesLaunch(DEFAULT_MEMORIES_LAUNCH);
+    setAlleyDiaryFadeOut(false);
     setDeclineBlackoutReady(false);
     setDeclineFarewellExiting(false);
     setEntranceState("entry");
@@ -517,7 +527,8 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       BAR_AUDIO_LEVELS.jazz.counter,
       BAR_AUDIO_TIMING.jazzEntryFadeMs,
     );
-  }, [entranceState, session.phase, session.isDevSimulated, audio]);
+    session.startDiaryGeneration();
+  }, [entranceState, session.phase, session.isDevSimulated, session.startDiaryGeneration, audio]);
 
   useEffect(() => {
     if (entranceState !== "postRecordBlackout") return;
@@ -662,8 +673,32 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
   const handleOpenMemories = () => {
     if (entryTransition !== "idle") return;
+    setMemoriesLaunch(DEFAULT_MEMORIES_LAUNCH);
     startEntryOutsideAmbience();
     setEntryTransition("toMemories");
+  };
+
+  const handleOpenSavedDiary = (diaryId: string) => {
+    setMemoriesLaunch({
+      backdrop: "afterNight",
+      initialDiaryId: diaryId,
+      returnTo: "alley",
+    });
+    setAlleyDiaryFadeOut(true);
+  };
+
+  const handleAlleyDiaryFadeOutComplete = () => {
+    setAlleyDiaryFadeOut(false);
+    setEntranceState("memories");
+  };
+
+  const handleBackFromMemories = () => {
+    if (memoriesLaunch.returnTo === "alley") {
+      setMemoriesLaunch(DEFAULT_MEMORIES_LAUNCH);
+      setEntranceState("alley");
+      return;
+    }
+    handleBackToEntry();
   };
 
   const handleMemoriesFadeOutComplete = () => {
@@ -949,7 +984,11 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     return (
       <AnimatePresence mode="wait">
         <motion.div key="memories" {...sceneExitInstant}>
-          <MemoriesScreen onBack={handleBackToEntry} />
+          <MemoriesScreen
+            onBack={handleBackFromMemories}
+            backdrop={memoriesLaunch.backdrop}
+            initialDiaryId={memoriesLaunch.initialDiaryId}
+          />
         </motion.div>
       </AnimatePresence>
     );
@@ -1015,7 +1054,13 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     return (
       <AnimatePresence mode="wait">
         <motion.div key="alley" {...sceneExit}>
-          <NightAlleyScreen outcome={alleyOutcome} onDismiss={resetToAlley} />
+          <NightAlleyScreen
+            outcome={alleyOutcome}
+            onDismiss={resetToAlley}
+            onOpenDiary={handleOpenSavedDiary}
+            diaryFadeOut={alleyDiaryFadeOut}
+            onDiaryFadeOutComplete={handleAlleyDiaryFadeOutComplete}
+          />
         </motion.div>
       </AnimatePresence>
     );

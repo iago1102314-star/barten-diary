@@ -1,5 +1,6 @@
 "use client";
 
+import { AfterNightBackdrop } from "@/components/entrance/after-night-backdrop";
 import { Haze } from "@/components/entrance/atmosphere";
 import { SceneFrame } from "@/components/entrance/scene-frame";
 import { StartSteadyLampGlowLayer } from "@/components/entrance/start-steady-lamp-glow-layer";
@@ -9,6 +10,7 @@ import { BarButton } from "@/components/ui/bar-button";
 import type { DiaryListItem } from "@/components/diaries/diary-list";
 import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
 import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
+import type { MemoriesBackdrop } from "@/lib/entrance/memories-launch";
 import {
   MEMORIES_BG_FADE_IN_SEC,
   MEMORIES_RETURN_FADE_OUT_SEC,
@@ -19,6 +21,9 @@ import { useCallback, useEffect, useState } from "react";
 
 type MemoriesScreenProps = {
   onBack: () => void;
+  backdrop?: MemoriesBackdrop;
+  /** 指定時は一覧を飛ばしてその記録を開く（帰り道からなど） */
+  initialDiaryId?: string;
 };
 
 const sceneFade = {
@@ -35,18 +40,42 @@ const contentFadeIn = {
 } as const;
 
 /** 路地で過去の記録を振り返る — ページ遷移なし */
-export function MemoriesScreen({ onBack }: MemoriesScreenProps) {
+export function MemoriesScreen({
+  onBack,
+  backdrop = "entry",
+  initialDiaryId,
+}: MemoriesScreenProps) {
   const [memos, setMemos] = useState<DiaryListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedMemo, setSelectedMemo] = useState<DiaryListItem | null>(null);
   const [exiting, setExiting] = useState(false);
+  const directOpen = Boolean(initialDiaryId);
 
   useEffect(() => {
     let cancelled = false;
 
     void (async () => {
       try {
+        if (initialDiaryId) {
+          const res = await fetch(`/api/memories/${initialDiaryId}`);
+          const data = (await res.json()) as {
+            diary?: DiaryListItem;
+            error?: string;
+          };
+
+          if (cancelled) return;
+
+          if (!res.ok || !data.diary) {
+            setError(data.error ?? "記録を開けませんでした。");
+            return;
+          }
+
+          setSelectedMemo(data.diary);
+          setMemos([data.diary]);
+          return;
+        }
+
         const res = await fetch("/api/memories");
         const data = (await res.json()) as {
           diaries?: DiaryListItem[];
@@ -75,7 +104,7 @@ export function MemoriesScreen({ onBack }: MemoriesScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialDiaryId]);
 
   const refreshMemo = useCallback(async (id: string) => {
     const res = await fetch(`/api/memories/${id}`);
@@ -96,18 +125,35 @@ export function MemoriesScreen({ onBack }: MemoriesScreenProps) {
     setSelectedMemo(memo);
   }, []);
 
-  const handleBackToList = useCallback(() => {
-    setSelectedMemo(null);
-  }, []);
-
   const handleBackToAlley = useCallback(() => {
     if (exiting) return;
     setExiting(true);
   }, [exiting]);
 
+  const handleBackToList = useCallback(() => {
+    if (directOpen) {
+      handleBackToAlley();
+      return;
+    }
+    setSelectedMemo(null);
+  }, [directOpen, handleBackToAlley]);
+
+  const backFromScreenLabel =
+    backdrop === "afterNight" ? "帰り道に戻る" : "路地に戻る";
+
   return (
     <SceneFrame>
-      <AlleyBackdrop />
+      {backdrop === "afterNight" ? (
+        <AfterNightBackdrop
+          motionProps={{
+            initial: { opacity: 0 },
+            animate: { opacity: 1 },
+            transition: { duration: MEMORIES_BG_FADE_IN_SEC, ease: EASE_DRIFT },
+          }}
+        />
+      ) : (
+        <EntryAlleyBackdrop />
+      )}
 
       <motion.div
         className="pointer-events-none absolute inset-0 z-40 bg-black"
@@ -131,7 +177,7 @@ export function MemoriesScreen({ onBack }: MemoriesScreenProps) {
             >
               <header className="shrink-0 space-y-3 px-7 pb-4 pt-[12%]">
                 <BarButton variant="ghost" onClick={handleBackToList}>
-                  一覧に戻る
+                  {directOpen ? backFromScreenLabel : "一覧に戻る"}
                 </BarButton>
               </header>
 
@@ -143,13 +189,10 @@ export function MemoriesScreen({ onBack }: MemoriesScreenProps) {
               </div>
             </motion.div>
           ) : (
-            <motion.div
-              key="list"
-              className="flex min-h-0 flex-1 flex-col"
-            >
+            <motion.div key="list" className="flex min-h-0 flex-1 flex-col">
               <header className="shrink-0 space-y-3 px-7 pb-4 pt-[12%]">
                 <BarButton variant="ghost" onClick={handleBackToAlley}>
-                  路地に戻る
+                  {backFromScreenLabel}
                 </BarButton>
                 <div className="space-y-2 pt-2">
                   <h1 className="font-serif-jp text-xl font-normal tracking-[0.14em] text-stone-200/90">
@@ -199,7 +242,7 @@ export function MemoriesScreen({ onBack }: MemoriesScreenProps) {
   );
 }
 
-function AlleyBackdrop() {
+function EntryAlleyBackdrop() {
   return (
     <motion.div
       className="absolute inset-0"
