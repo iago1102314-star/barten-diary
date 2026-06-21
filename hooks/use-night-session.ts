@@ -2,6 +2,7 @@
 
 import { useGenerateDiary } from "@/hooks/use-generate-diary";
 import { useRecorder } from "@/hooks/use-recorder";
+import { checkGenerationReadiness } from "@/lib/ai/check-generation-readiness";
 import { validateTranscriptInput } from "@/lib/ai/security/validate-input";
 import { isDevShortcutEnabled } from "@/lib/dev/is-dev-shortcut-enabled";
 import { simulateNight } from "@/lib/dev/simulate-night";
@@ -240,12 +241,78 @@ export function useNightSession() {
     return true;
   }, [recorder, generation]);
 
-  const retryGeneration = useCallback(() => {
+  const retryGeneration = useCallback(async () => {
     if (!transcript || !selectedCategoryId) return;
+
     setGenerationFailed(false);
     inflightGenerationKeyRef.current = null;
-    setPhase("accepted");
-  }, [transcript, selectedCategoryId]);
+    generation.reset();
+
+    logRecordingPipeline("generation readiness: retry", {
+      transcriptLength: transcript.length,
+    });
+
+    const readiness = await checkGenerationReadiness();
+    if (!readiness.ok) {
+      logRecordingPipeline("generation readiness: failed", {
+        error: readiness.error,
+        elapsedMs: readiness.elapsedMs,
+      });
+      updateRecordingPipelineDiagnostic({ pipelineError: readiness.error });
+      setGenerationFailed(true);
+      phaseRef.current = "processing";
+      setPhase("processing");
+      return;
+    }
+
+    logRecordingPipeline("generation readiness: ok", {
+      elapsedMs: readiness.elapsedMs,
+    });
+
+    phaseRef.current = "revealed";
+    setPhase("revealed");
+
+    const endedAt = recordedAt ?? new Date().toISOString();
+    const key = generationKey(transcript, endedAt);
+    inflightGenerationKeyRef.current = key;
+
+    logRecordingPipeline("diary generation: start", {
+      transcriptLength: transcript.length,
+      transcript,
+      selectedCategoryId,
+      selectedDrinkId,
+    });
+
+    updateRecordingPipelineDiagnostic({ diaryTranscript: transcript });
+
+    void generation
+      .generate(transcript, selectedCategoryId, endedAt, selectedDrinkId)
+      .then((outcome) => {
+        if (outcome.ok) {
+          logRecordingPipeline("diary generation: success", {
+            transcriptLength: transcript.length,
+            transcript,
+            bottleTag: outcome.diary.bottleTag,
+            diaryPreview: outcome.diary.diary.slice(0, 120),
+          });
+          barAudioEngine.resumeJazzAfterRecording();
+          return;
+        }
+        logRecordingPipeline("diary generation: failed", {
+          transcriptLength: transcript.length,
+          transcript,
+        });
+        inflightGenerationKeyRef.current = null;
+        setGenerationFailed(true);
+        console.error("Background diary generation failed");
+      });
+  }, [
+    transcript,
+    selectedCategoryId,
+    selectedDrinkId,
+    recordedAt,
+    generation,
+  ]);
 
   const abandonNightWithoutRecord = useCallback(() => {
     pipelineLock.current = false;
@@ -282,11 +349,8 @@ export function useNightSession() {
       setTranscript(simulated.transcript);
       setRecordedAt(simulated.recordedAt);
       setIsDevSimulated(true);
-      setPhase("accepted");
-
-      queueMicrotask(() => {
-        setPhase("revealed");
-      });
+      phaseRef.current = "revealed";
+      setPhase("revealed");
 
       return simulated.drink;
     },
@@ -295,6 +359,8 @@ export function useNightSession() {
 
   const runTranscribePipeline = useCallback(
     async (blob: Blob, mimeType: string) => {
+      if (!selectedCategoryId) return;
+
       logRecordingPipeline("transcribe pipeline: start", {
         blobSize: blob.size,
         blobType: blob.type || mimeType,
@@ -336,7 +402,66 @@ export function useNightSession() {
 
         clearListenFailureUi();
         setTranscript(text);
-        setPhase("accepted");
+
+        logRecordingPipeline("generation readiness: start");
+        const readiness = await checkGenerationReadiness();
+        if (!readiness.ok) {
+          updateRecordingPipelineDiagnostic({
+            pipelineError: readiness.error,
+          });
+          logRecordingPipeline("generation readiness: failed", {
+            error: readiness.error,
+            elapsedMs: readiness.elapsedMs,
+          });
+          setGenerationFailed(true);
+          phaseRef.current = "processing";
+          setPhase("processing");
+          return;
+        }
+
+        logRecordingPipeline("generation readiness: ok", {
+          elapsedMs: readiness.elapsedMs,
+        });
+
+        const endedAt = recordedAt ?? new Date().toISOString();
+        const key = generationKey(text, endedAt);
+        inflightGenerationKeyRef.current = key;
+
+        phaseRef.current = "revealed";
+        setPhase("revealed");
+
+        logRecordingPipeline("diary generation: start", {
+          transcriptLength: text.length,
+          transcript: text,
+          selectedCategoryId,
+          selectedDrinkId,
+        });
+
+        updateRecordingPipelineDiagnostic({
+          diaryTranscript: text,
+        });
+
+        void generation
+          .generate(text, selectedCategoryId, endedAt, selectedDrinkId)
+          .then((outcome) => {
+            if (outcome.ok) {
+              logRecordingPipeline("diary generation: success", {
+                transcriptLength: text.length,
+                transcript: text,
+                bottleTag: outcome.diary.bottleTag,
+                diaryPreview: outcome.diary.diary.slice(0, 120),
+              });
+              barAudioEngine.resumeJazzAfterRecording();
+              return;
+            }
+            logRecordingPipeline("diary generation: failed", {
+              transcriptLength: text.length,
+              transcript: text,
+            });
+            inflightGenerationKeyRef.current = null;
+            setGenerationFailed(true);
+            console.error("Background diary generation failed");
+          });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         updateRecordingPipelineDiagnostic({
@@ -353,7 +478,14 @@ export function useNightSession() {
         pipelineLock.current = false;
       }
     },
-    [registerListenFailure, clearListenFailureUi],
+    [
+      selectedCategoryId,
+      selectedDrinkId,
+      recordedAt,
+      generation,
+      registerListenFailure,
+      clearListenFailureUi,
+    ],
   );
 
   useEffect(() => {
@@ -385,59 +517,6 @@ export function useNightSession() {
     recorder.mimeType,
     selectedCategoryId,
     runTranscribePipeline,
-  ]);
-
-  useEffect(() => {
-    if (phase !== "accepted") return;
-    if (isDevSimulated) return;
-    if (!transcript || !selectedCategoryId) return;
-
-    const endedAt = recordedAt ?? new Date().toISOString();
-    const key = generationKey(transcript, endedAt);
-    if (inflightGenerationKeyRef.current === key) return;
-    inflightGenerationKeyRef.current = key;
-
-    logRecordingPipeline("diary generation: start", {
-      transcriptLength: transcript.length,
-      transcript,
-      selectedCategoryId,
-      selectedDrinkId,
-    });
-
-    updateRecordingPipelineDiagnostic({
-      diaryTranscript: transcript,
-    });
-
-    void generation
-      .generate(transcript, selectedCategoryId, endedAt, selectedDrinkId)
-      .then((outcome) => {
-        if (outcome.ok) {
-          logRecordingPipeline("diary generation: success", {
-            transcriptLength: transcript.length,
-            transcript,
-            bottleTag: outcome.diary.bottleTag,
-            diaryPreview: outcome.diary.diary.slice(0, 120),
-          });
-          barAudioEngine.resumeJazzAfterRecording();
-          setPhase("revealed");
-          return;
-        }
-        logRecordingPipeline("diary generation: failed", {
-          transcriptLength: transcript.length,
-          transcript,
-        });
-        inflightGenerationKeyRef.current = null;
-        setGenerationFailed(true);
-        console.error("Background diary generation failed");
-      });
-  }, [
-    phase,
-    isDevSimulated,
-    transcript,
-    selectedCategoryId,
-    selectedDrinkId,
-    recordedAt,
-    generation.generate,
   ]);
 
   return {

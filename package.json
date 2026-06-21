@@ -9,7 +9,8 @@
     "dev:lan:https": "next dev -H 0.0.0.0 --experimental-https",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:generation": "node scripts/check-generation-readiness.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

@@ -514,7 +514,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   }, [session.phase, entranceState]);
 
   useEffect(() => {
-    if (session.phase === "processing" || session.phase === "accepted") {
+    if (session.phase === "processing") {
       setEntranceState("processing");
     }
   }, [session.phase]);
@@ -1266,7 +1266,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
               {entranceState === "processing" && (
                 <GeneratingPanel
                   failed={session.generationFailed}
-                  onRetry={session.retryGeneration}
+                  onRetry={() => void session.retryGeneration()}
                 />
               )}
 
