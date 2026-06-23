@@ -44,7 +44,7 @@ export function BarButton({
     const content = (
       <span
         className={`group relative block overflow-hidden rounded-[2px] border px-8 py-4 text-center transition-all ${surfaceClass}`}
-        style={{ transitionDuration: `${hoverMs}ms` }}
+        style={{ transitionDuration: `${hoverMs}ms`, pointerEvents: "none" }}
       >
         {/* 上辺の微かな光沢 */}
         <span
@@ -71,7 +71,9 @@ export function BarButton({
 
   if (variant === "ghost") {
     const content = (
-      <span className="group relative inline-block px-1 py-1 text-[11px] tracking-[0.3em] text-stone-300/80 transition-colors duration-500 hover:text-amber-50/90">
+      <span
+        className="pointer-events-none group relative inline-block px-1 py-1 text-[11px] tracking-[0.3em] text-stone-300/80 transition-colors duration-500 group-hover:text-amber-50/90"
+      >
         {children}
         <span
           aria-hidden
@@ -83,7 +85,7 @@ export function BarButton({
   }
 
   const content = (
-    <span className="text-[11px] tracking-[0.22em] text-stone-500/75 transition-colors duration-500 hover:text-stone-400/90">
+    <span className="pointer-events-none text-[11px] tracking-[0.22em] text-stone-500/75 transition-colors duration-500 group-hover:text-stone-400/90">
       {children}
     </span>
   );
@@ -111,7 +113,7 @@ function wrap(
       <Link
         href={href}
         onClick={onClick}
-        className={`inline-block disabled:opacity-40 ${className}`}
+        className={`relative z-10 inline-block touch-manipulation cursor-pointer disabled:opacity-40 ${className}`}
       >
         {content}
       </Link>
@@ -122,7 +124,7 @@ function wrap(
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`disabled:cursor-not-allowed disabled:opacity-40 ${className}`}
+      className={`relative z-10 touch-manipulation cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${className}`}
     >
       {content}
     </button>

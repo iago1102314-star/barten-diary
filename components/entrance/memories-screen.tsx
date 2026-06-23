@@ -1,59 +1,102 @@
 "use client";
 
-import { AfterNightBackdrop } from "@/components/entrance/after-night-backdrop";
-import { Haze } from "@/components/entrance/atmosphere";
 import { SceneFrame } from "@/components/entrance/scene-frame";
-import { StartSteadyLampGlowLayer } from "@/components/entrance/start-steady-lamp-glow-layer";
 import { MemoList } from "@/components/memories/memo-list";
+import { DiaryExportNoticePanel } from "@/components/diary-paper/diary-export-notice";
 import { MemoDetailPanel } from "@/components/memories/memo-detail-panel";
-import { BarButton } from "@/components/ui/bar-button";
+import { MemoShelfSwipePager } from "@/components/memories/memo-shelf-swipe-pager";
+import { MemoShelfBottomBar } from "@/components/memories/memo-shelf-bottom-bar";
+import { MemoShelfRecordBottomBar } from "@/components/memories/memo-shelf-detail-bar";
+import styles from "@/components/memories/memo-shelf-grid.module.css";
+import { MemoShelfScreen } from "@/components/memories/memo-shelf-surface";
 import type { DiaryListItem } from "@/components/diaries/diary-list";
-import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
+import { useMemoShelfPageNavigation } from "@/hooks/use-memo-shelf-page-navigation";
+import { useDiaryPaperExport } from "@/hooks/use-diary-paper-export";
+import { skipMemoShelfPolaroidIntro } from "@/lib/memories/memo-shelf-polaroid-intro";
 import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
-import type { MemoriesBackdrop } from "@/lib/entrance/memories-launch";
-import {
-  MEMORIES_BG_FADE_IN_SEC,
-  MEMORIES_RETURN_FADE_OUT_SEC,
-} from "@/lib/entrance/start-entry-timing";
 import { AnimatePresence, motion } from "motion/react";
-import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type MemoriesScreenProps = {
   onBack: () => void;
-  backdrop?: MemoriesBackdrop;
   /** 指定時は一覧を飛ばしてその記録を開く（帰り道からなど） */
   initialDiaryId?: string;
 };
 
-const sceneFade = {
+const contentFade = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
-  exit: { opacity: 0, filter: "blur(6px)" },
-  transition: { duration: 0.9 },
-} as const;
-
-const contentFadeIn = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  transition: { duration: MEMORIES_BG_FADE_IN_SEC, ease: EASE_DRIFT },
+  exit: { opacity: 0 },
+  transition: { duration: 0.45, ease: EASE_DRIFT },
 } as const;
 
 /** 路地で過去の記録を振り返る — ページ遷移なし */
 export function MemoriesScreen({
   onBack,
-  backdrop = "entry",
   initialDiaryId,
 }: MemoriesScreenProps) {
   const [memos, setMemos] = useState<DiaryListItem[]>([]);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedMemo, setSelectedMemo] = useState<DiaryListItem | null>(null);
-  const [exiting, setExiting] = useState(false);
+  const [detailEditing, setDetailEditing] = useState(false);
+  const [detailDirty, setDetailDirty] = useState(false);
+  const diaryExportRef = useRef<HTMLDivElement>(null);
+  const polaroidIntroVisitIdRef = useRef(1);
+  const polaroidIntroPlayedVisitIdRef = useRef(0);
+  const polaroidIntroSession = {
+    visitIdRef: polaroidIntroVisitIdRef,
+    playedVisitIdRef: polaroidIntroPlayedVisitIdRef,
+  };
   const directOpen = Boolean(initialDiaryId);
+
+  const fetchListPage = useCallback(async (
+    pageNum: number,
+    preloaded?: {
+      memos: DiaryListItem[];
+      hasMore: boolean;
+      totalCount: number;
+    },
+  ) => {
+    if (pageNum !== 0) {
+      skipMemoShelfPolaroidIntro(polaroidIntroSession);
+    }
+
+    if (preloaded) {
+      setMemos(preloaded.memos);
+      setHasMore(preloaded.hasMore);
+      setTotalCount(preloaded.totalCount);
+      setPage(pageNum);
+      setError(null);
+      return;
+    }
+
+    const res = await fetch(`/api/memories?page=${pageNum}`);
+    const data = (await res.json()) as {
+      diaries?: DiaryListItem[];
+      hasMore?: boolean;
+      totalCount?: number;
+      error?: string;
+    };
+
+    if (!res.ok) {
+      throw new Error(data.error ?? "夜のメモを開けませんでした。");
+    }
+
+    setMemos(data.diaries ?? []);
+    setHasMore(data.hasMore ?? false);
+    setTotalCount(data.totalCount ?? data.diaries?.length ?? 0);
+    setPage(pageNum);
+    setError(null);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
 
     void (async () => {
       try {
@@ -72,24 +115,12 @@ export function MemoriesScreen({
           }
 
           setSelectedMemo(data.diary);
+          skipMemoShelfPolaroidIntro(polaroidIntroSession);
           setMemos([data.diary]);
           return;
         }
 
-        const res = await fetch("/api/memories");
-        const data = (await res.json()) as {
-          diaries?: DiaryListItem[];
-          error?: string;
-        };
-
-        if (cancelled) return;
-
-        if (!res.ok) {
-          setError(data.error ?? "夜のメモを開けませんでした。");
-          return;
-        }
-
-        setMemos(data.diaries ?? []);
+        await fetchListPage(0);
       } catch {
         if (!cancelled) {
           setError("夜のメモを開けませんでした。");
@@ -104,7 +135,7 @@ export function MemoriesScreen({
     return () => {
       cancelled = true;
     };
-  }, [initialDiaryId]);
+  }, [fetchListPage, initialDiaryId]);
 
   const refreshMemo = useCallback(async (id: string) => {
     const res = await fetch(`/api/memories/${id}`);
@@ -122,157 +153,207 @@ export function MemoriesScreen({
   }, []);
 
   const handleOpenMemo = useCallback((memo: DiaryListItem) => {
+    skipMemoShelfPolaroidIntro(polaroidIntroSession);
     setSelectedMemo(memo);
   }, []);
 
+  useEffect(() => {
+    setDetailEditing(false);
+    setDetailDirty(false);
+  }, [selectedMemo?.id]);
+
+  const diaryExport = useDiaryPaperExport({
+    captureRef: diaryExportRef,
+    createdAt: selectedMemo?.created_at ?? "",
+  });
+
   const handleBackToAlley = useCallback(() => {
-    if (exiting) return;
-    setExiting(true);
-  }, [exiting]);
+    onBack();
+  }, [onBack]);
 
   const handleBackToList = useCallback(() => {
+    if (detailEditing && detailDirty) {
+      if (!window.confirm("変更を破棄しますか？")) return;
+      setDetailEditing(false);
+      setDetailDirty(false);
+    }
     if (directOpen) {
       handleBackToAlley();
       return;
     }
     setSelectedMemo(null);
-  }, [directOpen, handleBackToAlley]);
+  }, [detailDirty, detailEditing, directOpen, handleBackToAlley]);
 
-  const backFromScreenLabel =
-    backdrop === "afterNight" ? "帰り道に戻る" : "路地に戻る";
+  const backFromScreenLabel = "路地に戻る";
+  const backToListLabel = "一覧に戻る";
+
+  const fetchPagePreview = useCallback(async (pageNum: number) => {
+    const res = await fetch(`/api/memories?page=${pageNum}`);
+    const data = (await res.json()) as {
+      diaries?: DiaryListItem[];
+      hasMore?: boolean;
+      totalCount?: number;
+      error?: string;
+    };
+
+    if (!res.ok) {
+      throw new Error(data.error ?? "夜のメモを開けませんでした。");
+    }
+
+    return {
+      memos: data.diaries ?? [],
+      hasMore: data.hasMore ?? false,
+      totalCount: data.totalCount ?? data.diaries?.length ?? 0,
+    };
+  }, []);
+
+  const listPaginationEnabled =
+    !initialDiaryId && !selectedMemo && !loading && !error && memos.length > 0;
+
+  const showIndexBar = !selectedMemo && !directOpen;
+
+  const {
+    goToPage,
+    transitioning,
+    setTransitioning,
+    registerGoToPage,
+    playPageSound,
+  } = useMemoShelfPageNavigation({
+    page,
+    hasMore,
+    loading,
+    enabled: listPaginationEnabled,
+  });
+
+  const recordBackLabel = selectedMemo
+    ? directOpen
+      ? backFromScreenLabel
+      : backToListLabel
+    : backFromScreenLabel;
+
+  const handleRecordBack = selectedMemo ? handleBackToList : handleBackToAlley;
 
   return (
     <SceneFrame>
-      {backdrop === "afterNight" ? (
-        <AfterNightBackdrop
-          motionProps={{
-            initial: { opacity: 0 },
-            animate: { opacity: 1 },
-            transition: { duration: MEMORIES_BG_FADE_IN_SEC, ease: EASE_DRIFT },
-          }}
-        />
-      ) : (
-        <EntryAlleyBackdrop />
-      )}
-
-      <motion.div
-        className="pointer-events-none absolute inset-0 z-40 bg-black"
-        initial={{ opacity: 1 }}
-        animate={{ opacity: 0 }}
-        transition={{ duration: MEMORIES_BG_FADE_IN_SEC, ease: EASE_DRIFT }}
-      />
-
-      <motion.div
-        {...contentFadeIn}
-        className={`absolute inset-0 z-30 flex flex-col ${
-          exiting ? "pointer-events-none" : ""
-        }`}
-      >
-        <AnimatePresence mode="wait">
-          {selectedMemo ? (
-            <motion.div
-              key={`detail-${selectedMemo.id}`}
-              {...sceneFade}
-              className="flex min-h-0 flex-1 flex-col"
-            >
-              <header className="shrink-0 space-y-3 px-7 pb-4 pt-[12%]">
-                <BarButton variant="ghost" onClick={handleBackToList}>
-                  {directOpen ? backFromScreenLabel : "一覧に戻る"}
-                </BarButton>
-              </header>
-
-              <div className="flex-1 overflow-y-auto overscroll-contain px-7 pb-[14%]">
-                <MemoDetailPanel
-                  diary={selectedMemo}
-                  onPersisted={() => void refreshMemo(selectedMemo.id)}
-                />
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div key="list" className="flex min-h-0 flex-1 flex-col">
-              <header className="shrink-0 space-y-3 px-7 pb-4 pt-[12%]">
-                <BarButton variant="ghost" onClick={handleBackToAlley}>
-                  {backFromScreenLabel}
-                </BarButton>
-                <div className="space-y-2 pt-2">
-                  <h1 className="font-serif-jp text-xl font-normal tracking-[0.14em] text-stone-200/90">
-                    夜のメモ
-                  </h1>
-                  <p className="font-serif-jp text-[12px] leading-relaxed tracking-[0.06em] text-stone-500/90">
-                    帰り道で、自分用に残した記録。
-                  </p>
-                </div>
-              </header>
-
-              <div className="flex-1 overflow-y-auto overscroll-contain px-7 pb-[14%]">
-                {loading && (
-                  <p className="py-16 text-center text-[11px] tracking-[0.2em] text-stone-600/80">
-                    ……
-                  </p>
-                )}
-
-                {!loading && error && (
-                  <p
-                    role="alert"
-                    className="rounded-lg border border-red-900/40 bg-red-950/20 px-4 py-3 text-sm text-red-200/80"
-                  >
-                    {error}
-                  </p>
-                )}
-
-                {!loading && !error && (
-                  <MemoList memos={memos} onOpenMemo={handleOpenMemo} />
-                )}
-              </div>
-            </motion.div>
+      <MemoShelfScreen>
+        <div className={styles.shelfChromeLayout}>
+          {showIndexBar && (
+            <MemoShelfBottomBar
+              placement="top"
+              page={page}
+              totalCount={totalCount}
+              hasMore={hasMore}
+              loading={loading}
+              transitioning={transitioning}
+              onPageChange={goToPage}
+            />
           )}
-        </AnimatePresence>
-      </motion.div>
 
-      {exiting && (
-        <motion.div
-          className="absolute inset-0 z-50 bg-black"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: MEMORIES_RETURN_FADE_OUT_SEC, ease: EASE_DRIFT }}
-          onAnimationComplete={onBack}
-        />
-      )}
+          <div className={styles.shelfContentStage}>
+            <AnimatePresence mode="wait">
+              {selectedMemo ? (
+                <motion.div
+                  key={`detail-${selectedMemo.id}`}
+                  {...contentFade}
+                  className={`${styles.shelfContentPane} ${styles.detailLayout}`}
+                >
+                  <div
+                    className={styles.detailPaperScroll}
+                    data-diary-paper-scroll
+                  >
+                    <MemoDetailPanel
+                      diary={selectedMemo}
+                      exportRef={diaryExportRef}
+                      editing={detailEditing}
+                      onEditingChange={setDetailEditing}
+                      onDirtyChange={setDetailDirty}
+                      onPersisted={() => void refreshMemo(selectedMemo.id)}
+                    />
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="list"
+                  {...contentFade}
+                  className={`${styles.shelfContentPane} ${styles.listLayout}`}
+                >
+                  <div className={styles.listMiddle}>
+                    <div className={styles.listTopSpacer} aria-hidden />
+
+                    <div className={styles.listAlbumHost}>
+                      <div className={styles.listAlbumScroll}>
+                        {loading && (
+                          <div className={styles.listAlbumGrid}>
+                            <p className={styles.loadingText}>……</p>
+                          </div>
+                        )}
+
+                        {!loading && error && (
+                          <div className={styles.listAlbumGrid}>
+                            <p role="alert" className={styles.errorText}>
+                              {error}
+                            </p>
+                          </div>
+                        )}
+
+                        {!loading && !error && memos.length > 0 && (
+                          <MemoShelfSwipePager
+                            page={page}
+                            hasMore={hasMore}
+                            enabled={listPaginationEnabled}
+                            currentMemos={memos}
+                            polaroidIntroSession={polaroidIntroSession}
+                            renderList={(pageMemos, pageNum, intro) => (
+                              <MemoList
+                                key={pageNum}
+                                memos={pageMemos}
+                                onOpenMemo={handleOpenMemo}
+                                page={pageNum}
+                                flat
+                                introStagger={intro.introStagger}
+                                introSession={polaroidIntroSession}
+                              />
+                            )}
+                            onNavigate={fetchListPage}
+                            onFetchPreview={fetchPagePreview}
+                            onPlayPageSound={playPageSound}
+                            onTransitioningChange={setTransitioning}
+                            registerGoToPage={registerGoToPage}
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className={styles.listBottomSpacer} aria-hidden />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <MemoShelfRecordBottomBar
+            onBack={handleRecordBack}
+            backLabel={recordBackLabel}
+            detailActions={
+              selectedMemo && !detailEditing
+                ? {
+                    onEdit: () => setDetailEditing(true),
+                    onSave: diaryExport.exportDiary,
+                    saveDisabled: diaryExport.exporting,
+                  }
+                : undefined
+            }
+          />
+
+          {selectedMemo ? (
+            <DiaryExportNoticePanel
+              notice={diaryExport.notice}
+              onDismiss={diaryExport.dismissNotice}
+            />
+          ) : null}
+        </div>
+      </MemoShelfScreen>
+
     </SceneFrame>
-  );
-}
-
-function EntryAlleyBackdrop() {
-  return (
-    <motion.div
-      className="absolute inset-0"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: MEMORIES_BG_FADE_IN_SEC, ease: EASE_DRIFT }}
-    >
-      <motion.div
-        className="absolute inset-0"
-        initial={{ scale: 1, x: 0 }}
-        animate={{ scale: 1, x: 0 }}
-      >
-        <Image
-          src={ENTRANCE_ASSETS.start}
-          alt=""
-          fill
-          priority
-          sizes="440px"
-          className="object-cover"
-          style={{ objectPosition: "60% 50%" }}
-          draggable={false}
-          unoptimized
-        />
-
-        <StartSteadyLampGlowLayer />
-      </motion.div>
-
-      <Haze y={36} intensity={1} />
-      <div className="absolute inset-0 bg-gradient-to-b from-stone-950/40 via-transparent to-stone-950/80" />
-      <div className="absolute inset-0 bg-[#0a1020]/20 mix-blend-multiply" />
-    </motion.div>
   );
 }

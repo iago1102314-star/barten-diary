@@ -9,6 +9,12 @@ export const POST_RECORD_EXIT_TUNING = {
   pureBlackFadeInMs: 880,
   /** 入店時 door 音量の倍率 */
   doorVolumeScale: 0.5,
+  /** 別れセリフ後 — 店内 jazz を下げ切るまで */
+  jazzFadeOutMs: 600,
+  /** 暗転開始から扉 SE まで */
+  doorDelayMs: 200,
+  /** 退店後 outside のフェードイン */
+  outsideFadeInMs: 2800,
   /** 扉 SE 後 — after-night へ切り替えるまで */
   afterDoorHoldMs: 400,
   masterThanksLines: ["話してくれてありがとう。", "気をつけて帰れよ"],

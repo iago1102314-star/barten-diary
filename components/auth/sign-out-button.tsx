@@ -1,5 +1,6 @@
 "use client";
 
+import { clearEntranceExperienceLock } from "@/hooks/use-entrance-scroll-lock";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -14,6 +15,7 @@ export function SignOutButton() {
     const supabase = createClient();
     await supabase.auth.signOut();
 
+    clearEntranceExperienceLock();
     router.push("/login");
     router.refresh();
   };

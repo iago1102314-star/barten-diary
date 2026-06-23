@@ -186,7 +186,9 @@ export async function updateDiaryBody(
   }
 
   const id = String(formData.get("id") ?? "").trim();
-  const body = String(formData.get("body") ?? "").trim();
+  const body = String(formData.get("body") ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/^\s+|\s+$/g, "");
 
   if (!id) {
     return { error: "記録が見つかりません。" };

@@ -12,10 +12,21 @@ export type DiaryListRow = Pick<
   | "created_at"
 >;
 
+export const DIARY_LIST_PAGE_SIZE = 4;
+
+export type FetchDiariesOptions = {
+  page?: number;
+  pageSize?: number;
+};
+
 export type FetchDiariesResult = {
   diaries: DiaryListRow[];
   drinkNoteColumnMissing: boolean;
   error: string | null;
+  page?: number;
+  pageSize?: number;
+  totalCount?: number;
+  hasMore?: boolean;
 };
 
 const SELECT_WITH_DRINK_NOTE =
@@ -28,19 +39,51 @@ function isDrinkNoteColumnMissing(message: string): boolean {
   return message.includes("drink_note") && message.includes("does not exist");
 }
 
+function paginationMeta(
+  page: number,
+  pageSize: number,
+  totalCount: number | null,
+): Pick<FetchDiariesResult, "page" | "pageSize" | "totalCount" | "hasMore"> {
+  const safeTotal = totalCount ?? 0;
+  return {
+    page,
+    pageSize,
+    totalCount: safeTotal,
+    hasMore: (page + 1) * pageSize < safeTotal,
+  };
+}
+
 export async function fetchDiariesForShelf(
   supabase: SupabaseClient,
+  options: FetchDiariesOptions = {},
 ): Promise<FetchDiariesResult> {
-  const withNote = await supabase
+  const page = Math.max(0, options.page ?? 0);
+  const pageSize = options.pageSize;
+  const usePagination = pageSize != null && pageSize > 0;
+  const rangeFrom = usePagination ? page * pageSize : undefined;
+  const rangeTo = usePagination ? page * pageSize + pageSize - 1 : undefined;
+
+  let withNoteQuery = supabase
     .from("diaries")
-    .select(SELECT_WITH_DRINK_NOTE)
+    .select(SELECT_WITH_DRINK_NOTE, {
+      count: usePagination ? "exact" : undefined,
+    })
     .order("created_at", { ascending: false });
+
+  if (rangeFrom != null && rangeTo != null) {
+    withNoteQuery = withNoteQuery.range(rangeFrom, rangeTo);
+  }
+
+  const withNote = await withNoteQuery;
 
   if (!withNote.error) {
     return {
       diaries: (withNote.data ?? []) as DiaryListRow[],
       drinkNoteColumnMissing: false,
       error: null,
+      ...(usePagination
+        ? paginationMeta(page, pageSize, withNote.count)
+        : {}),
     };
   }
 
@@ -52,10 +95,18 @@ export async function fetchDiariesForShelf(
     };
   }
 
-  const legacy = await supabase
+  let legacyQuery = supabase
     .from("diaries")
-    .select(SELECT_LEGACY)
+    .select(SELECT_LEGACY, {
+      count: usePagination ? "exact" : undefined,
+    })
     .order("created_at", { ascending: false });
+
+  if (rangeFrom != null && rangeTo != null) {
+    legacyQuery = legacyQuery.range(rangeFrom, rangeTo);
+  }
+
+  const legacy = await legacyQuery;
 
   if (legacy.error) {
     return {
@@ -74,5 +125,6 @@ export async function fetchDiariesForShelf(
     diaries,
     drinkNoteColumnMissing: true,
     error: null,
+    ...(usePagination ? paginationMeta(page, pageSize, legacy.count) : {}),
   };
 }

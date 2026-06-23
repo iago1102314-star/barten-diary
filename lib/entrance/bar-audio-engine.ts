@@ -12,6 +12,7 @@ const SFX_SOURCES = [
   ENTRANCE_SOUNDS.click,
   ENTRANCE_SOUNDS.glassSlide,
   ENTRANCE_SOUNDS.send,
+  ENTRANCE_SOUNDS.page,
   ENTRANCE_SOUNDS.think,
 ] as const;
 
@@ -20,6 +21,7 @@ const SFX_SRC_BY_KIND: Record<BarSfxKind, string> = {
   click: ENTRANCE_SOUNDS.click,
   glassSlide: ENTRANCE_SOUNDS.glassSlide,
   send: ENTRANCE_SOUNDS.send,
+  page: ENTRANCE_SOUNDS.page,
   think: ENTRANCE_SOUNDS.think,
 };
 
@@ -965,7 +967,7 @@ function stopLooping(
   }
 
   track.ambient?.pause();
-  fadeVolume(audio, audio.volume, 0, fadeMs, track, () => {
+  fadeVolume(audio, getTrackOutputLevel(audio, track), 0, fadeMs, track, () => {
     if (track.audio !== audio) {
       releaseAudio(audio);
       return;
@@ -1166,9 +1168,9 @@ export const barAudioEngine = {
     setLoopingVolume(volume, jazzTrack);
   },
 
-  stopJazz() {
+  stopJazz(fadeMs: number = BAR_AUDIO_TIMING.fadeMs) {
     bgmPausedForRecording = false;
-    stopLooping(jazzTrack);
+    stopLooping(jazzTrack, false, fadeMs);
   },
 
   /**
@@ -1234,6 +1236,10 @@ export const barAudioEngine = {
 
   playClick() {
     playSfxNow("click");
+  },
+
+  playPage() {
+    playSfxNow("page");
   },
 
   playSend() {

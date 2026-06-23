@@ -1,4 +1,5 @@
 import { isEntryImagePreloaded, preloadEntryImage } from "@/lib/entrance/entry-image-preload";
+import { LOADING_GATE_LIGHT_SEQUENCE_MS } from "@/lib/entrance/loading-gate-light-sequence";
 import { logLoadingGate } from "@/lib/entrance/loading-gate-log";
 import { isReturningVisitor } from "@/lib/entrance/visit-state";
 
@@ -7,8 +8,8 @@ export type LoadingGateSnapshot = {
   entryImagePreloaded: boolean;
 };
 
-/** UX — ロード完了後もこの時間は Gate を維持（実ロードが長い場合はそちらを優先） */
-export const LOADING_GATE_MIN_DISPLAY_MS = 3000;
+/** UX — ロード完了後もこの時間は Gate を維持（点灯演出と同期） */
+export const LOADING_GATE_MIN_DISPLAY_MS = LOADING_GATE_LIGHT_SEQUENCE_MS;
 
 type LoadingGatePhase = {
   id: string;

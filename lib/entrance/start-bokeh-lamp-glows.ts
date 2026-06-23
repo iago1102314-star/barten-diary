@@ -13,7 +13,7 @@ export const START_BOKEH_ONLY_POSITION_EDIT_ON_HOME = false;
 export const START_BOKEH_ONLY_SHAPE_EDIT_ON_HOME = false;
 
 /** 読み込み直後 — rain-alley 背景の不透明度（0 = 不可視, 1 = 定常と同じ） */
-export const START_BOKEH_BACKGROUND_OPACITY = 0.13;
+export const START_BOKEH_BACKGROUND_OPACITY = 0.18;
 
 export function isStartBokehLampGlowHomeEditing(): boolean {
   return START_BOKEH_LAMP_GLOW_SHAPE_EDIT_ON_HOME;

@@ -23,15 +23,15 @@ export function EntranceApp() {
 
   return (
     <div className="entrance-experience-root">
-      {!isReady || !gateSnapshot ? (
-        <LoadingGate onReady={handleGateReady} />
-      ) : (
-        <div className="stage-viewport">
-          <div className="stage-viewport-fill">
+      <div className="stage-viewport">
+        <div className="stage-viewport-fill">
+          {!isReady || !gateSnapshot ? (
+            <LoadingGate onReady={handleGateReady} />
+          ) : (
             <EntranceFlow gateSnapshot={gateSnapshot} />
-          </div>
+          )}
         </div>
-      )}
+      </div>
       {isRecordingDiagnosticEnabled() ? <EntranceDiagnosticOverlay /> : null}
     </div>
   );

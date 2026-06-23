@@ -1,4 +1,4 @@
-/** 導入フロー用アセットパス（public/assets/） */
+/** 導入フロー用アセット — 詳細は `lib/assets/public-paths.ts` */
 export const ENTRANCE_ASSETS = {
   /** 入店前 — 雨の路地（入口） */
   start: "/assets/start/rain-alley.webp",
@@ -6,9 +6,11 @@ export const ENTRANCE_ASSETS = {
   afterNight: "/assets/alley/after-night.webp",
   counterBack: "/assets/bar/counter-back.webp",
   counterFront: "/assets/bar/counter-front.webp",
-  /** 録音シーン — 背景 */
+  /**
+   * 録音シーン — 固定背景（全ドリンク共通）
+   * back →（将来マスター）→ counter → グラス（`lib/drinks/drink-assets.ts` record）
+   */
   backRecord: "/assets/bar/back-record.webp",
-  /** 録音シーン — カウンター（グラスの親） */
   counterRecord: "/assets/bar/counter-record.webp",
   lantern: "/assets/bar/lantern.webp",
   masterIdle: "/assets/master/master-idle.webp",
@@ -31,6 +33,8 @@ export const ENTRANCE_SOUNDS = {
   send: "/sounds/send.mp4",
   /** 吹き出しタップ */
   click: "/sounds/click.mp4",
+  /** 夜のメモ — ページめくり */
+  page: "/sounds/page.mp4",
   /** 気分選択の幕 */
   think: "/sounds/think.mp4",
 } as const;

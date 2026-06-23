@@ -4,10 +4,15 @@ import { useGenerateDiary } from "@/hooks/use-generate-diary";
 import { useRecorder } from "@/hooks/use-recorder";
 import { checkGenerationReadiness } from "@/lib/ai/check-generation-readiness";
 import { validateTranscriptInput } from "@/lib/ai/security/validate-input";
+import { fetchLatestDiaryForDev } from "@/lib/dev/fetch-latest-diary-for-dev";
 import { isDevShortcutEnabled } from "@/lib/dev/is-dev-shortcut-enabled";
 import { simulateNight } from "@/lib/dev/simulate-night";
 import type { FakeNightId } from "@/lib/dev/fake-nights";
-import type { Drink } from "@/lib/drinks/drink-catalog";
+import {
+  getDrinkById,
+  type Drink,
+} from "@/lib/drinks/drink-catalog";
+import { fallbackDrinkFromName } from "@/lib/drinks/resolve-drink-from-bottle-tag";
 import type { DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
 import { barAudioEngine, getBarAudioDiagnostics } from "@/lib/entrance/bar-audio-engine";
 import { MIN_RECORDING_BYTES } from "@/lib/recorder/recorder-platform";
@@ -334,6 +339,40 @@ export function useNightSession() {
     setPhase("idle");
   }, [recorder, generation]);
 
+  const prepareDevSkipFromLatestDiary = useCallback(async (): Promise<Drink | null> => {
+    if (!isDevShortcutEnabled()) return null;
+
+    const snapshot = await fetchLatestDiaryForDev();
+    if (!snapshot) return null;
+
+    const drink =
+      getDrinkById(snapshot.drinkId) ??
+      fallbackDrinkFromName(snapshot.drinkName);
+    const recordedAt = new Date().toISOString();
+
+    phaseRef.current = "revealed";
+    setPhase("revealed");
+    pipelineLock.current = false;
+    barAudioEngine.resumeJazzAfterRecording();
+    recorder.reset();
+    generation.reset();
+    resetListenFailure();
+    generation.injectDevResult(snapshot.record);
+    inflightGenerationKeyRef.current = generationKey(
+      snapshot.transcript,
+      recordedAt,
+    );
+    setSelectedCategoryId(snapshot.categoryId);
+    setSelectedDrinkId(snapshot.drinkId);
+    setContinuedFrom(null);
+    setTranscript(snapshot.transcript);
+    setRecordedAt(recordedAt);
+    setIsDevSimulated(false);
+    setGenerationFailed(false);
+
+    return drink;
+  }, [recorder, generation, resetListenFailure]);
+
   const simulateDevNight = useCallback(
     (patternId?: FakeNightId): Drink | null => {
       if (!isDevShortcutEnabled()) return null;
@@ -515,6 +554,7 @@ export function useNightSession() {
     startDiaryGeneration,
     abandonNightWithoutRecord,
     simulateDevNight,
+    prepareDevSkipFromLatestDiary,
     elapsedMs: recorder.elapsedMs,
     recorderStatus: recorder.status,
   };

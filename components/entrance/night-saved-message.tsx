@@ -18,7 +18,7 @@ export function NightSavedMessage({ error }: NightSavedMessageProps) {
         </>
       ) : (
         <p className="text-[14px] tracking-wide text-stone-200/88">
-          今夜の記録を残しました。
+          今夜のメモを残しました。
         </p>
       )}
     </div>

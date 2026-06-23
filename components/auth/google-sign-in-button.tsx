@@ -1,62 +1,49 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
-import { useState } from "react";
+import {
+  signInWithGoogleAction,
+  type SignInWithGoogleState,
+} from "@/app/login/actions";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
+
+const initialState: SignInWithGoogleState = { error: null };
 
 export function GoogleSignInButton() {
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const handleSignIn = async () => {
-    setLoading(true);
-    setErrorMessage(null);
-
-    try {
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      if (data.url) {
-        // モバイル Safari 等で自動リダイレクトが効かない場合に備え明示的に遷移
-        window.location.assign(data.url);
-        return;
-      }
-
-      throw new Error("OAuth URL が取得できませんでした");
-    } catch (error) {
-      setLoading(false);
-      const message =
-        error instanceof Error ? error.message : "ログインを開始できませんでした";
-      setErrorMessage(message);
-      console.error("Google sign-in failed:", error);
-    }
-  };
+  const [state, formAction] = useActionState(
+    signInWithGoogleAction,
+    initialState,
+  );
 
   return (
-    <div className="space-y-3">
-      <button
-        type="button"
-        onClick={handleSignIn}
-        disabled={loading}
-        className="mx-auto flex h-11 min-h-[44px] w-full max-w-xs touch-manipulation items-center justify-center gap-3 rounded-full border border-stone-700/50 bg-stone-900/60 px-8 text-sm text-stone-400 transition-colors hover:border-stone-600 hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <GoogleIcon />
-        {loading ? "…" : "入店する"}
-      </button>
-      {errorMessage && (
-        <p role="alert" className="text-sm text-red-300/80">
-          {errorMessage}
+    <div className="relative z-[110] space-y-3">
+      <form action={formAction}>
+        <SignInSubmitButton />
+      </form>
+      {state.error ? (
+        <p
+          role="alert"
+          className="whitespace-pre-wrap text-left text-sm leading-relaxed text-red-300/80"
+        >
+          {state.error}
         </p>
-      )}
+      ) : null}
     </div>
+  );
+}
+
+function SignInSubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="relative z-[110] mx-auto flex h-11 min-h-[44px] w-full max-w-xs touch-manipulation cursor-pointer items-center justify-center gap-3 rounded-full border border-stone-700/50 bg-stone-900/60 px-8 text-sm text-stone-400 transition-colors hover:border-stone-600 hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <GoogleIcon />
+      {pending ? "…" : "入店する"}
+    </button>
   );
 }
 

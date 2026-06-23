@@ -1,0 +1,957 @@
+/**
+ * 夜の記録一覧 — 紙面（罫線なし）＋ポラロイドグリッド
+ */
+.screen {
+  --shelf-paper-bg: #ebe2cf;
+  --shelf-paper-bg-soft: #f0e9da;
+  --shelf-paper-bg-deep: #e5d8bc;
+  --shelf-paper-ink: #3f3629;
+  --shelf-paper-ink-muted: rgba(63, 54, 41, 0.72);
+  --shelf-paper-texture-image: url("/assets/diary/paper.webp");
+  --shelf-paper-texture-opacity: var(--memo-shelf-paper-texture-opacity, 0.36);
+  --shelf-paper-texture-blend: multiply;
+  --shelf-paper-texture-size: var(--memo-shelf-paper-texture-size, 260px auto);
+  --shelf-paper-edge-shadow: var(--memo-shelf-paper-edge-shadow, 0.14);
+
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
+  overflow: hidden;
+  color: var(--shelf-paper-ink);
+  background-color: var(--shelf-paper-bg);
+  background-image:
+    radial-gradient(
+      ellipse 95% 55% at 50% 8%,
+      rgba(255, 252, 245, 0.42) 0%,
+      transparent 62%
+    ),
+    linear-gradient(
+      180deg,
+      var(--shelf-paper-bg-soft) 0%,
+      var(--shelf-paper-bg) 28%,
+      var(--shelf-paper-bg-deep) 100%
+    );
+}
+
+.screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--shelf-paper-texture-image);
+  background-repeat: repeat;
+  background-size: var(--shelf-paper-texture-size);
+  opacity: var(--shelf-paper-texture-opacity);
+  mix-blend-mode: var(--shelf-paper-texture-blend);
+}
+
+.screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: calc(0.65 + var(--shelf-paper-edge-shadow) * 0.8);
+  box-shadow:
+    inset 0 0 140px rgba(90, 62, 28, calc(var(--shelf-paper-edge-shadow) * 0.85)),
+    inset 0 0 48px rgba(70, 48, 24, calc(var(--shelf-paper-edge-shadow) * 0.45));
+  background:
+    radial-gradient(
+      ellipse 130% 95% at 50% 100%,
+      rgba(72, 50, 24, calc(var(--shelf-paper-edge-shadow) * 0.55)) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse 115% 90% at 50% 42%,
+      transparent 42%,
+      rgba(100, 72, 36, calc(var(--shelf-paper-edge-shadow) * 0.35)) 100%
+    );
+}
+
+/** 繊維の二重掛け — タイル感を和らげる */
+.screenPaperOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--shelf-paper-texture-image);
+  background-repeat: repeat;
+  background-size: calc(var(--memo-shelf-paper-texture-size-px, 260) * 1.07 * 1px) auto;
+  background-position: 18% 12%;
+  opacity: calc(var(--shelf-paper-texture-opacity, 0.36) * 0.42);
+  mix-blend-mode: soft-light;
+  filter: contrast(1.08) saturate(0.92);
+}
+
+/** 背景だけ暗く — コンテンツにはかからない */
+.screenPaperDarken {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: rgba(48, 34, 18, var(--memo-shelf-paper-darken, 0.1));
+}
+
+.screenBody {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.screenBodyInner {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+/** 日記詳細 — 紙面全画面 + 下部帯 */
+.detailLayout {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ebe2cf;
+}
+
+.detailPaperScroll {
+  flex: 1 1 0;
+  min-height: 0;
+  height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.detailPaperExportHost {
+  box-sizing: border-box;
+}
+
+.detailFooter {
+  padding: 0 1.5rem 1.75rem;
+}
+
+/** 一覧 — Header / Middle(TopSpacer+Album+BottomSpacer) / Pagination */
+.listLayout {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.listMiddle {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 0;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: visible;
+  touch-action: pan-y;
+}
+
+.listAlbumHost {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
+
+.listAlbumStage {
+  flex: 0 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  touch-action: pan-y;
+}
+
+.listAlbumSwipeTrack {
+  position: relative;
+  width: 100%;
+  will-change: transform;
+}
+
+.listAlbumSwipePanelCurrent {
+  position: relative;
+  width: 100%;
+  will-change: transform;
+}
+
+.listAlbumSwipePanelNext {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  width: 100%;
+  will-change: transform;
+}
+
+.listAlbumSwipePanelPrev {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  width: 100%;
+  will-change: transform;
+}
+
+.listAlbumGridMotion {
+  width: 100%;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listAlbumGridMotion {
+    will-change: auto;
+  }
+}
+
+.listAlbumScroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.listAlbumGrid {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 26.5rem;
+  margin-inline: auto;
+  padding:
+    clamp(0.85rem, 4vw, 1.15rem)
+    clamp(1.1rem, 5.5vw, 1.65rem)
+    clamp(2.5rem, 10vw, 4.5rem);
+}
+
+.listTopSpacer {
+  flex: 0.35 1 0;
+  min-height: 0;
+}
+
+.listBottomSpacer {
+  flex: 0.65 1 0;
+  min-height: 0;
+}
+
+.screenScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.screenInner {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 26.5rem;
+  margin-inline: auto;
+  padding:
+    clamp(0.85rem, 4vw, 1.15rem)
+    clamp(1.1rem, 5.5vw, 1.65rem)
+    max(1.75rem, env(safe-area-inset-bottom));
+}
+
+.topBar {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.35rem;
+  padding:
+    max(var(--memo-shelf-bottombar-padding-block, 0.3rem), env(safe-area-inset-top))
+    var(--memo-shelf-topbar-padding-inline, 0.95rem)
+    var(--memo-shelf-bottombar-padding-block, 0.3rem);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(34, 28, 22, 0.98) 0%,
+      rgba(26, 21, 16, 0.96) 72%,
+      rgba(20, 17, 14, 0.92) 100%
+    );
+  box-shadow:
+    0 1px 0 rgba(255, 248, 235, 0.05),
+    0 10px 28px rgba(12, 8, 5, 0.22);
+}
+
+.topBar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.55rem;
+  height: 0.55rem;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(20, 17, 14, 0.28) 0%,
+    transparent 100%
+  );
+}
+
+.topBarSide {
+  min-width: 0;
+}
+
+.topBarSideRight {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.topBarTitle {
+  margin: 0;
+  font-family: var(--font-serif-jp);
+  font-size: 0.98rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-align: center;
+  color: rgba(221, 210, 192, 0.94);
+}
+
+.topBarBack {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0.1rem 0.05rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(200, 188, 168, 0.82);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s ease;
+}
+
+.topBarBack:hover {
+  color: rgba(232, 220, 200, 0.96);
+}
+
+.topBarBack:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.topBarIcon {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+/** 目次 — 上部ページ送り */
+.indexTopBar {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.35rem;
+  padding:
+    max(var(--memo-shelf-bottombar-padding-block, 0.3rem), env(safe-area-inset-top))
+    var(--memo-shelf-topbar-padding-inline, 0.95rem)
+    var(--memo-shelf-bottombar-padding-block, 0.3rem);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(34, 28, 22, 0.98) 0%,
+      rgba(26, 21, 16, 0.96) 72%,
+      rgba(20, 17, 14, 0.92) 100%
+    );
+  box-shadow:
+    0 1px 0 rgba(255, 248, 235, 0.05),
+    0 10px 28px rgba(12, 8, 5, 0.22);
+}
+
+.indexTopBar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.55rem;
+  height: 0.55rem;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(20, 17, 14, 0.28) 0%,
+    transparent 100%
+  );
+}
+
+.shelfChromeLayout {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.shelfContentStage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.shelfContentPane {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  min-height: 0;
+  max-height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.bottomBar {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.35rem;
+  padding:
+    var(--memo-shelf-topbar-padding-block, 0.3rem)
+    var(--memo-shelf-topbar-padding-inline, 0.95rem)
+    max(var(--memo-shelf-topbar-padding-block, 0.3rem), env(safe-area-inset-bottom));
+  background:
+    linear-gradient(
+      0deg,
+      rgba(34, 28, 22, 0.98) 0%,
+      rgba(26, 21, 16, 0.96) 72%,
+      rgba(20, 17, 14, 0.92) 100%
+    );
+  box-shadow:
+    0 -1px 0 rgba(255, 248, 235, 0.05),
+    0 -10px 28px rgba(12, 8, 5, 0.22);
+}
+
+.bottomBar::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -0.55rem;
+  height: 0.55rem;
+  pointer-events: none;
+  background: linear-gradient(
+    0deg,
+    rgba(20, 17, 14, 0.28) 0%,
+    transparent 100%
+  );
+}
+
+.bottomBarSide {
+  min-width: 0;
+}
+
+.bottomBarSideRight {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  min-width: max-content;
+}
+
+.bottomBarDetailActions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  gap: 0.75rem;
+}
+
+.bottomBarTextAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.25rem 0.1rem;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-serif-jp);
+  font-size: 0.88rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: rgba(221, 210, 192, 0.94);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s ease;
+  white-space: nowrap;
+}
+
+.bottomBarTextAction:hover:not(:disabled) {
+  color: rgba(236, 228, 210, 0.98);
+}
+
+.bottomBarTextAction:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bottomBarEditAction,
+.bottomBarSaveAction {
+  gap: 0.4rem;
+}
+
+.bottomBarActionIcon {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.bottomBarIndicator {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-serif-jp);
+  font-size: 0.98rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-align: center;
+  color: rgba(221, 210, 192, 0.94);
+  font-variant-numeric: tabular-nums;
+}
+
+.bottomBarAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.65rem;
+  min-height: 2.65rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(200, 188, 168, 0.78);
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.bottomBarTriIcon {
+  width: 1.47rem;
+  height: 1.47rem;
+  flex-shrink: 0;
+}
+
+.bottomBarAction:hover:not(:disabled) {
+  color: rgba(232, 220, 200, 0.96);
+  background: rgba(255, 248, 235, 0.06);
+}
+
+.bottomBarAction:disabled,
+.bottomBarActionDisabled {
+  opacity: 0.32;
+  cursor: default;
+  pointer-events: none;
+}
+
+.loadingText {
+  margin: 0;
+  padding: 3rem 0;
+  text-align: center;
+  font-family: var(--font-serif-jp);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  color: var(--shelf-paper-ink-muted);
+}
+
+.errorText {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(139, 60, 60, 0.28);
+  background: rgba(255, 245, 240, 0.55);
+  font-family: var(--font-serif-jp);
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: #6b3a32;
+}
+
+.shelf {
+  --shelf-paper-bg: #ebe2cf;
+  --shelf-paper-bg-soft: #f0e9da;
+  --shelf-paper-bg-deep: #e5d8bc;
+  --shelf-paper-ink: #3f3629;
+  --shelf-paper-border: 1px solid rgba(120, 92, 48, 0.18);
+  --shelf-paper-texture-image: url("/assets/diary/paper.webp");
+  --shelf-paper-texture-opacity: 0.18;
+  --shelf-paper-texture-blend: multiply;
+  --shelf-paper-texture-size: 360px auto;
+  --shelf-paper-shadow:
+    0 1px 1px rgba(42, 30, 14, 0.045),
+    0 3px 10px rgba(42, 30, 14, 0.065),
+    0 10px 24px rgba(35, 24, 10, 0.055);
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 0.65rem;
+  border: var(--shelf-paper-border);
+  background: linear-gradient(
+    180deg,
+    var(--shelf-paper-bg-soft) 0%,
+    var(--shelf-paper-bg) 12%,
+    var(--shelf-paper-bg-deep) 100%
+  );
+  box-shadow: var(--shelf-paper-shadow);
+  color: var(--shelf-paper-ink);
+}
+
+.shelf::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: var(--shelf-paper-texture-image);
+  background-repeat: repeat;
+  background-size: var(--shelf-paper-texture-size);
+  opacity: var(--shelf-paper-texture-opacity);
+  mix-blend-mode: var(--shelf-paper-texture-blend);
+}
+
+.shelf::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 72px rgba(90, 62, 28, 0.06);
+  background: radial-gradient(
+    ellipse 115% 95% at 50% 42%,
+    transparent 58%,
+    rgba(100, 72, 36, 0.04) 100%
+  );
+}
+
+.shelfInner {
+  position: relative;
+  z-index: 1;
+  padding: clamp(1rem, 4.5vw, 1.35rem);
+}
+
+.tunedGrid {
+  width: 100%;
+  flex: 0 0 auto;
+  padding-top: var(--memo-shelf-grid-padding-top, 1.35rem);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--memo-shelf-grid-column-gap, 1.15rem);
+  row-gap: var(--memo-shelf-grid-row-gap, 2.85rem);
+  align-content: start;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gridItem {
+  min-width: 0;
+  overflow: visible;
+  align-self: start;
+}
+
+/* 2段目 — ポラロイド下影が scroll / overflow で切れないよう実高さを確保 */
+.gridItem:nth-last-child(-n + 2)::after {
+  content: "";
+  display: block;
+  height: clamp(3.25rem, 14vw, 5rem);
+  pointer-events: none;
+}
+
+.cardButton,
+.cardLink {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+  padding: var(--memo-shelf-grid-cell-padding-block, 0.55rem) 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  position: relative;
+  z-index: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cardButton:focus-visible,
+.cardLink:focus-visible {
+  outline: 2px solid rgba(90, 62, 28, 0.35);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.polaroidIntro {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.polaroid {
+  position: relative;
+  width: var(--memo-shelf-polaroid-width, 92%);
+  max-width: 100%;
+  padding:
+    3%
+    3%
+    var(--memo-shelf-polaroid-padding-bottom, 24%)
+    3%;
+  background: #faf6ee;
+  transform-origin: center center;
+  --polaroid-tilt: 0;
+  transform: rotate(calc(var(--polaroid-tilt) * 1deg));
+  transition:
+    transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  --polaroid-shadow-strength: var(--memo-shelf-polaroid-shadow-strength, 1.45);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65),
+    0 7px 14px -2px
+      rgba(
+        45,
+        32,
+        14,
+        calc(0.22 * var(--polaroid-shadow-strength))
+      ),
+    0 22px 38px -4px
+      rgba(
+        40,
+        28,
+        12,
+        calc(0.42 * var(--polaroid-shadow-strength))
+      );
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cardButton:hover,
+  .cardLink:hover {
+    z-index: 2;
+  }
+
+  .cardButton:hover .polaroid,
+  .cardLink:hover .polaroid {
+    transform: translateY(-6px) scale(1.03)
+      rotate(calc(var(--polaroid-tilt) * 0.5 * 1deg));
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.72),
+      0 10px 20px -2px
+        rgba(
+          45,
+          32,
+          14,
+          calc(0.28 * var(--polaroid-shadow-strength))
+        ),
+      0 30px 52px -6px
+        rgba(
+          40,
+          28,
+          12,
+          calc(0.52 * var(--polaroid-shadow-strength))
+        );
+  }
+}
+
+.cardButton:active .polaroid,
+.cardLink:active .polaroid {
+  transform: scale(0.98) rotate(calc(var(--polaroid-tilt) * 1deg));
+  transition-duration: 160ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .polaroid {
+    transition: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .cardButton:hover .polaroid,
+    .cardLink:hover .polaroid {
+      transform: rotate(calc(var(--polaroid-tilt) * 1deg));
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.65),
+        0 7px 14px -2px
+          rgba(
+            45,
+            32,
+            14,
+            calc(0.22 * var(--polaroid-shadow-strength))
+          ),
+        0 22px 38px -4px
+          rgba(
+            40,
+            28,
+            12,
+            calc(0.42 * var(--polaroid-shadow-strength))
+          );
+    }
+  }
+
+  .cardButton:active .polaroid,
+  .cardLink:active .polaroid {
+    transform: rotate(calc(var(--polaroid-tilt) * 1deg));
+  }
+}
+
+.tape {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 2;
+  width: min(50.4%, 4.5rem);
+  height: auto;
+  transform: translate(-50%, -46%);
+  pointer-events: none;
+}
+
+.photo {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 0;
+  backface-visibility: hidden;
+}
+
+.photoPlaceholder {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 0;
+  background: linear-gradient(
+    165deg,
+    rgba(255, 252, 245, 0.9) 0%,
+    rgba(200, 165, 110, 0.35) 42%,
+    rgba(110, 72, 38, 0.32) 100%
+  );
+}
+
+.photoPlaceholder::after {
+  content: "";
+  position: absolute;
+  inset: 12% 14% 16%;
+  border-radius: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(180, 120, 60, 0.45) 0%,
+    rgba(70, 42, 18, 0.55) 100%
+  );
+}
+
+.caption {
+  position: absolute;
+  left: 3%;
+  right: 3%;
+  bottom: 3%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+  min-height: 13%;
+  text-align: center;
+}
+
+.dateLine {
+  margin: 0;
+  max-width: 100%;
+  font-family: var(--font-serif-jp);
+  font-size: clamp(0.87rem, 4.2vw, 1.02rem);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  color: var(--shelf-paper-ink);
+}
+
+.dateSlash {
+  font-family: var(--font-serif-jp);
+}
+
+.drinkName {
+  margin: 0;
+  font-family: var(--font-serif-jp);
+  font-size: clamp(0.84rem, 3.9vw, 0.99rem);
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--shelf-paper-ink);
+}
+
+.empty {
+  margin: 0;
+  padding: clamp(2.5rem, 12vw, 3.5rem) 1rem;
+  text-align: center;
+  font-family: var(--font-serif-jp);
+  font-size: 0.82rem;
+  line-height: 1.85;
+  letter-spacing: 0.06em;
+  color: rgba(63, 54, 41, 0.72);
+}
+
+.pager {
+  margin-top: clamp(1.25rem, 5vw, 1.75rem);
+}
+
+.pagerNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.pagerLink,
+.pagerButton {
+  font-family: var(--font-serif-jp);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  color: rgba(63, 54, 41, 0.78);
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.pagerLink:hover,
+.pagerButton:hover:not(:disabled) {
+  color: rgba(63, 54, 41, 0.95);
+}
+
+.pagerButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

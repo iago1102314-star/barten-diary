@@ -1,46 +1,34 @@
+import type { DrinkId } from "@/lib/drinks/drink-catalog";
 import {
-  DRINK_CATEGORIES,
-  type DrinkId,
-} from "@/lib/drinks/drink-catalog";
+  DRINK_ASSETS,
+  drinkHasVisualAssets,
+  getDrinkThumbnailPath,
+  getDrinkThumbnailPathByName,
+  type RegisteredDrinkId,
+} from "@/lib/drinks/drink-assets";
 
 /**
- * public/assets/drinks/ に配置済みのファイル（{id}.webp）
- * メニューに銘柄を足したら、ここにも id を追加する
+ * @deprecated `DRINK_ASSETS` のキー集合。新規コードは `drinkHasVisualAssets` を使う。
  */
-export const DRINK_IMAGE_IDS = new Set<DrinkId>([
-  "old-fashioned",
-  "yamazaki-12",
-  "gin-tonic",
-  "espresso",
-  "bellini",
-  "irish-coffee",
-]);
+export const DRINK_IMAGE_IDS = new Set<DrinkId>(
+  Object.keys(DRINK_ASSETS) as RegisteredDrinkId[],
+);
 
-const DRINK_IMAGE_BY_NAME: Record<string, string> = {};
-
-for (const category of DRINK_CATEGORIES) {
-  for (const drink of category.drinks) {
-    const path = getDrinkImagePath(drink.id);
-    if (path) {
-      DRINK_IMAGE_BY_NAME[drink.name] = path;
-    }
-  }
-}
-
+/** @deprecated `getDrinkThumbnailPath` — 棚・カウンター用サムネ */
 export function getDrinkImagePath(
   drinkId: DrinkId | null | undefined,
 ): string | null {
-  if (!drinkId || !DRINK_IMAGE_IDS.has(drinkId)) return null;
-  return `/assets/drinks/${drinkId}.webp`;
+  return getDrinkThumbnailPath(drinkId);
 }
 
+/** @deprecated `getDrinkThumbnailPathByName` */
 export function getDrinkImagePathByName(
   drinkName: string | null | undefined,
 ): string | null {
-  if (!drinkName?.trim()) return null;
-  return DRINK_IMAGE_BY_NAME[drinkName.trim()] ?? null;
+  return getDrinkThumbnailPathByName(drinkName);
 }
 
+/** @deprecated `drinkHasVisualAssets` */
 export function drinkHasImage(drinkId: DrinkId): boolean {
-  return DRINK_IMAGE_IDS.has(drinkId);
+  return drinkHasVisualAssets(drinkId);
 }

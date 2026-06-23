@@ -1,0 +1,617 @@
+/**
+ * 日記詳細モック — 紙面トークン（後から PNG / テープ / フォント差し替え用）
+ * 参考: セピア調の手帳紙・途切れた罫線
+ */
+.paper {
+  --diary-paper-bg: #ebe2cf;
+  --diary-paper-bg-soft: #f0e9da;
+  --diary-paper-bg-deep: #e5d8bc;
+  --diary-paper-ink: #3f3629;
+  --diary-paper-ink-muted: #5c4f3d;
+  --diary-paper-ink-faint: #7a6b54;
+  --diary-paper-rule: rgba(139, 115, 78, 0.42);
+  --diary-paper-radius: 0;
+  --diary-paper-padding-x: clamp(1.35rem, 5.5vw, 1.75rem);
+  --diary-paper-padding-y: clamp(1.75rem, 6vw, 2.35rem);
+  --diary-paper-max-width: 26.5rem;
+  --diary-paper-texture-image: url("/assets/diary/paper.webp");
+  --diary-paper-texture-opacity: 0.18;
+  --diary-paper-texture-blend: multiply;
+  --diary-paper-texture-size: 360px auto;
+  --diary-paper-shadow:
+    0 1px 1px rgba(42, 30, 14, 0.045),
+    0 3px 10px rgba(42, 30, 14, 0.065),
+    0 10px 24px rgba(35, 24, 10, 0.055);
+  --diary-paper-border: 1px solid rgba(120, 92, 48, 0.18);
+  --diary-line-height: 2.08;
+  --diary-text-size: 0.96rem;
+  /* iPhone 間のずれを抑えるため lh/em ではなく rem から算出した固定行幅を使う */
+  --diary-line-stride: calc(var(--diary-text-size) * var(--diary-line-height));
+  --diary-date-rows: 1;
+  --diary-drink-block-rows: 9;
+  --diary-character-gap-rows: 1;
+  --diary-hand-underline-color: var(--diary-paper-ink);
+  --diary-hand-underline-thickness: 1px;
+  --diary-hand-underline-offset: 0.2em;
+  --diary-character-master-ink: #5a4333;
+  --diary-rule-baseline-shift: calc(var(--diary-line-stride) * 0.13);
+  --diary-rule-stroke: 0.55;
+  /* 罫線 — 全行同一パターンの繰り返し（手書きフォント前提） */
+  --diary-rule-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='32' preserveAspectRatio='none'%3E%3Cline x1='0' y1='31' x2='480' y2='31' stroke='%23a8926f' stroke-width='0.55' stroke-dasharray='14 10 5 13' stroke-linecap='round' opacity='0.52'/%3E%3C/svg%3E");
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: 100%;
+  max-width: var(--diary-paper-max-width);
+  margin-inline: auto;
+  padding: var(--diary-paper-padding-y) var(--diary-paper-padding-x);
+  border-radius: var(--diary-paper-radius);
+  border: var(--diary-paper-border);
+  background: linear-gradient(
+    180deg,
+    var(--diary-paper-bg-soft) 0%,
+    var(--diary-paper-bg) 12%,
+    var(--diary-paper-bg-deep) 100%
+  );
+  box-shadow: var(--diary-paper-shadow);
+  color: var(--diary-paper-ink);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.paperFullscreen {
+  --diary-paper-max-width: none;
+  --diary-paper-radius: 0;
+  --diary-paper-shadow: none;
+  --diary-paper-border: none;
+
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+  padding-bottom: calc(var(--diary-line-stride) * 1.1);
+}
+
+.paper::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: var(--diary-paper-texture-image);
+  background-repeat: repeat;
+  background-size: var(--diary-paper-texture-size);
+  opacity: var(--diary-paper-texture-opacity);
+  mix-blend-mode: var(--diary-paper-texture-blend);
+}
+
+.paper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 72px rgba(90, 62, 28, 0.06);
+  background: radial-gradient(
+    ellipse 115% 95% at 50% 42%,
+    transparent 58%,
+    rgba(100, 72, 36, 0.04) 100%
+  );
+}
+
+.paper > *:not(.paperCorners) {
+  position: relative;
+  z-index: 1;
+}
+
+.paperCorners {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.cornerTL,
+.cornerTR,
+.cornerBR,
+.cornerBL {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+}
+
+.cornerTL {
+  top: 0;
+  left: 0;
+  background: radial-gradient(
+    circle at 0 0,
+    rgba(52, 36, 14, 0.22) 0%,
+    rgba(52, 36, 14, 0.08) 42%,
+    transparent 68%
+  );
+}
+
+.cornerTL::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 11px;
+  height: 11px;
+  background: linear-gradient(
+    145deg,
+    rgba(38, 26, 10, 0.28) 0%,
+    rgba(210, 188, 150, 0.12) 100%
+  );
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  box-shadow: 1px 1px 0 rgba(72, 52, 24, 0.12);
+}
+
+.cornerTR {
+  top: 0;
+  right: 0;
+  background: radial-gradient(
+    circle at 100% 0,
+    rgba(52, 36, 14, 0.18) 0%,
+    rgba(52, 36, 14, 0.06) 40%,
+    transparent 66%
+  );
+}
+
+.cornerTR::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(
+    215deg,
+    rgba(42, 28, 12, 0.22) 0%,
+    rgba(215, 195, 158, 0.1) 100%
+  );
+  clip-path: polygon(100% 0, 0 0, 100% 100%);
+}
+
+.cornerBR {
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+    circle at 100% 100%,
+    rgba(48, 34, 14, 0.2) 0%,
+    rgba(48, 34, 14, 0.07) 44%,
+    transparent 70%
+  );
+}
+
+.cornerBR::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(
+    325deg,
+    rgba(40, 28, 11, 0.24) 0%,
+    rgba(200, 178, 142, 0.08) 100%
+  );
+  clip-path: polygon(100% 100%, 100% 0, 0 100%);
+  box-shadow: -1px -1px 0 rgba(68, 48, 20, 0.1);
+}
+
+.cornerBL {
+  bottom: 0;
+  left: 0;
+  background: radial-gradient(
+    circle at 0 100%,
+    rgba(50, 35, 14, 0.19) 0%,
+    rgba(50, 35, 14, 0.07) 42%,
+    transparent 68%
+  );
+}
+
+.cornerBL::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(
+    35deg,
+    rgba(44, 30, 12, 0.2) 0%,
+    rgba(208, 186, 148, 0.09) 100%
+  );
+  clip-path: polygon(0 100%, 100% 100%, 0 0);
+}
+
+.header {
+  margin: 0;
+}
+
+.dateZone {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(var(--diary-date-rows) * var(--diary-line-stride));
+  display: flex;
+  align-items: flex-end;
+}
+
+.dateLine {
+  margin: 0;
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  font-family: var(--font-serif-jp);
+  font-size: 0.92rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  line-height: 1.45;
+  color: var(--diary-paper-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--diary-hand-underline-color);
+  text-decoration-thickness: var(--diary-hand-underline-thickness);
+  text-underline-offset: var(--diary-hand-underline-offset);
+}
+
+.dateSlash {
+  font-family: var(--font-serif-jp);
+}
+
+.mainRuledSection {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.drinkBlockZone {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(var(--diary-drink-block-rows) * var(--diary-line-stride));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(var(--diary-line-stride) * 0.02);
+  padding:
+    calc(var(--diary-line-stride) * 0.08) 0
+    calc(var(--diary-line-stride) * 0.06);
+}
+
+.drinkPhotoWrap {
+  flex: 1 1 0;
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.drink {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.drinkPhoto {
+  position: relative;
+  width: min(81%, 18.95rem);
+  padding: 3% 3% 9% 3%;
+  background: #faf6ee;
+  transform-origin: center center;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65),
+    0 6px 12px -2px rgba(45, 32, 14, 0.15),
+    0 18px 32px -6px rgba(40, 28, 12, 0.28);
+}
+
+/* 白・茶マスキング共通 — 位置・大きさは写真に依存せず固定 */
+.drinkTape {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 2;
+  width: min(50.4%, 7.5rem);
+  height: auto;
+  transform: translate(-50%, -46%);
+  pointer-events: none;
+}
+
+.drinkFrame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 2.65;
+  border-radius: 0;
+  background: linear-gradient(
+    165deg,
+    rgba(255, 252, 245, 0.9) 0%,
+    rgba(200, 165, 110, 0.35) 42%,
+    rgba(110, 72, 38, 0.32) 100%
+  );
+}
+
+.drinkFrame::after {
+  content: "";
+  position: absolute;
+  inset: 12% 14% 16%;
+  border-radius: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(180, 120, 60, 0.45) 0%,
+    rgba(70, 42, 18, 0.55) 100%
+  );
+}
+
+.drinkImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 2.65;
+  object-fit: cover;
+  border-radius: 0;
+}
+
+.drinkNameLine {
+  flex-shrink: 0;
+  margin: 0;
+  transform: translateY(calc(var(--diary-line-stride) * -0.12));
+  font-size: calc(0.88rem * 1.2);
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-decoration: underline;
+  text-decoration-color: var(--diary-hand-underline-color);
+  text-decoration-thickness: var(--diary-hand-underline-thickness);
+  text-underline-offset: var(--diary-hand-underline-offset);
+  color: var(--diary-paper-ink);
+}
+
+.body {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.body .paragraph {
+  white-space: pre-line;
+}
+
+.ruledBlock {
+  box-sizing: border-box;
+  width: 100%;
+  font-size: var(--diary-text-size);
+  letter-spacing: 0.05em;
+  color: var(--diary-paper-ink);
+  line-height: var(--diary-line-height);
+  background-image: var(--diary-rule-image);
+  background-size: 100% var(--diary-line-stride);
+  background-repeat: repeat-y;
+  background-origin: border-box;
+  background-clip: border-box;
+  background-position: 0
+    calc(
+      var(--diary-line-stride) - 1px - var(--diary-rule-baseline-shift)
+    );
+}
+
+.paragraph {
+  margin: 0;
+  padding-top: 0;
+}
+
+.paragraph + .paragraph {
+  padding-top: var(--diary-line-stride);
+}
+
+.editDimmedInner {
+  opacity: 0.22;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 0.35s ease;
+}
+
+.editSepiaScreenTop,
+.editSepiaScreenBottom {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  background: rgba(92, 64, 36, 0.5);
+  pointer-events: none;
+}
+
+.editSepiaScreenTop {
+  top: 0;
+}
+
+.editSepiaScreenBottom {
+  bottom: 0;
+}
+
+.bodyEditWrap {
+  position: relative;
+  z-index: 2;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.bodyEditForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.bodyTextarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  outline: none;
+  overflow: hidden;
+  resize: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.bodyTextarea:focus {
+  outline: none;
+}
+
+.bodyEditError {
+  margin: calc(var(--diary-line-stride) * 0.35) 0 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  line-height: 1.55;
+  color: #8b3a32;
+}
+
+.bodyEditActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: calc(var(--diary-line-stride) * 0.55);
+  padding-top: calc(var(--diary-line-stride) * 0.15);
+}
+
+.bodyEditSave,
+.bodyEditCancel {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid rgba(120, 92, 48, 0.32);
+  border-radius: 0;
+  background: rgba(248, 241, 226, 0.45);
+  font: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bodyEditSave {
+  color: var(--diary-paper-ink);
+}
+
+.bodyEditSave:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.bodyEditCancel {
+  color: var(--diary-paper-ink-muted);
+  background: rgba(248, 241, 226, 0.2);
+}
+
+.bodyEditCancel:active,
+.bodyEditSave:not(:disabled):active {
+  background: rgba(235, 224, 200, 0.55);
+}
+
+.characterFrame {
+  --character-frame-overhang: calc(var(--diary-line-stride) * 0.22);
+  --character-ink: var(--diary-paper-ink);
+  --character-caption-size: 0.84rem;
+  --character-frame-line-primary: var(--character-ink);
+  --character-frame-line-secondary: color-mix(in srgb, var(--character-ink) 52%, transparent);
+  --character-frame-line-weight: 0.5px;
+  --character-frame-line-gap: 1.5px;
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: calc(
+    var(--diary-character-gap-rows) * var(--diary-line-stride) -
+      var(--character-frame-overhang)
+  );
+  padding: var(--character-frame-overhang) 0 0;
+  border-top: var(--character-frame-line-weight) solid
+    var(--character-frame-line-primary);
+  border-bottom: none;
+  border-left: none;
+  border-right: none;
+  box-shadow: inset 0 var(--character-frame-line-gap) 0 0
+    var(--character-frame-line-secondary);
+}
+
+.characterFrame[data-character="master"] {
+  --character-ink: var(--diary-character-master-ink);
+  --character-caption-size: 0.8rem;
+  --character-caption-line-height: calc(var(--diary-line-stride) * 1.07);
+}
+
+.characterFrame[data-character="master"] .characterSignature {
+  right: 0.5rem;
+  transform: translate(0.1rem, 58%) rotate(-2deg);
+}
+
+.characterInner {
+  padding: 0 0 var(--character-frame-overhang);
+}
+
+.characterInner .paragraph {
+  white-space: pre-line;
+}
+
+.characterCaption {
+  font-size: var(--character-caption-size);
+  font-weight: 400;
+  letter-spacing: 0.07em;
+  line-height: var(--character-caption-line-height, var(--diary-line-height));
+  color: var(--character-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.characterSignature {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0;
+  z-index: 3;
+  margin: 0;
+  padding: 0 0.22rem;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateY(52%) rotate(-2deg);
+  transform-origin: 100% 50%;
+  color: var(--diary-paper-ink-muted);
+}
+
+.characterSignatureDash {
+  font-size: calc(0.92rem * 1.4);
+  letter-spacing: 0.08em;
+  color: var(--diary-paper-ink-faint);
+}
+
+.characterSignatureName {
+  font-size: calc(1.42rem * 1.4);
+  line-height: 1;
+  color: var(--diary-paper-ink);
+}

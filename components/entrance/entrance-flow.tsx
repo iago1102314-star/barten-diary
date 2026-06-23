@@ -4,7 +4,7 @@ import { saveAiDiary } from "@/app/(app)/diaries/actions";
 import { CounterScene } from "@/components/entrance/counter-scene";
 import { DrinkRecordIntroPanel } from "@/components/entrance/drink-record-intro-panel";
 import { RecordCounterScene } from "@/components/entrance/record-counter-scene";
-import { MasterHeadDevTapZone } from "@/components/entrance/master-head-dev-tap";
+import { DevPostRecordSkipButton } from "@/components/entrance/dev-post-record-skip-button";
 import { EnteringReveal } from "@/components/entrance/entering-reveal";
 import { GeneratingPanel } from "@/components/entrance/generating-panel";
 import { LeavingScreen } from "@/components/entrance/leaving-screen";
@@ -157,6 +157,15 @@ const sceneExitInstant = {
 
 type EntryTransition = "idle" | "doorExit" | "toMemories" | "steadyFadeIn";
 
+const DEV_POST_RECORD_SKIP_STATES = new Set<EntranceState>([
+  "counterReveal",
+  "moodPrompt",
+  "moodSelect",
+  "pastBottleSelect",
+  "drinkServed",
+  "recording",
+]);
+
 const COUNTER_SCENE_STATES = new Set<EntranceState>([
   "counterReveal",
   "moodPrompt",
@@ -198,6 +207,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   );
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const declineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const postRecordExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const declineOriginRef = useRef<DeclineOrigin>("moodSelect");
   const [declineBlackoutReady, setDeclineBlackoutReady] = useState(false);
   const [declineFarewellExiting, setDeclineFarewellExiting] = useState(false);
@@ -253,6 +263,9 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     DEFAULT_MEMORIES_LAUNCH,
   );
   const [alleyDiaryFadeOut, setAlleyDiaryFadeOut] = useState(false);
+  const [alleyHomeFadeOut, setAlleyHomeFadeOut] = useState(false);
+  const [nightSaveTick, setNightSaveTick] = useState(0);
+  const [devSkipLoading, setDevSkipLoading] = useState(false);
 
   const unlockBarAudio = useCallback(() => {
     setAudioUnlocked((unlocked) => {
@@ -387,7 +400,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const drinkImageSrc = getDrinkImagePath(pickedDrink?.id);
 
   const clearTimers = useCallback(() => {
-    for (const ref of [fadeTimerRef, declineTimerRef]) {
+    for (const ref of [fadeTimerRef, declineTimerRef, postRecordExitTimerRef]) {
       if (ref.current) {
         clearTimeout(ref.current);
         ref.current = null;
@@ -411,7 +424,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     setAlleyOutcome(null);
   }, []);
 
-  const resetToAlley = useCallback(() => {
+  const returnToHomeSteady = useCallback(() => {
     clearTimers();
     session.reset();
     setPickedDrink(null);
@@ -420,15 +433,23 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     resetEntryOutsideStarted();
     setMemoriesLaunch(DEFAULT_MEMORIES_LAUNCH);
     setAlleyDiaryFadeOut(false);
+    setAlleyHomeFadeOut(false);
     setDeclineBlackoutReady(false);
     setDeclineFarewellExiting(false);
+    setSkipEntryEntrance(true);
     setEntranceState("entry");
+    setEntryTransition("steadyFadeIn");
     audio.stopJazz();
-    audio.startOutside(
-      BAR_AUDIO_LEVELS.outside.alley,
-      BAR_AUDIO_TIMING.entryOutsideFadeMs,
-    );
   }, [clearTimers, session, audio, resetNightRefs, resetEntryOutsideStarted]);
+
+  const handleDismissAlley = useCallback(() => {
+    if (alleyHomeFadeOut) return;
+    setAlleyHomeFadeOut(true);
+  }, [alleyHomeFadeOut]);
+
+  const handleAlleyHomeFadeOutComplete = useCallback(() => {
+    returnToHomeSteady();
+  }, [returnToHomeSteady]);
 
   const attemptGoToAlley = useCallback(() => {
     if (!leaveAnimationDoneRef.current) return;
@@ -568,6 +589,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         console.error("Background save failed:", result.error);
         lastSavedTranscriptRef.current = null;
         backgroundWorkRef.current = "failed";
+        setNightSaveTick((tick) => tick + 1);
         if (leaveAnimationDoneRef.current) {
           attemptGoToAlley();
         }
@@ -576,6 +598,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
       savedDiaryIdRef.current = result.diaryId;
       backgroundWorkRef.current = "saved";
+      setNightSaveTick((tick) => tick + 1);
       router.refresh();
       if (leaveAnimationDoneRef.current) {
         attemptGoToAlley();
@@ -598,16 +621,47 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     if (session.generationStatus !== "error") return;
 
     backgroundWorkRef.current = "failed";
+    setNightSaveTick((tick) => tick + 1);
     if (leaveAnimationDoneRef.current) {
       attemptGoToAlley();
     }
   }, [session.generationStatus, session.isDevSimulated, attemptGoToAlley]);
 
-  const handleDevSkipNight = () => {
-    const drink = session.simulateDevNight();
-    if (!drink) return;
-    setPickedDrink(drink);
-    setPastMasterLine(null);
+  useEffect(() => {
+    if (entranceState !== "postRecordExitBlack") return;
+    if (!leaveAnimationDoneRef.current) return;
+    attemptGoToAlley();
+  }, [entranceState, nightSaveTick, session.generationStatus, attemptGoToAlley]);
+
+  const handleDevSkipToPostRecord = async () => {
+    if (devSkipLoading) return;
+
+    setDevSkipLoading(true);
+    try {
+      const drink = await session.prepareDevSkipFromLatestDiary();
+      if (!drink) return;
+
+      clearTimers();
+      setMoodSelectExitActive(false);
+      setDrinkEnteringReveal(false);
+      setPickedDrink(drink);
+      setPastMasterLine(null);
+      lastSavedTranscriptRef.current = null;
+      saveExpectedRef.current = true;
+      farewellStartedRef.current = true;
+      backgroundWorkRef.current = "pending";
+      savedDiaryIdRef.current = null;
+      leaveAnimationDoneRef.current = false;
+
+      unlockBarAudio();
+      setEntranceState("postRecordThanks");
+      audio.startJazz(
+        BAR_AUDIO_LEVELS.jazz.counter,
+        BAR_AUDIO_TIMING.jazzEntryFadeMs,
+      );
+    } finally {
+      setDevSkipLoading(false);
+    }
   };
 
   const handleDeclineNight = () => {
@@ -678,11 +732,15 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     setEntryTransition("toMemories");
   };
 
+  const handleOpenDiaryPaperMock = () => {
+    if (entryTransition !== "idle") return;
+    router.push("/lab/diary-paper");
+  };
+
   const handleOpenSavedDiary = (diaryId: string) => {
     setMemoriesLaunch({
       backdrop: "afterNight",
       initialDiaryId: diaryId,
-      returnTo: "alley",
     });
     setAlleyDiaryFadeOut(true);
   };
@@ -693,9 +751,8 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleBackFromMemories = () => {
-    if (memoriesLaunch.returnTo === "alley") {
-      setMemoriesLaunch(DEFAULT_MEMORIES_LAUNCH);
-      setEntranceState("alley");
+    if (memoriesLaunch.backdrop === "afterNight") {
+      returnToHomeSteady();
       return;
     }
     handleBackToEntry();
@@ -798,9 +855,23 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handlePostRecordThanksComplete = () => {
-    audio.stopJazz();
-    audio.startOutside(BAR_AUDIO_LEVELS.outside.leaving);
+    if (postRecordExitTimerRef.current) {
+      clearTimeout(postRecordExitTimerRef.current);
+    }
+
+    audio.stopJazz(POST_RECORD_EXIT_TUNING.jazzFadeOutMs);
     setEntranceState("postRecordExitBlack");
+
+    postRecordExitTimerRef.current = setTimeout(() => {
+      postRecordExitTimerRef.current = null;
+      audio.playDoor({
+        volumeScale: POST_RECORD_EXIT_TUNING.doorVolumeScale,
+      });
+      audio.startOutside(
+        BAR_AUDIO_LEVELS.outside.leaving,
+        POST_RECORD_EXIT_TUNING.outsideFadeInMs,
+      );
+    }, POST_RECORD_EXIT_TUNING.doorDelayMs);
   };
 
   const handlePostRecordExitComplete = () => {
@@ -855,6 +926,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
           <NightEntryScreen
             onEnterCounter={handleEnterCounter}
             onOpenMemories={handleOpenMemories}
+            onOpenDiaryPaperMock={handleOpenDiaryPaperMock}
             onBackgroundTap={handleBackgroundTapForOutside}
             skipImageEntrance={skipEntryEntrance}
             steadyFadeIn={entryTransition === "steadyFadeIn"}
@@ -986,7 +1058,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         <motion.div key="memories" {...sceneExitInstant}>
           <MemoriesScreen
             onBack={handleBackFromMemories}
-            backdrop={memoriesLaunch.backdrop}
             initialDiaryId={memoriesLaunch.initialDiaryId}
           />
         </motion.div>
@@ -1028,14 +1099,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   if (entranceState === "postRecordExitBlack") {
     return (
       <SceneFrame className="bg-black" atmosphere={false}>
-        <PostRecordExitBlack
-          onDoor={() =>
-            audio.playDoor({
-              volumeScale: POST_RECORD_EXIT_TUNING.doorVolumeScale,
-            })
-          }
-          onComplete={handlePostRecordExitComplete}
-        />
+        <PostRecordExitBlack onComplete={handlePostRecordExitComplete} />
       </SceneFrame>
     );
   }
@@ -1056,10 +1120,12 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         <motion.div key="alley" {...sceneExit}>
           <NightAlleyScreen
             outcome={alleyOutcome}
-            onDismiss={resetToAlley}
+            onDismiss={handleDismissAlley}
             onOpenDiary={handleOpenSavedDiary}
             diaryFadeOut={alleyDiaryFadeOut}
             onDiaryFadeOutComplete={handleAlleyDiaryFadeOutComplete}
+            homeFadeOut={alleyHomeFadeOut}
+            onHomeFadeOutComplete={handleAlleyHomeFadeOutComplete}
           />
         </motion.div>
       </AnimatePresence>
@@ -1181,7 +1247,12 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
               />
             )}
 
-            <MasterHeadDevTapZone onTripleTap={handleDevSkipNight} />
+            {DEV_POST_RECORD_SKIP_STATES.has(entranceState) && (
+              <DevPostRecordSkipButton
+                onClick={() => void handleDevSkipToPostRecord()}
+                loading={devSkipLoading}
+              />
+            )}
 
             <div
               className={`pointer-events-none absolute inset-0 flex flex-col ${

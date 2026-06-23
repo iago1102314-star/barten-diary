@@ -1,20 +1,9 @@
+import { getRequestOriginFromRequest } from "@/lib/auth/request-origin";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-/** Vercel / プロキシ越しでも正しい origin を返す */
-function getRequestOrigin(request: Request): string {
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const forwardedProto = request.headers.get("x-forwarded-proto") ?? "https";
-
-  if (forwardedHost) {
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-
-  return new URL(request.url).origin;
-}
-
 export async function GET(request: Request) {
-  const origin = getRequestOrigin(request);
+  const origin = getRequestOriginFromRequest(request);
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/";
@@ -26,6 +15,13 @@ export async function GET(request: Request) {
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`);
     }
+
+    const loginUrl = new URL(`${origin}/login`);
+    loginUrl.searchParams.set("error", "auth");
+    if (process.env.NODE_ENV === "development") {
+      loginUrl.searchParams.set("detail", error.message);
+    }
+    return NextResponse.redirect(loginUrl.toString());
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth`);

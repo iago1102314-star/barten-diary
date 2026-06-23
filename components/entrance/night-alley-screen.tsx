@@ -6,7 +6,7 @@ import { SceneFrame } from "@/components/entrance/scene-frame";
 import { BarButton } from "@/components/ui/bar-button";
 import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
 import type { NightAlleyOutcome } from "@/lib/entrance/night-outcome";
-import { MEMORIES_EXIT_FADE_SEC } from "@/lib/entrance/start-entry-timing";
+import { MEMORIES_EXIT_FADE_SEC, MEMORIES_RETURN_FADE_OUT_SEC } from "@/lib/entrance/start-entry-timing";
 import { motion } from "motion/react";
 
 type NightAlleyScreenProps = {
@@ -16,6 +16,9 @@ type NightAlleyScreenProps = {
   /** 記録を開く — ホーム「メモを見る」と同じ暗転 */
   diaryFadeOut?: boolean;
   onDiaryFadeOutComplete?: () => void;
+  /** また今度読む — ホーム定常へ暗転 */
+  homeFadeOut?: boolean;
+  onHomeFadeOutComplete?: () => void;
 };
 
 const outcomeTextClass =
@@ -28,6 +31,8 @@ export function NightAlleyScreen({
   onOpenDiary,
   diaryFadeOut = false,
   onDiaryFadeOutComplete,
+  homeFadeOut = false,
+  onHomeFadeOutComplete,
 }: NightAlleyScreenProps) {
   return (
     <SceneFrame>
@@ -38,7 +43,7 @@ export function NightAlleyScreen({
           {outcome.kind === "saved" && (
             <>
               <Reveal delay={0.7} duration={1.7}>
-                <p className={outcomeTextClass}>今夜の記録を残しました。</p>
+                <p className={outcomeTextClass}>今夜のメモを残しました。</p>
               </Reveal>
               <Reveal
                 delay={1.8}
@@ -61,7 +66,7 @@ export function NightAlleyScreen({
           {outcome.kind === "devSaved" && (
             <>
               <Reveal delay={0.7} duration={1.7}>
-                <p className={outcomeTextClass}>今夜の記録を残しました。</p>
+                <p className={outcomeTextClass}>今夜のメモを残しました。</p>
               </Reveal>
               <Reveal delay={1.3}>
                 <p className="text-[10px] tracking-[0.1em] text-stone-500/60">
@@ -99,13 +104,20 @@ export function NightAlleyScreen({
         </div>
       </div>
 
-      {diaryFadeOut && (
+      {(diaryFadeOut || homeFadeOut) && (
         <motion.div
           className="absolute inset-0 z-[60] bg-black"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: MEMORIES_EXIT_FADE_SEC, ease: EASE_DRIFT }}
-          onAnimationComplete={onDiaryFadeOutComplete}
+          transition={{
+            duration: homeFadeOut
+              ? MEMORIES_RETURN_FADE_OUT_SEC
+              : MEMORIES_EXIT_FADE_SEC,
+            ease: EASE_DRIFT,
+          }}
+          onAnimationComplete={
+            homeFadeOut ? onHomeFadeOutComplete : onDiaryFadeOutComplete
+          }
         />
       )}
     </SceneFrame>

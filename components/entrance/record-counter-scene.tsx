@@ -77,7 +77,7 @@ export function RecordCounterScene({
 }: RecordCounterSceneProps) {
   const key = placementKey ?? resolveRecordDrinkPlacementKey(drinkId);
   const drinkPlacement = getRecordDrinkPlacement(key);
-  const drinkSrc = getRecordDrinkImagePath();
+  const drinkSrc = getRecordDrinkImagePath(drinkId);
 
   return (
     <div className="absolute inset-0">

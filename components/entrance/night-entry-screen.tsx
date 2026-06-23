@@ -1,28 +1,15 @@
 "use client";
 
-import { Haze } from "@/components/entrance/atmosphere";
-import { GlowAnchorMarker } from "@/components/entrance/glow-anchor-marker";
 import { SceneFrame } from "@/components/entrance/scene-frame";
+import { LoadingGateMessage } from "@/components/entrance/loading-gate-message";
+import {
+  StartEntryAlleyLayer,
+  START_ENTRY_ALLEY_KEN_BURNS,
+} from "@/components/entrance/start-entry-alley-layer";
 import { BarButton } from "@/components/ui/bar-button";
-import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
-import { resolveLampGlowRgb } from "@/lib/entrance/lamp-glow-color";
-import {
-  getLampBreatheClassName,
-  getLampBreatheStyleFromProfile,
-} from "@/lib/entrance/lamp-glow-breathe";
-import {
-  interpolateStartGlowVisual,
-  pairStartGlowsById,
-} from "@/lib/entrance/lamp-glow-interpolate";
-import { lampGlowCenteredLayoutStyle } from "@/lib/entrance/lamp-glow-position";
-import {
-  buildBokehGlowBackground,
-  bokehOrbElementOpacity,
-  buildLampGlowBackground,
-  lampGlowElementOpacity,
-} from "@/lib/entrance/lamp-glow-visual";
+import { SHOW_LOADING_GATE_MESSAGE_ON_HOME } from "@/lib/entrance/loading-gate-message-tuning";
 import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
-import { getStartLampBreatheProfile } from "@/lib/entrance/start-lamp-glow-breathe";
+import { isNonProd } from "@/lib/env/app-env";
 import {
   DOOR_EXIT_DURATION_SEC,
   DOOR_EXIT_IMAGE_ZOOM_SCALE,
@@ -39,21 +26,18 @@ import {
   STEADY_HOME_FADE_IN_SEC,
 } from "@/lib/entrance/start-entry-timing";
 import {
-  SHOW_START_BOKEH_ONLY_POSITION_MARKERS,
   START_BOKEH_BACKGROUND_OPACITY,
   START_BOKEH_LAMP_GLOWS,
   START_BOKEH_ONLY_LAMP_GLOWS,
   type StartBokehLampGlowConfig,
 } from "@/lib/entrance/start-bokeh-lamp-glows";
 import {
-  SHOW_START_LAMP_GLOW_DEBUG_MARKERS,
-  SHOW_START_LAMP_GLOW_LIGHT,
   START_LAMP_GLOWS,
   type StartLampGlowConfig,
 } from "@/lib/entrance/start-lamp-glows";
+import { SHOW_LOADING_GATE_LIGHT_ORDER_MARKERS } from "@/lib/entrance/loading-gate-light-sequence";
 import { motion } from "motion/react";
-import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // ─── 開発用フラグ ──────────────────────────────────────────────────────────────
 /** true にするとボケ入場画面で止まる（デザイン確認用） */
@@ -66,128 +50,15 @@ const TITLE_DELAY_MS = START_ENTRY_TITLE_DELAY_MS;
 const BUTTONS_DELAY_MS = START_ENTRY_BUTTONS_DELAY_MS;
 
 // ─── Ken Burns ────────────────────────────────────────────────────────────────
-const ALLEY_KEN_BURNS = {
-  initial: { scale: 1.12, x: -10 },
-  animate: { scale: 1, x: 0 },
-  transition: {
-    scale: { duration: 16, ease: "easeOut" as const },
-    x: { duration: 16, ease: "easeOut" as const },
-  },
-} as const;
+const ALLEY_KEN_BURNS = START_ENTRY_ALLEY_KEN_BURNS;
 
 export type EntryScreenPhase = "bokeh" | "revealing" | "normal";
-
-function BokehOnlyOrb({
-  glow,
-  fade = 1,
-}: {
-  glow: StartBokehLampGlowConfig;
-  fade?: number;
-}) {
-  const rgb = resolveLampGlowRgb(glow.tone, glow.colorRgb);
-  const clampedFade = Math.max(0, Math.min(1, fade));
-  const intensity = Math.min(3, glow.intensity * clampedFade);
-  return (
-    <div
-      className="pointer-events-none absolute rounded-full"
-      style={{
-        ...lampGlowCenteredLayoutStyle(
-          glow.offsetX,
-          glow.offsetY,
-          glow.size,
-          glow.ratio,
-        ),
-        background: buildBokehGlowBackground(rgb, intensity),
-        opacity: bokehOrbElementOpacity(intensity) * clampedFade,
-        mixBlendMode: "screen",
-        filter: "blur(2px)",
-      }}
-      aria-hidden
-    />
-  );
-}
-
-/** ペア7灯 — ボケ→定常を progress (0〜1) で連続補間。背景 Ken Burns と同じ座標系 */
-function PairedStartEntranceGlow({
-  bokeh,
-  steady,
-  progress,
-  enableBreathe = false,
-}: {
-  bokeh: StartBokehLampGlowConfig;
-  steady: StartLampGlowConfig;
-  progress: number;
-  enableBreathe?: boolean;
-}) {
-  const visual = interpolateStartGlowVisual(bokeh, steady, progress);
-  const intensity = Math.min(3, visual.intensity);
-  const layoutStyle = lampGlowCenteredLayoutStyle(
-    visual.offsetX,
-    visual.offsetY,
-    visual.size,
-    visual.ratio,
-  );
-  const blurFilter =
-    visual.blurPx > 0 ? `blur(${visual.blurPx}px)` : undefined;
-  const breatheProfile = enableBreathe
-    ? getStartLampBreatheProfile(steady.anchor)
-    : undefined;
-
-  if (breatheProfile) {
-    return (
-      <div
-        className={`pointer-events-none absolute rounded-full ${getLampBreatheClassName(breatheProfile.variant)}`}
-        style={{
-          ...layoutStyle,
-          background: buildLampGlowBackground(visual.rgb, intensity),
-          mixBlendMode: "screen",
-          filter: blurFilter,
-          ...getLampBreatheStyleFromProfile(breatheProfile, intensity),
-        }}
-        aria-hidden
-      />
-    );
-  }
-
-  const bokehWeight = 1 - visual.steadyWeight;
-  const lampWeight = visual.steadyWeight;
-
-  return (
-    <div
-      className="pointer-events-none absolute rounded-full"
-      style={{
-        ...layoutStyle,
-        filter: blurFilter,
-      }}
-      aria-hidden
-    >
-      {bokehWeight > 0.001 && (
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: buildBokehGlowBackground(visual.rgb, intensity),
-            opacity: bokehWeight * bokehOrbElementOpacity(intensity),
-            mixBlendMode: "screen",
-          }}
-        />
-      )}
-      {lampWeight > 0.001 && (
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: buildLampGlowBackground(visual.rgb, intensity),
-            opacity: lampWeight * lampGlowElementOpacity(intensity),
-            mixBlendMode: "screen",
-          }}
-        />
-      )}
-    </div>
-  );
-}
 
 type NightEntryScreenProps = {
   onEnterCounter: () => void;
   onOpenMemories: () => void;
+  /** 日記詳細デザインモック（本番以外） */
+  onOpenDiaryPaperMock?: () => void;
   /** 背景タップ — 路地 BGM 開始（ボタン押下は対象外） */
   onBackgroundTap?: () => void;
   skipImageEntrance?: boolean;
@@ -215,6 +86,7 @@ type NightEntryScreenProps = {
 export function NightEntryScreen({
   onEnterCounter,
   onOpenMemories,
+  onOpenDiaryPaperMock,
   onBackgroundTap,
   skipImageEntrance = false,
   steadyFadeIn = false,
@@ -230,9 +102,6 @@ export function NightEntryScreen({
   onPhaseChange,
   freezeKenBurns = false,
 }: NightEntryScreenProps) {
-  const showMarkers = SHOW_START_LAMP_GLOW_DEBUG_MARKERS;
-  const showBokehOnlyMarkers = SHOW_START_BOKEH_ONLY_POSITION_MARKERS;
-  const showGlow = SHOW_START_LAMP_GLOW_LIGHT || showMarkers;
   const interactionLocked = doorExiting || memoriesFadeOut;
 
   const [phase, setPhase] = useState<EntryScreenPhase>(
@@ -252,11 +121,6 @@ export function NightEntryScreen({
     }
     onBackgroundTap?.();
   };
-
-  const glowPairs = useMemo(
-    () => pairStartGlowsById(bokehLampGlows, steadyLampGlows),
-    [bokehLampGlows, steadyLampGlows],
-  );
 
   useEffect(() => {
     onPhaseChange?.(phase);
@@ -306,7 +170,6 @@ export function NightEntryScreen({
   }, [phase]);
 
   const isNormal = phase === "normal";
-  const revealDuration = REVEAL_MS / 1000;
   const entranceProgress = skipImageEntrance
     ? 1
     : phase === "bokeh"
@@ -315,26 +178,25 @@ export function NightEntryScreen({
         ? revealProgress
         : 1;
   const bokehOnlyFade = Math.max(0, 1 - entranceProgress);
-  const showAnchoredGlows = showGlow && SHOW_START_LAMP_GLOW_LIGHT;
   const isSteadyReturn = steadyFadeIn && skipImageEntrance;
   const showUi = isNormal && !interactionLocked;
 
   const titleTransition = isSteadyReturn
-    ? { duration: STEADY_HOME_FADE_IN_SEC, delay: 0, ease: EASE_DRIFT }
+    ? { duration: 0 }
     : {
         duration: interactionLocked ? 0.35 : 1.2,
         delay: showUi ? TITLE_DELAY_MS / 1000 : 0,
       };
 
   const buttonsTransition = isSteadyReturn
-    ? { duration: STEADY_HOME_FADE_IN_SEC, delay: 0, ease: EASE_DRIFT }
+    ? { duration: 0 }
     : {
         duration: interactionLocked ? 0.35 : 1.4,
         delay: showUi ? BUTTONS_DELAY_MS / 1000 : 0,
       };
 
   const kenBurnsMotion =
-    doorExiting || freezeKenBurns
+    doorExiting || freezeKenBurns || skipImageEntrance || isSteadyReturn
       ? { initial: false as const, animate: { scale: 1, x: 0 } }
       : ALLEY_KEN_BURNS;
 
@@ -344,11 +206,25 @@ export function NightEntryScreen({
     }
   };
 
+  const steadyFadeCompletedRef = useRef(false);
+
+  const finishSteadyFadeIn = () => {
+    if (steadyFadeCompletedRef.current) return;
+    steadyFadeCompletedRef.current = true;
+    onSteadyFadeInComplete?.();
+  };
+
   const handleSteadyFadeInComplete = () => {
     if (isSteadyReturn) {
-      onSteadyFadeInComplete?.();
+      finishSteadyFadeIn();
     }
   };
+
+  useEffect(() => {
+    if (!isSteadyReturn) {
+      steadyFadeCompletedRef.current = false;
+    }
+  }, [isSteadyReturn]);
 
   return (
     <SceneFrame onPointerDown={handleBackgroundTap}>
@@ -368,101 +244,29 @@ export function NightEntryScreen({
         onAnimationComplete={handleSceneAnimationComplete}
       >
         <motion.div
-          className="absolute inset-0"
-          initial={isSteadyReturn ? { opacity: 0 } : false}
+          className="pointer-events-none absolute inset-0"
+          initial={false}
           animate={{ opacity: 1 }}
-          transition={
-            isSteadyReturn
-              ? { duration: STEADY_HOME_FADE_IN_SEC, ease: EASE_DRIFT }
-              : { duration: 0 }
-          }
+          transition={{ duration: 0 }}
         >
-        <motion.div className="absolute inset-0" {...kenBurnsMotion}>
-          <motion.div
-            className="absolute inset-0"
-            initial={
-              skipImageEntrance ? false : { opacity: START_BOKEH_BACKGROUND_OPACITY }
-            }
-            animate={{ opacity: backgroundOpacity }}
-            transition={
-              devBackgroundOpacity != null ||
-              skipImageEntrance ||
-              phase === "revealing" ||
-              doorExiting
-                ? { duration: 0 }
-                : { duration: revealDuration, ease: "easeOut" }
-            }
-          >
-            <motion.div
-              className="absolute inset-0"
-              animate={{
-                scale: doorExiting ? DOOR_EXIT_IMAGE_ZOOM_SCALE : 1,
-              }}
-              transition={{
-                duration: doorExiting ? DOOR_EXIT_DURATION_SEC : 0,
-                ease: EASE_DRIFT,
-              }}
-              style={{ transformOrigin: DOOR_EXIT_ORIGIN }}
-            >
-              <Image
-                src={ENTRANCE_ASSETS.start}
-                alt=""
-                fill
-                priority
-                loading="eager"
-                sizes="440px"
-                className="object-cover"
-                style={{
-                  objectPosition: doorExiting ? DOOR_EXIT_ORIGIN : "60% 50%",
-                }}
-                draggable={false}
-                unoptimized
-              />
-            </motion.div>
-          </motion.div>
-
-          {(showAnchoredGlows || showBokehOnlyMarkers) && (
-            <div className="pointer-events-none absolute inset-0 z-[1]">
-              {showMarkers &&
-                entranceProgress >= 1 &&
-                steadyLampGlows.map((glow) => (
-                  <GlowAnchorMarker key={`marker-${glow.id}`} glow={glow} />
-                ))}
-              {showBokehOnlyMarkers &&
-                bokehOnlyLampGlows.map((glow) => (
-                  <GlowAnchorMarker
-                    key={`marker-${glow.id}`}
-                    glow={glow}
-                    compact
-                  />
-                ))}
-              {showAnchoredGlows &&
-                glowPairs.map(({ bokeh, steady }) => (
-                  <PairedStartEntranceGlow
-                    key={`paired-${bokeh.id}`}
-                    bokeh={bokeh}
-                    steady={steady}
-                    progress={entranceProgress}
-                    enableBreathe={entranceProgress >= 1}
-                  />
-                ))}
-              {showAnchoredGlows &&
-                !skipImageEntrance &&
-                entranceProgress < 1 &&
-                bokehOnlyLampGlows.map((glow) => (
-                  <BokehOnlyOrb
-                    key={`bokeh-only-${glow.id}`}
-                    glow={glow}
-                    fade={bokehOnlyFade}
-                  />
-                ))}
-            </div>
-          )}
-        </motion.div>
-
-        <Haze y={36} intensity={1} />
-        <div className="absolute inset-0 bg-gradient-to-b from-stone-950/40 via-transparent to-stone-950/80" />
-        <div className="absolute inset-0 bg-[#0a1020]/20 mix-blend-multiply" />
+          <StartEntryAlleyLayer
+            backgroundOpacity={backgroundOpacity}
+            entranceProgress={entranceProgress}
+            bokehOnlyFade={bokehOnlyFade}
+            steadyLampGlows={steadyLampGlows}
+            bokehLampGlows={bokehLampGlows}
+            bokehOnlyLampGlows={bokehOnlyLampGlows}
+            kenBurnsMotion={kenBurnsMotion}
+            showBokehOnlyOrbs={!skipImageEntrance}
+            imageScale={doorExiting ? DOOR_EXIT_IMAGE_ZOOM_SCALE : 1}
+            imageObjectPosition={doorExiting ? DOOR_EXIT_ORIGIN : "60% 50%"}
+            imageTransformOrigin={DOOR_EXIT_ORIGIN}
+            imageScaleTransition={{
+              duration: doorExiting ? DOOR_EXIT_DURATION_SEC : 0,
+              ease: EASE_DRIFT,
+            }}
+            showOrderMarkers={SHOW_LOADING_GATE_LIGHT_ORDER_MARKERS}
+          />
         </motion.div>
 
         <motion.button
@@ -471,37 +275,37 @@ export function NightEntryScreen({
           onClick={interactionLocked ? undefined : onEnterCounter}
           animate={{ opacity: doorExiting ? 0 : 1 }}
           transition={{ duration: doorExiting ? 0.35 : 0 }}
-          className={`absolute right-[10%] top-[36%] z-20 h-[26%] w-[34%] [-webkit-tap-highlight-color:transparent] ${
-            interactionLocked ? "pointer-events-none" : ""
+          className={`absolute right-[10%] top-[36%] z-20 h-[26%] w-[34%] touch-manipulation [-webkit-tap-highlight-color:transparent] ${
+            interactionLocked || !showUi ? "pointer-events-none" : "pointer-events-auto"
           }`}
         />
 
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-between px-7 py-[14%]">
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{
-              opacity: showUi ? 1 : 0,
-              y: showUi ? 0 : -8,
-            }}
-            transition={titleTransition}
-            className="space-y-3 text-center"
-          >
-            <p className="text-[10px] tracking-[0.5em] text-stone-400/65 uppercase">
-              back bar
-            </p>
-            <h1 className="font-serif-jp text-[22px] font-normal tracking-[0.22em] text-stone-100/90">
-              バーテン日記
-            </h1>
-          </motion.div>
+        <motion.div
+          initial={isSteadyReturn ? false : { opacity: 0, y: -8 }}
+          animate={{
+            opacity: showUi ? 1 : 0,
+            y: showUi ? 0 : isSteadyReturn ? 0 : -8,
+          }}
+          transition={titleTransition}
+          className="pointer-events-none absolute inset-x-0 top-[14%] z-30 space-y-3 px-7 text-center"
+        >
+          <p className="text-[10px] tracking-[0.5em] text-stone-400/65 uppercase">
+            back bar
+          </p>
+          <h1 className="font-serif-jp text-[22px] font-normal tracking-[0.22em] text-stone-100/90">
+            バーテン日記
+          </h1>
+        </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: showUi ? 1 : 0 }}
-            transition={buttonsTransition}
-            className={`w-full max-w-[260px] space-y-4 text-center ${
-              interactionLocked ? "pointer-events-none" : ""
-            }`}
-          >
+        <motion.div
+          initial={isSteadyReturn ? false : { opacity: 0 }}
+          animate={{ opacity: showUi ? 1 : 0 }}
+          transition={buttonsTransition}
+          className={`absolute inset-x-0 bottom-[14%] z-40 flex justify-center px-7 ${
+            !showUi || interactionLocked ? "pointer-events-none" : "pointer-events-auto"
+          }`}
+        >
+          <div className="w-full max-w-[260px] space-y-4 text-center">
             <BarButton
               variant="primary"
               transparent
@@ -516,9 +320,19 @@ export function NightEntryScreen({
             >
               メモを見る
             </BarButton>
-          </motion.div>
-        </div>
+            {isNonProd && onOpenDiaryPaperMock && (
+              <BarButton
+                variant="quiet"
+                onClick={interactionLocked ? undefined : onOpenDiaryPaperMock}
+              >
+                日記デザイン（仮）
+              </BarButton>
+            )}
+          </div>
+        </motion.div>
       </motion.div>
+
+      {SHOW_LOADING_GATE_MESSAGE_ON_HOME && <LoadingGateMessage />}
 
       {isSteadyReturn && (
         <motion.div

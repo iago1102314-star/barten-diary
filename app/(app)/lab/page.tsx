@@ -24,6 +24,12 @@ export default function LabPage() {
           >
             店内 LampGlow 座標調整 →
           </Link>
+          <Link
+            href="/lab/diary-paper"
+            className="text-stone-500 transition-colors hover:text-stone-300"
+          >
+            日記詳細（紙UIモック） →
+          </Link>
         </nav>
       </header>
       <PromptLab />

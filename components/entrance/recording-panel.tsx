@@ -1,6 +1,5 @@
 "use client";
 
-import { ListeningIndicator } from "@/components/entrance/listening-indicator";
 import { MasterLine } from "@/components/entrance/master-line";
 import { BarButton } from "@/components/ui/bar-button";
 import {
@@ -8,15 +7,7 @@ import {
   resolveListenFailureLines,
   shouldOfferRetryAfterListenFailure,
 } from "@/lib/night/listen-failure";
-import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
-
-const MASTER_ASIDES = [
-  "……ゆっくりで、いい。",
-  "……続けてくれ。",
-  "……聞いている。",
-  "……そのまま。",
-] as const;
 
 type RecordingPanelProps = {
   listenFailureCount: number;
@@ -42,21 +33,6 @@ export function RecordingPanel({
   const [breathing, setBreathing] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [recorderPaused, setRecorderPaused] = useState(false);
-  const [aside, setAside] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (listenFailureVisible || breathing || resuming) return;
-
-    const showAside = () => {
-      const line =
-        MASTER_ASIDES[Math.floor(Math.random() * MASTER_ASIDES.length)];
-      setAside(line);
-      setTimeout(() => setAside(null), 3200);
-    };
-
-    const interval = setInterval(showAside, 9000);
-    return () => clearInterval(interval);
-  }, [listenFailureVisible, breathing, resuming]);
 
   useEffect(() => {
     if (!listenFailureVisible) return;
@@ -130,21 +106,6 @@ export function RecordingPanel({
 
   return (
     <div className="flex flex-col items-center gap-6">
-      <AnimatePresence mode="wait">
-        {aside && (
-          <motion.p
-            key={aside}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 0.85, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 1.2 }}
-            className="font-serif-jp text-center text-[13px] tracking-[0.08em] text-stone-300/80"
-          >
-            {aside}
-          </motion.p>
-        )}
-      </AnimatePresence>
-      {!aside && <ListeningIndicator />}
       <div className="mx-auto w-full max-w-[230px]">
         <BarButton variant="primary" onClick={onFinish}>
           今日はこの辺にしておく

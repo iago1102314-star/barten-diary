@@ -59,17 +59,31 @@ body.entrance-experience-locked {
   overscroll-behavior: none;
 }
 
-html.entrance-experience-locked {
-  position: fixed;
-  inset: 0;
+body.entrance-experience-locked {
+  min-height: 0;
+  background: #000;
 }
 
-body.entrance-experience-locked {
-  position: fixed;
-  inset: 0;
-  min-height: 0;
-  display: block;
-  background: #000;
+/* ログイン — scroll lock が残っても iOS でタップ不能にならないよう上書き */
+html.login-route,
+body.login-route {
+  position: static;
+  inset: auto;
+  overflow: auto;
+  height: auto;
+  max-height: none;
+  min-height: 100dvh;
+}
+
+body.login-route {
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+}
+
+.login-route-shell {
+  isolation: isolate;
+  touch-action: manipulation;
 }
 
 .entrance-experience-root {
@@ -475,6 +489,46 @@ body.entrance-experience-locked {
   }
 }
 
+.loading-gate-caption {
+  opacity: 0.88;
+}
+
+.loading-gate-dots {
+  display: inline-flex;
+  width: 1.1em;
+  margin-left: 0.02em;
+}
+
+.loading-gate-dot {
+  display: inline-block;
+  animation: loading-gate-dot-wave 1.35s ease-in-out infinite;
+}
+
+.loading-gate-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.loading-gate-dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.loading-gate-dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+@keyframes loading-gate-dot-wave {
+  0%,
+  24%,
+  100% {
+    opacity: 0.18;
+    transform: translateY(0);
+  }
+  44% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
 .loading-gate-message {
   animation: loading-gate-breathe 3.6s ease-in-out infinite;
 }
@@ -490,7 +544,8 @@ body.entrance-experience-locked {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .loading-gate-message {
+  .loading-gate-message,
+  .loading-gate-dot {
     animation: none;
     opacity: 0.8;
   }

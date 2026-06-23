@@ -1,18 +1,24 @@
 "use client";
 
+import { LoadingGateScene } from "@/components/entrance/loading-gate-scene";
 import {
   runLoadingGateInit,
   type LoadingGateSnapshot,
 } from "@/lib/entrance/loading-gate-init";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type LoadingGateProps = {
   onReady: (snapshot: LoadingGateSnapshot) => void;
 };
 
-/** 初期化完了まで — 黒背景 + 控えめな準備テキスト */
+/** 初期化完了まで — 路地の灯りが奥から手前へともり、ホーム入場へ繋ぐ */
 export function LoadingGate({ onReady }: LoadingGateProps) {
   const startedRef = useRef(false);
+  const [initSnapshot, setInitSnapshot] = useState<LoadingGateSnapshot | null>(
+    null,
+  );
+  const [lightsComplete, setLightsComplete] = useState(false);
+  const readySentRef = useRef(false);
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -21,23 +27,29 @@ export function LoadingGate({ onReady }: LoadingGateProps) {
     let cancelled = false;
 
     void runLoadingGateInit().then((snapshot) => {
-      if (!cancelled) onReady(snapshot);
+      if (!cancelled) setInitSnapshot(snapshot);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [onReady]);
+  }, []);
+
+  const tryFinish = useCallback(() => {
+    if (readySentRef.current || !initSnapshot || !lightsComplete) return;
+    readySentRef.current = true;
+    onReady(initSnapshot);
+  }, [initSnapshot, lightsComplete, onReady]);
+
+  useEffect(() => {
+    tryFinish();
+  }, [tryFinish]);
+
+  const handleLightsComplete = useCallback(() => {
+    setLightsComplete(true);
+  }, []);
 
   return (
-    <div className="flex h-full min-h-0 w-full items-center justify-center bg-black">
-      <p
-        className="loading-gate-message font-serif-jp translate-y-4 text-[14px] tracking-[0.12em] text-amber-100/80"
-        role="status"
-        aria-live="polite"
-      >
-        夜を準備しています
-      </p>
-    </div>
+    <LoadingGateScene onSequenceComplete={handleLightsComplete} />
   );
 }
