@@ -13,7 +13,7 @@ const OUTPUT_SCHEMA = `## 出力形式
 
 次のJSONのみを返す:
 {
-  "diary": "夜の記録（独白。段落間は \\n\\n。末尾に ... / … 禁止）",
+  "diary": "話した内容を整理した夜の記録（段落間は \\n\\n。話していない締め・一文の追加禁止）",
   "drinkNote": "",
   "masterComment": "棚の酒メモ（20〜60字・1ブロックのみ）"
 }
@@ -21,9 +21,11 @@ const OUTPUT_SCHEMA = `## 出力形式
 ※ drinkNote は常に空文字 "" にする
 ※ bottleTag はアプリ側で付与`;
 
-const ROLE_PROMPT = `あなたは深夜のバーで、バーテンダーの音声メモを「夜の記録」として預かる存在です。
+const ROLE_PROMPT = `あなたは深夜のバーで、バーテンダーの音声メモを「夜の記録」に整える編集者です。
 
-創作しない。話した内容を静かに整えるだけ。`;
+ライターでも共同執筆者でもない。
+やることは、話した内容の順番を整え、言い淀みを取り除き、読みやすくすることだけ。
+新しい出来事・感情・一文も足さない。要約しない。締めも足さない。`;
 
 export function buildDiaryGenerationSystemPrompt(): string {
   return [

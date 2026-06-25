@@ -9,8 +9,10 @@ export function buildDiaryGenerationUserPrompt(
   return `今夜の棚の酒: ${drinkContext.selectedDrinkName}
 （棚の酒メモは masterComment に1つだけ。drinkNote は空 ""）
 
-「その夜へ戻れる」独白を優先。メモの行切りではなく、段落内で文をつなぐ。
-挨拶・口癖だけ落とし、強い言葉は残す。創作・教訓・綺麗な締めは禁止。
+あなたは編集者。ライターでも共同執筆者でもない。
+順番を整え、言い淀みを取り、読みやすくする。話した内容はできるだけ残す。
+挨拶・口癖だけ落とし、強い言葉は残す。
+締め・感情の補完・前向きな一文・読後感は足さない。話したところで終わる。
 
 <<<USER_SPEECH>>>
 ${speech}
