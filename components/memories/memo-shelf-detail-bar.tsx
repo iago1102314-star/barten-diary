@@ -1,15 +1,20 @@
 "use client";
 
 import styles from "@/components/memories/memo-shelf-grid.module.css";
+import { DeleteActionIcon } from "@/components/ui/delete-action-icon";
 import { EditActionIcon } from "@/components/ui/edit-action-icon";
+import { MoreActionsIcon } from "@/components/ui/more-actions-icon";
 import { ShareSaveIcon } from "@/components/ui/share-save-icon";
 import { ShebronIcon } from "@/components/ui/shebron-icon";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 type MemoShelfRecordBottomBarDetailActions = {
   onEdit: () => void;
-  onSave: () => void;
-  saveDisabled?: boolean;
+  onShare: () => void;
+  shareDisabled?: boolean;
+  onDelete: () => void;
+  deleteDisabled?: boolean;
 };
 
 type MemoShelfRecordBottomBarProps = {
@@ -28,6 +33,16 @@ export function MemoShelfRecordBottomBar({
   backHref,
   detailActions,
 }: MemoShelfRecordBottomBarProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    if (!detailActions) {
+      setMenuOpen(false);
+      setConfirmOpen(false);
+    }
+  }, [detailActions]);
+
   const backControl =
     backHref != null ? (
       <Link
@@ -54,29 +69,101 @@ export function MemoShelfRecordBottomBar({
       <p className={styles.bottomBarIndicator}>{title}</p>
       <div className={`${styles.bottomBarSide} ${styles.bottomBarSideRight}`}>
         {detailActions ? (
-          <div className={styles.bottomBarDetailActions}>
+          <div className={styles.bottomBarMenuShell}>
             <button
               type="button"
-              className={`${styles.bottomBarTextAction} ${styles.bottomBarEditAction}`}
-              onClick={detailActions.onEdit}
-              aria-label="編集"
+              className={styles.bottomBarAction}
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-label="その他の操作"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
             >
-              <EditActionIcon className={styles.bottomBarActionIcon} />
-              編集
+              <MoreActionsIcon className={styles.bottomBarTriIcon} />
             </button>
-            <button
-              type="button"
-              className={`${styles.bottomBarTextAction} ${styles.bottomBarSaveAction}`}
-              onClick={detailActions.onSave}
-              disabled={detailActions.saveDisabled}
-              aria-label="保存"
-            >
-              <ShareSaveIcon className={styles.bottomBarActionIcon} />
-              保存
-            </button>
+
+            {menuOpen ? (
+              <div className={styles.bottomBarMenuPanel} role="menu" aria-label="日記の操作">
+                <button
+                  type="button"
+                  className={styles.bottomBarMenuItem}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    detailActions.onEdit();
+                  }}
+                  role="menuitem"
+                >
+                  <EditActionIcon className={styles.bottomBarActionIcon} />
+                  編集
+                </button>
+                <button
+                  type="button"
+                  className={styles.bottomBarMenuItem}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    detailActions.onShare();
+                  }}
+                  disabled={detailActions.shareDisabled}
+                  role="menuitem"
+                >
+                  <ShareSaveIcon className={styles.bottomBarActionIcon} />
+                  共有
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.bottomBarMenuItem} ${styles.bottomBarMenuDanger}`}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setConfirmOpen(true);
+                  }}
+                  disabled={detailActions.deleteDisabled}
+                  role="menuitem"
+                >
+                  <DeleteActionIcon className={styles.bottomBarActionIcon} />
+                  削除
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
+
+      {confirmOpen && detailActions ? (
+        <div className={styles.bottomBarConfirmLayer} role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className={styles.bottomBarConfirmBackdrop}
+            aria-label="削除確認を閉じる"
+            onClick={() => setConfirmOpen(false)}
+          />
+          <div className={styles.bottomBarConfirmCard}>
+            <p className={styles.bottomBarConfirmText}>
+              削除したメモは復元できません。
+              <br />
+              本当に削除しますか？？
+            </p>
+            <div className={styles.bottomBarConfirmActions}>
+              <button
+                type="button"
+                className={styles.bottomBarConfirmDelete}
+                onClick={() => {
+                  setConfirmOpen(false);
+                  detailActions.onDelete();
+                }}
+                disabled={detailActions.deleteDisabled}
+              >
+                削除
+              </button>
+              <button
+                type="button"
+                className={styles.bottomBarConfirmCancel}
+                onClick={() => setConfirmOpen(false)}
+              >
+                やめる
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </footer>
   );
 }

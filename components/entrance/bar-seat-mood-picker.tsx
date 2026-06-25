@@ -508,6 +508,10 @@ export function BarSeatMoodPicker({
     (option: MoodOption) => {
       if (exitCompleteFiredRef.current) return;
       exitCompleteFiredRef.current = true;
+      setConfirmPhase(null);
+      setButtonAnchor(null);
+      setIsExiting(false);
+      setPicked(option);
       onConfirmExitComplete?.(option);
     },
     [onConfirmExitComplete],
@@ -515,8 +519,6 @@ export function BarSeatMoodPicker({
 
   const skipConfirmExitToGrass = useCallback(() => {
     if (!confirmedOption || exitCompleteFiredRef.current) return;
-    setConfirmPhase(null);
-    setButtonAnchor(null);
     fireConfirmExitComplete(confirmedOption);
   }, [confirmedOption, fireConfirmExitComplete]);
 
@@ -604,6 +606,7 @@ export function BarSeatMoodPicker({
 
     const maxExitDelay = (options.length - 1) * exitOptionStagger;
     const timer = window.setTimeout(() => {
+      if (exitCompleteFiredRef.current) return;
       const el = selectedBtnRef.current;
       if (el) {
         captureButtonAnchor(el);
@@ -624,6 +627,7 @@ export function BarSeatMoodPicker({
     const dissolveStartMs = Math.max(0, (moveSec - leadSec) * 1000);
 
     const timer = window.setTimeout(() => {
+      if (exitCompleteFiredRef.current) return;
       setConfirmPhase("buttonDissolve");
     }, dissolveStartMs);
 
@@ -644,6 +648,7 @@ export function BarSeatMoodPicker({
       0.5;
 
     const timer = window.setTimeout(() => {
+      if (exitCompleteFiredRef.current) return;
       fireConfirmExitComplete(confirmedOption);
     }, totalSec * 1000);
 

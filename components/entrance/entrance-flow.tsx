@@ -118,6 +118,7 @@ import {
 import { MASTER_DECLINE_FAREWELL } from "@/lib/entrance/master-greetings";
 import { DECLINE_NIGHT_TUNING } from "@/lib/entrance/decline-night-tuning";
 import { AnimatePresence, motion } from "motion/react";
+import { useSettingsMenuHidden } from "@/lib/settings/settings-menu-visibility";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -181,6 +182,14 @@ const OUTSIDE_AMBIENT_STATES = new Set<EntranceState>([
   "memories",
   "leaving",
   "alley",
+]);
+
+const SETTINGS_MENU_RECORDING_STATES = new Set<EntranceState>([
+  "recording",
+  "postRecordBlackout",
+  "postRecordThanks",
+  "postRecordExitBlack",
+  "leaving",
 ]);
 
 function getSceneMotionKey(state: EntranceState): string {
@@ -265,6 +274,12 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const [alleyDiaryFadeOut, setAlleyDiaryFadeOut] = useState(false);
   const [alleyHomeFadeOut, setAlleyHomeFadeOut] = useState(false);
   const [devSkipLoading, setDevSkipLoading] = useState(false);
+
+  useSettingsMenuHidden("memories-list", entranceState === "memories");
+  useSettingsMenuHidden(
+    "recording-flow",
+    SETTINGS_MENU_RECORDING_STATES.has(entranceState),
+  );
 
   const unlockBarAudio = useCallback(() => {
     setAudioUnlocked((unlocked) => {
@@ -1215,7 +1230,8 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const showMoodSelectChrome =
     (entranceState === "moodSelect" ||
       (isDeclineFading && declineOrigin === "moodSelect")) &&
-    !lampGlowHomeEditing;
+    !lampGlowHomeEditing &&
+    !(moodSelectExitActive && !moodAwaitingGrass);
   const showPastBottleChrome =
     entranceState === "pastBottleSelect" ||
     (isDeclineFading && declineOrigin === "pastBottleSelect");

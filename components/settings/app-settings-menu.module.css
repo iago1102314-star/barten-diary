@@ -1,0 +1,243 @@
+.fab {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1.1rem, env(safe-area-inset-bottom));
+  z-index: 48;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.15rem;
+  height: 3.15rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(12, 10, 8, 0.92);
+  color: rgba(236, 228, 210, 0.96);
+  box-shadow:
+    0 10px 28px rgba(8, 6, 4, 0.34),
+    inset 0 1px 0 rgba(255, 248, 235, 0.06);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.fab:hover {
+  transform: scale(1.03);
+}
+
+.fabIcon {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(10, 8, 6, 0.42);
+  backdrop-filter: blur(10px);
+}
+
+.panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding:
+    max(1rem, env(safe-area-inset-top))
+    max(1.1rem, env(safe-area-inset-right))
+    max(1.1rem, env(safe-area-inset-bottom))
+    max(1.1rem, env(safe-area-inset-left));
+  background: rgba(18, 14, 11, 0.18);
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.closeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 248, 235, 0.08);
+  color: rgba(232, 222, 205, 0.92);
+  cursor: pointer;
+}
+
+.closeIcon {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.panelBody {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.panelInner {
+  width: min(100%, 24rem);
+}
+
+.menuList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.95rem 0.35rem;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 248, 235, 0.06);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: rgba(236, 228, 210, 0.96);
+}
+
+.menuItem:last-child {
+  border-bottom: 0;
+}
+
+.menuItemIcon {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex-shrink: 0;
+  color: rgba(220, 208, 188, 0.9);
+}
+
+.menuItemText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.menuItemLabel {
+  font-family: var(--font-serif-jp);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+}
+
+.menuItemSub {
+  font-family: var(--font-serif-jp);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: rgba(196, 184, 164, 0.62);
+}
+
+.subPanelTitle {
+  margin: 0 0 1.4rem;
+  font-family: var(--font-serif-jp);
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-align: center;
+  color: rgba(236, 228, 210, 0.96);
+}
+
+.sliderBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 1.2rem;
+}
+
+.sliderLabelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.sliderLabel {
+  font-family: var(--font-serif-jp);
+  font-size: 0.88rem;
+  letter-spacing: 0.1em;
+  color: rgba(228, 218, 200, 0.94);
+}
+
+.sliderValue {
+  font-family: var(--font-serif-jp);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  color: rgba(196, 184, 164, 0.72);
+  font-variant-numeric: tabular-nums;
+}
+
+.slider {
+  width: 100%;
+  accent-color: rgba(214, 196, 168, 0.92);
+}
+
+.languageList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.languageOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(255, 248, 235, 0.08);
+  border-radius: 0.85rem;
+  background: rgba(255, 248, 235, 0.04);
+  font-family: var(--font-serif-jp);
+  font-size: 0.9rem;
+  letter-spacing: 0.1em;
+  color: rgba(232, 222, 205, 0.94);
+  cursor: pointer;
+}
+
+.languageOptionActive {
+  border-color: rgba(214, 196, 168, 0.28);
+  background: rgba(214, 196, 168, 0.1);
+}
+
+.placeholderText,
+.aboutText {
+  margin: 0;
+  font-family: var(--font-serif-jp);
+  font-size: 0.88rem;
+  line-height: 1.9;
+  letter-spacing: 0.08em;
+  text-align: center;
+  white-space: pre-line;
+  color: rgba(220, 208, 188, 0.82);
+}
+
+.aboutTitle {
+  margin: 0 0 0.8rem;
+  font-family: var(--font-serif-jp);
+  font-size: 1.05rem;
+  letter-spacing: 0.14em;
+  text-align: center;
+  color: rgba(236, 228, 210, 0.96);
+}

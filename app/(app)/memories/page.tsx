@@ -17,13 +17,15 @@ export default async function MemoriesPage({ searchParams }: MemoriesPageProps) 
     await fetchDiariesForShelf(supabase, {
       page,
       pageSize: DIARY_LIST_PAGE_SIZE,
+      includeExactCount: true,
+      shelfListOnly: true,
     });
 
   if (error) {
     console.error("Failed to fetch memos:", error);
   }
 
-  const safeTotalCount = totalCount ?? diaries.length;
+  const safeTotalCount = totalCount ?? 0;
 
   return (
     <MemoShelfRouteView

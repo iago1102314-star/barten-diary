@@ -56,6 +56,8 @@ type MemoShelfSwipePagerProps = {
   onPlayPageSound: () => void;
   onTransitioningChange: (transitioning: boolean) => void;
   registerGoToPage: (handler: ((nextPage: number) => void) | null) => void;
+  /** 親が保持するページキャッシュ（戻る操作で再取得しない） */
+  sharedPageCache?: Map<number, MemoShelfFetchedPage>;
 };
 
 type DragPhase = "idle" | "dragging" | "animating";
@@ -97,11 +99,20 @@ export function MemoShelfSwipePager({
   onPlayPageSound,
   onTransitioningChange,
   registerGoToPage,
+  sharedPageCache,
 }: MemoShelfSwipePagerProps) {
   const prefersReducedMotion = useReducedMotion();
   const stageRef = useRef<HTMLDivElement>(null);
   const scrollParentRef = useRef<HTMLElement | null>(null);
-  const pageCacheRef = useRef<Map<number, MemoShelfFetchedPage>>(new Map());
+  const pageCacheRef = useRef<Map<number, MemoShelfFetchedPage>>(
+    sharedPageCache ?? new Map(),
+  );
+
+  useEffect(() => {
+    if (sharedPageCache) {
+      pageCacheRef.current = sharedPageCache;
+    }
+  }, [sharedPageCache]);
   const offsetX = useMotionValue(0);
   const directionRef = useRef<1 | -1>(1);
   const [stageWidth, setStageWidth] = useState(0);

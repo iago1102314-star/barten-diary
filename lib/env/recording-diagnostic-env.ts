@@ -1,23 +1,11 @@
-import { APP_ENV, isNonProd, isProd } from "@/lib/env/app-env";
+import { APP_ENV } from "@/lib/env/app-env";
 
 /**
  * 録音パイプライン診断 UI / debug API / 診断データ収集。
- *
- * - production: デフォルト OFF（明示的 true のみ ON）
- * - local / dev: デフォルト ON（明示的 false で OFF）
+ * 明示的に `NEXT_PUBLIC_RECORDING_DIAGNOSTIC=true` のときだけ ON。
  */
 export function isRecordingDiagnosticEnabled(): boolean {
-  const flag = process.env.NEXT_PUBLIC_RECORDING_DIAGNOSTIC;
-
-  if (isProd) {
-    return flag === "true";
-  }
-
-  if (flag === "false") {
-    return false;
-  }
-
-  return isNonProd;
+  return process.env.NEXT_PUBLIC_RECORDING_DIAGNOSTIC === "true";
 }
 
 export function recordingDiagnosticEnvLabel(): string {

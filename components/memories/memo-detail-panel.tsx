@@ -8,9 +8,11 @@ import screenStyles from "@/components/diary-paper/diary-paper-screen.module.css
 import { MemoShelfRecordBottomBar } from "@/components/memories/memo-shelf-detail-bar";
 import styles from "@/components/memories/memo-shelf-grid.module.css";
 import { useDiaryBodyEdit } from "@/hooks/use-diary-body-edit";
+import { useDiaryDelete } from "@/hooks/use-diary-delete";
 import { useDiaryPaperExport } from "@/hooks/use-diary-paper-export";
 import type { DiaryListRow } from "@/lib/diaries/fetch-diaries";
 import { mapDiaryListRowToDiaryPaper } from "@/lib/diary-paper/map-diary-to-paper";
+import { useSettingsMenuHidden } from "@/lib/settings/settings-menu-visibility";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -205,6 +207,14 @@ function MemoDetailPanelScreen({
     captureRef: exportRef,
     createdAt: diary.created_at,
   });
+  const diaryDelete = useDiaryDelete({
+    diaryId: diary.id,
+    onDeleted: () => {
+      router.push(backHref);
+    },
+  });
+
+  useSettingsMenuHidden("diary-detail", true);
 
   const handleBack = useCallback(() => {
     if (editing && dirty) {
@@ -237,8 +247,10 @@ function MemoDetailPanelScreen({
             !editing
               ? {
                   onEdit: () => setEditing(true),
-                  onSave: diaryExport.exportDiary,
-                  saveDisabled: diaryExport.exporting,
+                    onShare: diaryExport.exportDiary,
+                    shareDisabled: diaryExport.exporting || diaryDelete.deleting,
+                    onDelete: diaryDelete.deleteDiary,
+                    deleteDisabled: diaryDelete.deleting || diaryExport.exporting,
                 }
               : undefined
           }
@@ -251,6 +263,10 @@ function MemoDetailPanelScreen({
       <DiaryExportNoticePanel
         notice={saveNotice}
         onDismiss={dismissSaveNotice}
+      />
+      <DiaryExportNoticePanel
+        notice={diaryDelete.notice}
+        onDismiss={diaryDelete.dismissNotice}
       />
     </>
   );

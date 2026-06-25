@@ -431,7 +431,7 @@
   flex-shrink: 0;
   margin-top: auto;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 0.35rem;
   padding:
@@ -469,10 +469,15 @@
   min-width: 0;
 }
 
+.bottomBarSide:first-child {
+  justify-self: start;
+}
+
 .bottomBarSideRight {
   display: flex;
   flex-shrink: 0;
   justify-content: flex-end;
+  justify-self: end;
   min-width: max-content;
 }
 
@@ -482,6 +487,67 @@
   justify-content: flex-end;
   flex-shrink: 0;
   gap: 0.75rem;
+}
+
+.bottomBarMenuShell {
+  position: relative;
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.bottomBarMenuPanel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.55rem);
+  display: flex;
+  width: 6rem;
+  flex-direction: column;
+  padding: 0.25rem;
+  border: 1px solid rgba(255, 248, 235, 0.08);
+  border-radius: 0.85rem;
+  background: rgba(24, 19, 15, 0.96);
+  box-shadow:
+    0 18px 36px rgba(8, 6, 4, 0.28),
+    inset 0 1px 0 rgba(255, 248, 235, 0.04);
+  backdrop-filter: blur(10px);
+}
+
+.bottomBarMenuItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.62rem 0.7rem;
+  border: 0;
+  border-radius: 0.6rem;
+  background: transparent;
+  font-family: var(--font-serif-jp);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: rgba(225, 214, 196, 0.95);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.bottomBarMenuItem:hover:not(:disabled) {
+  background: rgba(255, 248, 235, 0.06);
+  color: rgba(240, 230, 212, 1);
+}
+
+.bottomBarMenuItem:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.bottomBarMenuDanger {
+  color: #d66a62;
+}
+
+.bottomBarMenuDanger:hover:not(:disabled) {
+  color: #ee8d86;
 }
 
 .bottomBarTextAction {
@@ -527,6 +593,7 @@
 .bottomBarIndicator {
   margin: 0;
   min-width: 0;
+  justify-self: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -537,6 +604,87 @@
   text-align: center;
   color: rgba(221, 210, 192, 0.94);
   font-variant-numeric: tabular-nums;
+}
+
+.bottomBarConfirmLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+
+.bottomBarConfirmBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(18, 13, 10, 0.38);
+}
+
+.bottomBarConfirmCard {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 26rem);
+  padding: 1rem 1rem 1.05rem;
+  border: 1px solid rgba(255, 248, 235, 0.08);
+  border-radius: 1rem;
+  background: rgba(26, 21, 16, 0.98);
+  box-shadow: 0 18px 38px rgba(8, 6, 4, 0.34);
+}
+
+.bottomBarConfirmText {
+  margin: 0;
+  font-family: var(--font-serif-jp);
+  font-size: 0.9rem;
+  line-height: 1.85;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: rgba(232, 222, 205, 0.95);
+}
+
+.bottomBarConfirmActions {
+  display: flex;
+  justify-content: center;
+  gap: 0.65rem;
+  margin-top: 0.95rem;
+}
+
+.bottomBarConfirmCancel,
+.bottomBarConfirmDelete {
+  min-width: 5.75rem;
+  margin: 0;
+  padding: 0.72rem 0.95rem;
+  border: 0;
+  border-radius: 999px;
+  font-family: var(--font-serif-jp);
+  font-size: 0.84rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: opacity 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.bottomBarConfirmCancel {
+  background: rgba(255, 248, 235, 0.08);
+  color: rgba(229, 219, 201, 0.94);
+}
+
+.bottomBarConfirmDelete {
+  background: rgba(112, 28, 24, 0.16);
+  color: #df726a;
+}
+
+.bottomBarConfirmCancel:hover,
+.bottomBarConfirmDelete:hover {
+  opacity: 0.9;
+}
+
+.bottomBarConfirmCancel:disabled,
+.bottomBarConfirmDelete:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .bottomBarAction {

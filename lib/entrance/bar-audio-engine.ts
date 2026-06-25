@@ -1,5 +1,9 @@
 import { ENTRANCE_SOUNDS } from "@/lib/entrance/asset-paths";
 import {
+  getBgmVolumeMultiplier,
+  getSeVolumeMultiplier,
+} from "@/lib/settings/audio-preferences";
+import {
   BAR_AUDIO_LEVELS,
   BAR_AUDIO_TIMING,
   getSfxPlayVolume,
@@ -581,8 +585,14 @@ function clearTrackAudio(track: LoopingTrackState, audio: HTMLAudioElement) {
 
 const outsideTrack = createInitialTrackState(BAR_AUDIO_LEVELS.outside.alley);
 const jazzTrack = createInitialTrackState(BAR_AUDIO_LEVELS.jazz.counter);
+let jazzBaseVolume: number = BAR_AUDIO_LEVELS.jazz.counter;
+let outsideBaseVolume: number = BAR_AUDIO_LEVELS.outside.alley;
 let jazzPreparePromise: Promise<void> | null = null;
 let outsidePreparePromise: Promise<void> | null = null;
+
+function scaleBgmVolume(volume: number): number {
+  return clampVolume(volume * getBgmVolumeMultiplier());
+}
 
 function beginOutsideAlleyPreload() {
   if (outsideTrack.started && outsideTrack.audio) return;
@@ -639,7 +649,9 @@ async function prepareOutsideForEntry(
 
     outsideTrack.generation += 1;
     const token = outsideTrack.generation;
-    outsideTrack.targetVolume = volume;
+    outsideBaseVolume = volume;
+    const scaledVolume = scaleBgmVolume(volume);
+    outsideTrack.targetVolume = scaledVolume;
 
     await waitForMetadata(audio);
     if (!isTrackAudioCurrent(outsideTrack, token, audio)) return;
@@ -662,7 +674,7 @@ async function prepareOutsideForEntry(
     fadeVolume(
       audio,
       getTrackOutputLevel(audio, outsideTrack),
-      volume,
+      scaledVolume,
       fadeMs,
       outsideTrack,
     );
@@ -808,7 +820,7 @@ function playSfxNow(
   }
 
   const audio = slots.find((slot) => slot.paused) ?? slots[0];
-  audio.volume = getSfxPlayVolume(kind) * volumeScale;
+  audio.volume = getSfxPlayVolume(kind) * volumeScale * getSeVolumeMultiplier();
   audio.muted = false;
   audio.currentTime = 0;
 
@@ -846,7 +858,13 @@ async function startLooping(
 
   track.generation += 1;
   const token = track.generation;
-  track.targetVolume = volume;
+  if (track === jazzTrack) {
+    jazzBaseVolume = volume;
+  } else if (track === outsideTrack) {
+    outsideBaseVolume = volume;
+  }
+  const scaledVolume = scaleBgmVolume(volume);
+  track.targetVolume = scaledVolume;
 
   if (track.started && track.audio) {
     const audio = track.audio;
@@ -881,7 +899,7 @@ async function startLooping(
     if (!isTrackAudioCurrent(track, token, audio)) {
       return;
     }
-    fadeVolume(audio, fadeFrom, volume, fadeMs, track);
+    fadeVolume(audio, fadeFrom, scaledVolume, fadeMs, track);
     return;
   }
 
@@ -930,7 +948,7 @@ async function startLooping(
       return;
     }
     primeLoopAudioSilence(audio, track);
-    fadeVolume(audio, 0, volume, fadeMs, track);
+    fadeVolume(audio, 0, scaledVolume, fadeMs, track);
   } catch {
     if (track.audio === audio) {
       clearTrackAudio(track, audio);
@@ -941,7 +959,13 @@ async function startLooping(
 }
 
 function setLoopingVolume(volume: number, track: LoopingTrackState) {
-  track.targetVolume = volume;
+  if (track === jazzTrack) {
+    jazzBaseVolume = volume;
+  } else if (track === outsideTrack) {
+    outsideBaseVolume = volume;
+  }
+  const scaledVolume = scaleBgmVolume(volume);
+  track.targetVolume = scaledVolume;
   const audio = track.audio;
   if (!audio) return;
   cancelTrackFade(track);
@@ -949,7 +973,7 @@ function setLoopingVolume(volume: number, track: LoopingTrackState) {
     track.ambient.applyNow();
     return;
   }
-  setTrackOutputLevel(audio, track, volume);
+  setTrackOutputLevel(audio, track, scaledVolume);
 }
 
 function stopLooping(
@@ -1166,6 +1190,15 @@ export const barAudioEngine = {
 
   setJazzVolume(volume: number) {
     setLoopingVolume(volume, jazzTrack);
+  },
+
+  reapplyUserBgmVolume() {
+    if (jazzTrack.audio) {
+      setLoopingVolume(jazzBaseVolume, jazzTrack);
+    }
+    if (outsideTrack.audio) {
+      setLoopingVolume(outsideBaseVolume, outsideTrack);
+    }
   },
 
   stopJazz(fadeMs: number = BAR_AUDIO_TIMING.fadeMs) {

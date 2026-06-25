@@ -1,3 +1,4 @@
+import { AppChrome } from "@/components/app/app-chrome";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -15,5 +16,5 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  return <>{children}</>;
+  return <AppChrome>{children}</AppChrome>;
 }

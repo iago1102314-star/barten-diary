@@ -10,8 +10,10 @@
   border-radius: 999px;
   font-family: var(--font-serif-jp);
   font-size: 0.72rem;
+  line-height: 1.65;
   letter-spacing: 0.1em;
   text-align: center;
+  white-space: pre-line;
   pointer-events: none;
   box-shadow: 0 8px 24px rgba(12, 8, 5, 0.28);
 }

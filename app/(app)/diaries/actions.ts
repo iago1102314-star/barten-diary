@@ -172,6 +172,50 @@ export type UpdateDiaryBodyState = {
   success?: boolean;
 };
 
+export type DeleteDiaryResult = {
+  success?: boolean;
+  error?: string;
+};
+
+export async function deleteDiary(id: string): Promise<DeleteDiaryResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const diaryId = id.trim();
+
+  if (!diaryId) {
+    return { error: "記録が見つかりません。" };
+  }
+
+  const { data, error } = await supabase
+    .from("diaries")
+    .delete()
+    .eq("id", diaryId)
+    .eq("user_id", user.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to delete diary:", error.message);
+    return { error: "削除できませんでした。\nもう一度お試しください。" };
+  }
+
+  if (!data) {
+    return { error: "削除できませんでした。\nもう一度お試しください。" };
+  }
+
+  revalidatePath(`/diaries/${diaryId}`);
+  revalidatePath("/memories");
+  revalidatePath("/diaries");
+  return { success: true };
+}
+
 export async function updateDiaryBody(
   _prevState: UpdateDiaryBodyState,
   formData: FormData,

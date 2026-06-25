@@ -5,12 +5,13 @@ import { MigrationNotice } from "@/components/diaries/migration-notice";
 import { MemoList } from "@/components/memories/memo-list";
 import { MemoShelfBottomBar } from "@/components/memories/memo-shelf-bottom-bar";
 import { MemoShelfSwipePager } from "@/components/memories/memo-shelf-swipe-pager";
-import { skipMemoShelfPolaroidIntro } from "@/lib/memories/memo-shelf-polaroid-intro";
 import styles from "@/components/memories/memo-shelf-grid.module.css";
+import { useMemoShelfListData } from "@/hooks/use-memo-shelf-list-data";
 import { useMemoShelfPageNavigation } from "@/hooks/use-memo-shelf-page-navigation";
+import { useSettingsMenuHidden } from "@/lib/settings/settings-menu-visibility";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 type MemoShelfRouteViewProps = {
   page: number;
@@ -36,87 +37,43 @@ export function MemoShelfRouteView({
     visitIdRef: polaroidIntroVisitIdRef,
     playedVisitIdRef: polaroidIntroPlayedVisitIdRef,
   };
-  const [page, setPage] = useState(initialPage);
-  const [diaries, setDiaries] = useState(initialDiaries);
-  const [hasMore, setHasMore] = useState(initialHasMore);
-  const [totalCount, setTotalCount] = useState(initialTotalCount);
+
+  const {
+    page,
+    memos: diaries,
+    hasMore,
+    totalCount,
+    fetchPagePreview,
+    navigateToPage,
+    sharedPageCacheRef,
+  } = useMemoShelfListData({
+    enabled: !error,
+    initialPage,
+    initialSeed: {
+      memos: initialDiaries,
+      hasMore: initialHasMore,
+      totalCount: initialTotalCount,
+    },
+    polaroidIntroSession,
+  });
 
   useEffect(() => {
-    setPage(initialPage);
-    setDiaries(initialDiaries);
-    setHasMore(initialHasMore);
-    setTotalCount(initialTotalCount);
-  }, [initialDiaries, initialHasMore, initialPage, initialTotalCount]);
+    router.replace(
+      page <= 0 ? "/memories" : `/memories?page=${page}`,
+      { scroll: false },
+    );
+  }, [page, router]);
 
-  const fetchPagePreview = useCallback(async (pageNum: number) => {
-    const res = await fetch(`/api/memories?page=${pageNum}`);
-    const data = (await res.json()) as {
-      diaries?: DiaryListItem[];
-      hasMore?: boolean;
-      totalCount?: number;
-      error?: string;
-    };
-
-    if (!res.ok) {
-      throw new Error(data.error ?? "夜のメモを開けませんでした。");
-    }
-
-    return {
-      memos: data.diaries ?? [],
-      hasMore: data.hasMore ?? false,
-      totalCount: data.totalCount ?? data.diaries?.length ?? 0,
-    };
-  }, []);
-
-  const navigateToPage = useCallback(
-    async (
-      nextPage: number,
-      preloaded?: {
-        memos: DiaryListItem[];
-        hasMore: boolean;
-        totalCount: number;
-      },
-    ) => {
-      if (nextPage !== 0) {
-        skipMemoShelfPolaroidIntro(polaroidIntroSession);
-      }
-
-      if (preloaded) {
-        setDiaries(preloaded.memos);
-        setHasMore(preloaded.hasMore);
-        setTotalCount(preloaded.totalCount);
-        setPage(nextPage);
-        router.replace(
-          nextPage <= 0 ? "/memories" : `/memories?page=${nextPage}`,
-          { scroll: false },
-        );
-        return;
-      }
-
-      const res = await fetch(`/api/memories?page=${nextPage}`);
-      const data = (await res.json()) as {
-        diaries?: DiaryListItem[];
-        hasMore?: boolean;
-        totalCount?: number;
-        error?: string;
-      };
-
-      if (!res.ok) {
-        throw new Error(data.error ?? "夜のメモを開けませんでした。");
-      }
-
-      setDiaries(data.diaries ?? []);
-      setHasMore(data.hasMore ?? false);
-      setTotalCount(data.totalCount ?? data.diaries?.length ?? 0);
-      setPage(nextPage);
-
-      router.replace(
-        nextPage <= 0 ? "/memories" : `/memories?page=${nextPage}`,
-        { scroll: false },
-      );
+  const navigateToPageWithRoute = async (
+    nextPage: number,
+    preloaded?: {
+      memos: DiaryListItem[];
+      hasMore: boolean;
+      totalCount: number;
     },
-    [router],
-  );
+  ) => {
+    await navigateToPage(nextPage, preloaded);
+  };
 
   const listEnabled = !error && diaries.length > 0;
 
@@ -131,6 +88,8 @@ export function MemoShelfRouteView({
     hasMore,
     enabled: listEnabled,
   });
+
+  useSettingsMenuHidden("memories-list", true);
 
   return (
     <div className={`${styles.listLayout} mx-auto min-h-dvh w-full max-w-xl`}>
@@ -184,11 +143,12 @@ export function MemoShelfRouteView({
                     introSession={polaroidIntroSession}
                   />
                 )}
-                onNavigate={navigateToPage}
+                onNavigate={navigateToPageWithRoute}
                 onFetchPreview={fetchPagePreview}
                 onPlayPageSound={playPageSound}
                 onTransitioningChange={setTransitioning}
                 registerGoToPage={registerGoToPage}
+                sharedPageCache={sharedPageCacheRef}
               />
             )}
           </div>

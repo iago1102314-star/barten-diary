@@ -10,12 +10,14 @@ import { MemoShelfRecordBottomBar } from "@/components/memories/memo-shelf-detai
 import styles from "@/components/memories/memo-shelf-grid.module.css";
 import { MemoShelfScreen } from "@/components/memories/memo-shelf-surface";
 import type { DiaryListItem } from "@/components/diaries/diary-list";
+import { useMemoShelfListData } from "@/hooks/use-memo-shelf-list-data";
 import { useMemoShelfPageNavigation } from "@/hooks/use-memo-shelf-page-navigation";
+import { useDiaryDelete } from "@/hooks/use-diary-delete";
 import { useDiaryPaperExport } from "@/hooks/use-diary-paper-export";
 import { skipMemoShelfPolaroidIntro } from "@/lib/memories/memo-shelf-polaroid-intro";
 import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type MemoriesScreenProps = {
   onBack: () => void;
@@ -35,15 +37,12 @@ export function MemoriesScreen({
   onBack,
   initialDiaryId,
 }: MemoriesScreenProps) {
-  const [memos, setMemos] = useState<DiaryListItem[]>([]);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [totalCount, setTotalCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedMemo, setSelectedMemo] = useState<DiaryListItem | null>(null);
   const [detailEditing, setDetailEditing] = useState(false);
   const [detailDirty, setDetailDirty] = useState(false);
+  const [deletedMemoIds, setDeletedMemoIds] = useState<Set<string>>(() => new Set());
+  const [loadingDetail, setLoadingDetail] = useState(Boolean(initialDiaryId));
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const diaryExportRef = useRef<HTMLDivElement>(null);
   const polaroidIntroVisitIdRef = useRef(1);
   const polaroidIntroPlayedVisitIdRef = useRef(0);
@@ -53,81 +52,77 @@ export function MemoriesScreen({
   };
   const directOpen = Boolean(initialDiaryId);
 
-  const fetchListPage = useCallback(async (
-    pageNum: number,
-    preloaded?: {
-      memos: DiaryListItem[];
-      hasMore: boolean;
-      totalCount: number;
+  const listData = useMemoShelfListData({
+    enabled: !initialDiaryId,
+    polaroidIntroSession,
+  });
+
+  const {
+    page,
+    memos,
+    hasMore,
+    totalCount,
+    loading: listLoading,
+    error: listError,
+    fetchPagePreview,
+    navigateToPage,
+    sharedPageCacheRef,
+  } = listData;
+  const visibleMemos = useMemo(
+    () => memos.filter((memo) => !deletedMemoIds.has(memo.id)),
+    [deletedMemoIds, memos],
+  );
+  const visibleTotalCount = Math.max(0, totalCount - deletedMemoIds.size);
+
+  const loading = initialDiaryId ? loadingDetail : listLoading;
+  const error = initialDiaryId ? errorDetail : listError;
+  const diaryDelete = useDiaryDelete({
+    diaryId: selectedMemo?.id ?? "",
+    onDeleted: () => {
+      if (!selectedMemo) return;
+
+      setDeletedMemoIds((prev) => {
+        const next = new Set(prev);
+        next.add(selectedMemo.id);
+        return next;
+      });
+      setSelectedMemo(null);
+      setDetailEditing(false);
+      setDetailDirty(false);
     },
-  ) => {
-    if (pageNum !== 0) {
-      skipMemoShelfPolaroidIntro(polaroidIntroSession);
-    }
-
-    if (preloaded) {
-      setMemos(preloaded.memos);
-      setHasMore(preloaded.hasMore);
-      setTotalCount(preloaded.totalCount);
-      setPage(pageNum);
-      setError(null);
-      return;
-    }
-
-    const res = await fetch(`/api/memories?page=${pageNum}`);
-    const data = (await res.json()) as {
-      diaries?: DiaryListItem[];
-      hasMore?: boolean;
-      totalCount?: number;
-      error?: string;
-    };
-
-    if (!res.ok) {
-      throw new Error(data.error ?? "夜のメモを開けませんでした。");
-    }
-
-    setMemos(data.diaries ?? []);
-    setHasMore(data.hasMore ?? false);
-    setTotalCount(data.totalCount ?? data.diaries?.length ?? 0);
-    setPage(pageNum);
-    setError(null);
-  }, []);
+  });
 
   useEffect(() => {
+    if (!initialDiaryId) return;
+
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    setLoadingDetail(true);
+    setErrorDetail(null);
 
     void (async () => {
       try {
-        if (initialDiaryId) {
-          const res = await fetch(`/api/memories/${initialDiaryId}`);
-          const data = (await res.json()) as {
-            diary?: DiaryListItem;
-            error?: string;
-          };
+        const res = await fetch(`/api/memories/${initialDiaryId}`);
+        const data = (await res.json()) as {
+          diary?: DiaryListItem;
+          error?: string;
+        };
 
-          if (cancelled) return;
+        if (cancelled) return;
 
-          if (!res.ok || !data.diary) {
-            setError(data.error ?? "記録を開けませんでした。");
-            return;
-          }
-
-          setSelectedMemo(data.diary);
-          skipMemoShelfPolaroidIntro(polaroidIntroSession);
-          setMemos([data.diary]);
+        if (!res.ok || !data.diary) {
+          setErrorDetail(data.error ?? "記録を開けませんでした。");
           return;
         }
 
-        await fetchListPage(0);
+        setSelectedMemo(data.diary);
+        skipMemoShelfPolaroidIntro(polaroidIntroSession);
       } catch {
         if (!cancelled) {
-          setError("夜のメモを開けませんでした。");
+          setErrorDetail("記録を開けませんでした。");
         }
       } finally {
         if (!cancelled) {
-          setLoading(false);
+          setLoadingDetail(false);
         }
       }
     })();
@@ -135,7 +130,7 @@ export function MemoriesScreen({
     return () => {
       cancelled = true;
     };
-  }, [fetchListPage, initialDiaryId]);
+  }, [initialDiaryId, polaroidIntroSession]);
 
   const refreshMemo = useCallback(async (id: string) => {
     const res = await fetch(`/api/memories/${id}`);
@@ -147,15 +142,43 @@ export function MemoriesScreen({
     if (!res.ok || !data.diary) return;
 
     setSelectedMemo(data.diary);
-    setMemos((prev) =>
-      prev.map((memo) => (memo.id === data.diary!.id ? data.diary! : memo)),
-    );
   }, []);
 
   const handleOpenMemo = useCallback((memo: DiaryListItem) => {
     skipMemoShelfPolaroidIntro(polaroidIntroSession);
-    setSelectedMemo(memo);
-  }, []);
+
+    if (memo.body?.trim()) {
+      setSelectedMemo(memo);
+      return;
+    }
+
+    void (async () => {
+      const res = await fetch(`/api/memories/${memo.id}`);
+      const data = (await res.json()) as {
+        diary?: DiaryListItem;
+        error?: string;
+      };
+
+      if (res.ok && data.diary) {
+        setSelectedMemo(data.diary);
+        return;
+      }
+
+      setSelectedMemo(memo);
+    })();
+  }, [polaroidIntroSession]);
+
+  const fetchVisiblePagePreview = useCallback(
+    async (pageNum: number) => {
+      const entry = await fetchPagePreview(pageNum);
+      return {
+        ...entry,
+        memos: entry.memos.filter((memo) => !deletedMemoIds.has(memo.id)),
+        totalCount: Math.max(0, entry.totalCount - deletedMemoIds.size),
+      };
+    },
+    [deletedMemoIds, fetchPagePreview],
+  );
 
   useEffect(() => {
     setDetailEditing(false);
@@ -186,26 +209,6 @@ export function MemoriesScreen({
 
   const backFromScreenLabel = "路地に戻る";
   const backToListLabel = "一覧に戻る";
-
-  const fetchPagePreview = useCallback(async (pageNum: number) => {
-    const res = await fetch(`/api/memories?page=${pageNum}`);
-    const data = (await res.json()) as {
-      diaries?: DiaryListItem[];
-      hasMore?: boolean;
-      totalCount?: number;
-      error?: string;
-    };
-
-    if (!res.ok) {
-      throw new Error(data.error ?? "夜のメモを開けませんでした。");
-    }
-
-    return {
-      memos: data.diaries ?? [],
-      hasMore: data.hasMore ?? false,
-      totalCount: data.totalCount ?? data.diaries?.length ?? 0,
-    };
-  }, []);
 
   const listPaginationEnabled =
     !initialDiaryId && !selectedMemo && !loading && !error && memos.length > 0;
@@ -241,7 +244,7 @@ export function MemoriesScreen({
             <MemoShelfBottomBar
               placement="top"
               page={page}
-              totalCount={totalCount}
+              totalCount={visibleTotalCount}
               hasMore={hasMore}
               loading={loading}
               transitioning={transitioning}
@@ -301,7 +304,7 @@ export function MemoriesScreen({
                             page={page}
                             hasMore={hasMore}
                             enabled={listPaginationEnabled}
-                            currentMemos={memos}
+                            currentMemos={visibleMemos}
                             polaroidIntroSession={polaroidIntroSession}
                             renderList={(pageMemos, pageNum, intro) => (
                               <MemoList
@@ -314,11 +317,12 @@ export function MemoriesScreen({
                                 introSession={polaroidIntroSession}
                               />
                             )}
-                            onNavigate={fetchListPage}
-                            onFetchPreview={fetchPagePreview}
+                            onNavigate={navigateToPage}
+                            onFetchPreview={fetchVisiblePagePreview}
                             onPlayPageSound={playPageSound}
                             onTransitioningChange={setTransitioning}
                             registerGoToPage={registerGoToPage}
+                            sharedPageCache={sharedPageCacheRef}
                           />
                         )}
                       </div>
@@ -338,8 +342,10 @@ export function MemoriesScreen({
               selectedMemo && !detailEditing
                 ? {
                     onEdit: () => setDetailEditing(true),
-                    onSave: diaryExport.exportDiary,
-                    saveDisabled: diaryExport.exporting,
+                    onShare: diaryExport.exportDiary,
+                    shareDisabled: diaryExport.exporting || diaryDelete.deleting,
+                    onDelete: diaryDelete.deleteDiary,
+                    deleteDisabled: diaryDelete.deleting || diaryExport.exporting,
                   }
                 : undefined
             }
@@ -351,6 +357,10 @@ export function MemoriesScreen({
               onDismiss={diaryExport.dismissNotice}
             />
           ) : null}
+          <DiaryExportNoticePanel
+            notice={diaryDelete.notice}
+            onDismiss={diaryDelete.dismissNotice}
+          />
         </div>
       </MemoShelfScreen>
 

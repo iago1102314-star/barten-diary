@@ -17,10 +17,14 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const page = Math.max(0, Number.parseInt(searchParams.get("page") ?? "0", 10) || 0);
+  const includeExactCount = searchParams.get("includeCount") === "true";
+  const shelfListOnly = searchParams.get("shelfListOnly") === "true";
 
   const result = await fetchDiariesForShelf(supabase, {
     page,
     pageSize: DIARY_LIST_PAGE_SIZE,
+    includeExactCount,
+    shelfListOnly,
   });
 
   if (result.error) {
@@ -44,6 +48,6 @@ export async function GET(request: Request) {
     page: result.page ?? page,
     pageSize: result.pageSize ?? DIARY_LIST_PAGE_SIZE,
     hasMore: result.hasMore ?? false,
-    totalCount: result.totalCount ?? result.diaries.length,
+    ...(result.totalCount != null ? { totalCount: result.totalCount } : {}),
   });
 }
