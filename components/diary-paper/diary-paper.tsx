@@ -8,7 +8,6 @@ import {
 import { DiaryDrink } from "@/components/diary-paper/diary-drink";
 import { DiaryHeader } from "@/components/diary-paper/diary-header";
 import { DiaryCharacterComment } from "@/components/diary-paper/diary-character-comment";
-import { DiaryEditSepiaOverlay } from "@/components/diary-paper/diary-edit-sepia-overlay";
 import styles from "@/components/diary-paper/diary-paper.module.css";
 import { zenKurenaido } from "@/lib/diary-paper/diary-paper-font";
 import { DIARY_PAPER_LAYOUT } from "@/lib/diary-paper/diary-paper-layout";
@@ -55,15 +54,11 @@ export function DiaryPaper({ data, className, bodyEdit }: DiaryPaperProps) {
         );
 
   return (
-    <>
-      {bodyEdit ? (
-        <DiaryEditSepiaOverlay active targetRef={bodyEditRef} />
-      ) : null}
-      <article
-        className={[styles.paper, className].filter(Boolean).join(" ")}
-        style={paperLayoutStyle}
-        aria-label="夜の記録"
-      >
+    <article
+      className={[styles.paper, className].filter(Boolean).join(" ")}
+      style={paperLayoutStyle}
+      aria-label="夜の記録"
+    >
       <div className={styles.paperCorners} aria-hidden>
         <span className={styles.cornerTL} />
         <span className={styles.cornerTR} />
@@ -105,7 +100,6 @@ export function DiaryPaper({ data, className, bodyEdit }: DiaryPaperProps) {
           </EditDimmedSection>
         </div>
       </div>
-      </article>
-    </>
+    </article>
   );
 }

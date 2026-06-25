@@ -37,6 +37,8 @@ export type BarSeatMoodPickerProps = {
   onConfirmStart?: (option: MoodOption) => void;
   /** 選ばれたボタンが闇に溶け終わった */
   onConfirmExitComplete?: (option: MoodOption) => void;
+  /** 確定退場演出を即完了（grass 再生へ） */
+  onRegisterExitSkip?: (skip: (() => void) | null) => void;
   showPourAnimation?: boolean;
   pourCompleteDelay?: number;
   className?: string;
@@ -471,6 +473,7 @@ export function BarSeatMoodPicker({
   onBeforeSelect,
   onConfirmStart,
   onConfirmExitComplete,
+  onRegisterExitSkip,
   showPourAnimation = true,
   pourCompleteDelay = TIMING.pourCompleteDelay,
   className = "",
@@ -509,6 +512,20 @@ export function BarSeatMoodPicker({
     },
     [onConfirmExitComplete],
   );
+
+  const skipConfirmExitToGrass = useCallback(() => {
+    if (!confirmedOption || exitCompleteFiredRef.current) return;
+    setConfirmPhase(null);
+    setButtonAnchor(null);
+    fireConfirmExitComplete(confirmedOption);
+  }, [confirmedOption, fireConfirmExitComplete]);
+
+  useEffect(() => {
+    if (!onRegisterExitSkip) return;
+
+    onRegisterExitSkip(skipConfirmExitToGrass);
+    return () => onRegisterExitSkip(null);
+  }, [onRegisterExitSkip, skipConfirmExitToGrass]);
 
   const beginPour = (option: MoodOption) => {
     setPicked(option);

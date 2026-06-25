@@ -8,14 +8,19 @@ import {
   micBlockedHintText,
 } from "@/lib/recorder/mic-availability";
 import { Reveal } from "@/components/motion/reveal";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type DrinkRecordIntroPanelProps = {
   onSip: () => void;
+  /** grass 経由の提供演出 — セリフを飛ばして口をつけるへ */
+  skipToSip?: boolean;
 };
 
 /** 明転後 — マスター吹き出し → 口をつける（同一画面） */
-export function DrinkRecordIntroPanel({ onSip }: DrinkRecordIntroPanelProps) {
+export function DrinkRecordIntroPanel({
+  onSip,
+  skipToSip = false,
+}: DrinkRecordIntroPanelProps) {
   const [showSip, setShowSip] = useState(false);
   const micBlock = useMemo(() => {
     if (!showSip) return null;
@@ -23,11 +28,17 @@ export function DrinkRecordIntroPanel({ onSip }: DrinkRecordIntroPanelProps) {
     return availability.available ? null : availability.reason ?? "unsupported";
   }, [showSip]);
 
+  useEffect(() => {
+    if (!skipToSip || showSip) return;
+    setShowSip(true);
+  }, [showSip, skipToSip]);
+
   if (!showSip) {
     return (
       <MasterIntroPanel
         lines={MASTER_DRINK_SERVED}
         onComplete={() => setShowSip(true)}
+        onSkipToEnd={() => setShowSip(true)}
         bubbleDelayMs={0}
       />
     );

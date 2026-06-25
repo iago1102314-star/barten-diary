@@ -1,0 +1,45 @@
+.root {
+  pointer-events: none;
+  position: absolute;
+  inset-inline: 0;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  padding-inline: var(--drink-name-padding-inline, 1.75rem);
+  padding-top: var(--drink-name-top, 14%);
+}
+
+.inner {
+  width: 100%;
+  max-width: 22rem;
+  text-align: center;
+}
+
+.englishName {
+  margin: 0;
+  color: var(--drink-name-english-color, rgba(245, 239, 228, 0.94));
+  font-size: var(--drink-name-english-size, clamp(1.85rem, 7.2vw, 2.35rem));
+  letter-spacing: var(--drink-name-english-tracking, 0.06em);
+  line-height: 1.05;
+}
+
+.dividerWrap {
+  margin-top: var(--drink-name-english-to-line-gap, 0.42rem);
+  margin-bottom: var(--drink-name-line-to-katakana-gap, 0.38rem);
+}
+
+.katakanaName {
+  margin: 0;
+  color: var(--drink-name-katakana-color, rgba(232, 212, 184, 0.72));
+  font-family: var(--font-serif-jp), serif;
+  font-size: var(--drink-name-katakana-size, 0.72rem);
+  line-height: var(--drink-name-katakana-line-height, 1.5);
+  letter-spacing: var(--drink-name-katakana-tracking, 0.14em);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .englishName,
+  .katakanaName {
+    transition: none !important;
+  }
+}

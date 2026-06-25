@@ -63,6 +63,7 @@ export function useDiaryPaperExport({
 
     try {
       await waitForCaptureReady(node);
+      node.setAttribute("data-diary-exporting", "true");
 
       const captureWidth = Math.ceil(node.getBoundingClientRect().width);
       const blob = await domToBlob(node, {
@@ -88,6 +89,7 @@ export function useDiaryPaperExport({
       }
       setNotice({ type: "error", text: "画像の保存に失敗しました" });
     } finally {
+      captureRef.current?.removeAttribute("data-diary-exporting");
       setExporting(false);
     }
   }, [captureRef, createdAt, exporting]);

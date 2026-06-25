@@ -81,10 +81,10 @@ export function NightSession() {
         </div>
       )}
 
-      {session.phase === "processing" && (
+      {session.phase === "checking" && (
         <div className="space-y-3 py-4">
           <p className="animate-pulse text-sm tracking-wide text-stone-500">
-            ……言葉を整理している。
+            ……少し待ってくれ。
           </p>
         </div>
       )}

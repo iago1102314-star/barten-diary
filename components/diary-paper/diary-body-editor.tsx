@@ -1,6 +1,8 @@
 "use client";
 
 import styles from "@/components/diary-paper/diary-paper.module.css";
+import { useDiaryEditScrollRoot } from "@/hooks/use-diary-edit-scroll-root";
+import { syncDiaryBodyTextareaHeight } from "@/lib/diary-paper/diary-edit-textarea-height";
 import {
   forwardRef,
   useCallback,
@@ -19,44 +21,65 @@ export type DiaryBodyEditorProps = {
   error?: string;
 };
 
-function syncTextareaHeight(textarea: HTMLTextAreaElement) {
-  textarea.style.height = "0px";
-  textarea.style.height = `${textarea.scrollHeight}px`;
-}
-
 export const DiaryBodyEditor = forwardRef<HTMLDivElement, DiaryBodyEditorProps>(
   function DiaryBodyEditor(
     { diaryId, value, onChange, onCancel, formAction, error },
     ref,
   ) {
+    const wrapRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const resizeFrameRef = useRef(0);
+
+    useDiaryEditScrollRoot(wrapRef, true);
 
     const resizeTextarea = useCallback(() => {
       const el = textareaRef.current;
       if (!el) return;
-      syncTextareaHeight(el);
+      syncDiaryBodyTextareaHeight(el);
     }, []);
 
+    const scheduleResize = useCallback(() => {
+      cancelAnimationFrame(resizeFrameRef.current);
+      resizeFrameRef.current = requestAnimationFrame(() => {
+        resizeTextarea();
+      });
+    }, [resizeTextarea]);
+
     useLayoutEffect(() => {
-      resizeTextarea();
-    }, [value, resizeTextarea]);
+      scheduleResize();
+    }, [value, scheduleResize]);
 
     useLayoutEffect(() => {
       if (document.fonts?.ready) {
-        void document.fonts.ready.then(resizeTextarea);
+        void document.fonts.ready.then(scheduleResize);
       }
 
-      window.addEventListener("resize", resizeTextarea, { passive: true });
-      return () => window.removeEventListener("resize", resizeTextarea);
-    }, [resizeTextarea]);
+      window.addEventListener("resize", scheduleResize, { passive: true });
+      return () => {
+        window.removeEventListener("resize", scheduleResize);
+        cancelAnimationFrame(resizeFrameRef.current);
+      };
+    }, [scheduleResize]);
 
     const handleChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
       onChange(event.target.value);
-      syncTextareaHeight(event.target);
+      scheduleResize();
     };
 
+    const setWrapRef = useCallback(
+      (node: HTMLDivElement | null) => {
+        wrapRef.current = node;
+        if (typeof ref === "function") {
+          ref(node);
+        } else if (ref) {
+          ref.current = node;
+        }
+      },
+      [ref],
+    );
+
     return (
-      <div ref={ref} className={styles.bodyEditWrap}>
+      <div ref={setWrapRef} className={styles.bodyEditWrap}>
         <form action={formAction} className={styles.bodyEditForm}>
           <input type="hidden" name="id" value={diaryId} />
           <textarea

@@ -25,31 +25,33 @@ export function DiaryDrink({
   return (
     <div className={styles.drink}>
       <div
-        className={styles.drinkPhoto}
+        className={styles.drinkPhotoLift}
         style={{ transform: `rotate(${photoTiltDeg}deg)` }}
       >
-        <Image
-          src={maskingTapeSrc}
-          alt=""
-          aria-hidden
-          width={DIARY_DRINK_TAPE_IMAGE_SIZE.width}
-          height={DIARY_DRINK_TAPE_IMAGE_SIZE.height}
-          className={styles.drinkTape}
-          style={{ opacity: getDiaryDrinkTapeOpacity(maskingTapeSrc) }}
-          unoptimized
-        />
-        {imageSrc ? (
+        <div className={styles.drinkPhoto}>
           <Image
-            src={imageSrc}
-            alt={alt}
-            width={324}
-            height={215}
-            className={styles.drinkImage}
+            src={maskingTapeSrc}
+            alt=""
+            aria-hidden
+            width={DIARY_DRINK_TAPE_IMAGE_SIZE.width}
+            height={DIARY_DRINK_TAPE_IMAGE_SIZE.height}
+            className={styles.drinkTape}
+            style={{ opacity: getDiaryDrinkTapeOpacity(maskingTapeSrc) }}
             unoptimized
           />
-        ) : (
-          <div className={styles.drinkFrame} role="img" aria-label={alt} />
-        )}
+          {imageSrc ? (
+            <Image
+              src={imageSrc}
+              alt={alt}
+              width={324}
+              height={215}
+              className={styles.drinkImage}
+              unoptimized
+            />
+          ) : (
+            <div className={styles.drinkFrame} role="img" aria-label={alt} />
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,9 +1,8 @@
 "use client";
 
+import { checkGenerationReadiness } from "@/lib/ai/check-generation-readiness";
 import { useGenerateDiary } from "@/hooks/use-generate-diary";
 import { useRecorder } from "@/hooks/use-recorder";
-import { checkGenerationReadiness } from "@/lib/ai/check-generation-readiness";
-import { validateTranscriptInput } from "@/lib/ai/security/validate-input";
 import { fetchLatestDiaryForDev } from "@/lib/dev/fetch-latest-diary-for-dev";
 import { isDevShortcutEnabled } from "@/lib/dev/is-dev-shortcut-enabled";
 import { simulateNight } from "@/lib/dev/simulate-night";
@@ -15,21 +14,28 @@ import {
 import { fallbackDrinkFromName } from "@/lib/drinks/resolve-drink-from-bottle-tag";
 import type { DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
 import { barAudioEngine, getBarAudioDiagnostics } from "@/lib/entrance/bar-audio-engine";
-import { MIN_RECORDING_BYTES } from "@/lib/recorder/recorder-platform";
+import {
+  EMPTY_NIGHT_PIPELINE_TIMINGS,
+  type NightPipelineTimings,
+} from "@/lib/night/night-pipeline-timings";
+import { runNightGenerationPipeline } from "@/lib/night/run-night-generation-pipeline";
+import { validateRecordingForTranscribe } from "@/lib/night/validate-recording-for-transcribe";
 import {
   getRecordingPipelineDiagnostic,
   resetRecordingPipelineDiagnostic,
   updateRecordingPipelineDiagnostic,
 } from "@/lib/recorder/recording-pipeline-diagnostic";
 import { logRecordingPipeline, logRecordingPipelineError } from "@/lib/recorder/recording-pipeline-log";
-import { transcribeAudio } from "@/lib/transcribe/transcribe-audio";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type NightPhase =
   | "idle"
   | "recording"
-  | "processing"
-  | "accepted"
+  /** 録音 blob のローカルチェックのみ */
+  | "checking"
+  /** チェック通過 — 店内エンディング中（生成はバックグラウンド） */
+  | "ending"
+  /** Whisper + 整形 + 生成完了 */
   | "revealed";
 
 export type ContinuedFromBottle = {
@@ -62,6 +68,12 @@ export function useNightSession() {
   );
   const [isDevSimulated, setIsDevSimulated] = useState(false);
   const [generationFailed, setGenerationFailed] = useState(false);
+  const [pipelineTimings, setPipelineTimings] = useState<NightPipelineTimings>(
+    EMPTY_NIGHT_PIPELINE_TIMINGS,
+  );
+  const pipelineTimingsRef = useRef(pipelineTimings);
+  pipelineTimingsRef.current = pipelineTimings;
+
   const pipelineLock = useRef(false);
   const inflightGenerationKeyRef = useRef<string | null>(null);
   const registerListenFailureRef = useRef<
@@ -75,7 +87,7 @@ export function useNightSession() {
     onFatalError: ({ hadRecordingAttempt, message }) => {
       if (
         phaseRef.current !== "recording" &&
-        phaseRef.current !== "processing"
+        phaseRef.current !== "checking"
       ) {
         return;
       }
@@ -90,6 +102,10 @@ export function useNightSession() {
     },
   });
 
+  const resetPipelineTimings = useCallback(() => {
+    setPipelineTimings(EMPTY_NIGHT_PIPELINE_TIMINGS);
+  }, []);
+
   const registerListenFailure = useCallback(
     (options?: { advanceCount?: boolean; reason?: string }) => {
       pipelineLock.current = false;
@@ -100,6 +116,7 @@ export function useNightSession() {
       setTranscript(null);
       setRecordedAt(null);
       setGenerationFailed(false);
+      resetPipelineTimings();
       const reason =
         options?.reason ?? "listen failure (no detail recorded)";
       logRecordingPipelineError("listen failure", {
@@ -118,10 +135,19 @@ export function useNightSession() {
       phaseRef.current = "recording";
       setPhase("recording");
     },
-    [recorder, generation],
+    [recorder, generation, resetPipelineTimings],
   );
 
   registerListenFailureRef.current = registerListenFailure;
+
+  const registerPipelineFailure = useCallback((reason: string) => {
+    setGenerationFailed(true);
+    logRecordingPipelineError("night pipeline: failed after ending", {
+      reason,
+      phase: phaseRef.current,
+    });
+    updateRecordingPipelineDiagnostic({ pipelineError: reason });
+  }, []);
 
   const resetListenFailure = useCallback(() => {
     setListenFailureCount(0);
@@ -147,7 +173,8 @@ export function useNightSession() {
     setContinuedFrom(null);
     setIsDevSimulated(false);
     setGenerationFailed(false);
-  }, [recorder, generation, resetListenFailure]);
+    resetPipelineTimings();
+  }, [recorder, generation, resetListenFailure, resetPipelineTimings]);
 
   const selectCategory = useCallback(
     (categoryId: DrinkCategoryId, drinkId?: DrinkId) => {
@@ -186,6 +213,7 @@ export function useNightSession() {
     pipelineLock.current = false;
     inflightGenerationKeyRef.current = null;
     setGenerationFailed(false);
+    resetPipelineTimings();
     generation.reset();
     setTranscript(null);
     setRecordedAt(null);
@@ -195,11 +223,17 @@ export function useNightSession() {
     setPhase("recording");
     const started = await recorder.start();
     if (!started) {
-      // phaseRef を先に更新していれば onFatalError 経由で UI 化済み
       return false;
     }
     return true;
-  }, [recorder, generation, selectedCategoryId, resetListenFailure, registerListenFailure]);
+  }, [
+    recorder,
+    generation,
+    selectedCategoryId,
+    resetListenFailure,
+    registerListenFailure,
+    resetPipelineTimings,
+  ]);
 
   const stopSpeaking = useCallback(() => {
     if (recorder.status === "recording" || recorder.status === "paused") {
@@ -232,6 +266,7 @@ export function useNightSession() {
     setGenerationFailed(false);
     pipelineLock.current = false;
     inflightGenerationKeyRef.current = null;
+    resetPipelineTimings();
     resetRecordingPipelineDiagnostic();
     phaseRef.current = "recording";
     setPhase("recording");
@@ -244,86 +279,231 @@ export function useNightSession() {
       return false;
     }
     return true;
-  }, [recorder, generation]);
+  }, [recorder, generation, resetPipelineTimings]);
+
+  const runBackgroundGeneration = useCallback(
+    async (blob: Blob, mimeType: string, endedAt: string) => {
+      if (!selectedCategoryId) return;
+      if (pipelineLock.current) return;
+
+      pipelineLock.current = true;
+      const key = `blob::${endedAt}::${blob.size}`;
+      inflightGenerationKeyRef.current = key;
+      setGenerationFailed(false);
+
+      logRecordingPipeline("night pipeline: background start", {
+        blobSize: blob.size,
+        mimeType,
+      });
+
+      const result = await runNightGenerationPipeline({
+        blob,
+        mimeType,
+        selectedCategoryId,
+        selectedDrinkId,
+        recordedAt: endedAt,
+        generate: generation.generate,
+      });
+
+      setPipelineTimings((prev) => ({
+        ...prev,
+        whisperMs: result.timings.whisperMs,
+        readinessMs: result.timings.readinessMs,
+        diaryGenerationMs: result.timings.diaryGenerationMs,
+        totalMs: prev.recordingCheckMs + result.timings.totalMs,
+      }));
+
+      if (!result.ok) {
+        if (result.phase === "transcribe" || result.phase === "validation") {
+          registerPipelineFailure(result.reason);
+        } else {
+          setGenerationFailed(true);
+          updateRecordingPipelineDiagnostic({ pipelineError: result.reason });
+          logRecordingPipeline("night pipeline: failed", {
+            phase: result.phase,
+            reason: result.reason,
+            timings: result.timings,
+          });
+        }
+        pipelineLock.current = false;
+        return;
+      }
+
+      clearListenFailureUi();
+      setTranscript(result.transcript);
+      updateRecordingPipelineDiagnostic({
+        diaryTranscript: result.transcript,
+      });
+      inflightGenerationKeyRef.current = generationKey(
+        result.transcript,
+        endedAt,
+      );
+      phaseRef.current = "revealed";
+      setPhase("revealed");
+      pipelineLock.current = false;
+
+      logRecordingPipeline("night pipeline: complete", {
+        timings: {
+          ...pipelineTimingsRef.current,
+          whisperMs: result.timings.whisperMs,
+          readinessMs: result.timings.readinessMs,
+          diaryGenerationMs: result.timings.diaryGenerationMs,
+          totalMs: pipelineTimingsRef.current.recordingCheckMs + result.timings.totalMs,
+        },
+      });
+    },
+    [
+      selectedCategoryId,
+      selectedDrinkId,
+      generation,
+      registerPipelineFailure,
+      clearListenFailureUi,
+    ],
+  );
+
+  const runRecordingCheck = useCallback(
+    (blob: Blob, mimeType: string, elapsedMs: number) => {
+      if (!selectedCategoryId) return;
+
+      const checkStartedAt = performance.now();
+      logRecordingPipeline("recording check: start", {
+        blobSize: blob.size,
+        mimeType,
+        elapsedMs,
+      });
+
+      const check = validateRecordingForTranscribe({
+        blob,
+        mimeType,
+        elapsedMs,
+      });
+      const recordingCheckMs = Math.round(performance.now() - checkStartedAt);
+
+      setPipelineTimings((prev) => ({
+        ...prev,
+        recordingCheckMs,
+      }));
+
+      if (!check.ok) {
+        updateRecordingPipelineDiagnostic({ pipelineError: check.reason });
+        logRecordingPipeline("recording check: failed", {
+          elapsedMs: recordingCheckMs,
+          reason: check.reason,
+        });
+        registerListenFailure({
+          advanceCount: true,
+          reason: check.reason,
+        });
+        return;
+      }
+
+      logRecordingPipeline("recording check: ok", {
+        elapsedMs: recordingCheckMs,
+      });
+
+      const endedAt = recordedAt ?? new Date().toISOString();
+      phaseRef.current = "ending";
+      setPhase("ending");
+      void runBackgroundGeneration(blob, mimeType, endedAt);
+    },
+    [
+      selectedCategoryId,
+      recordedAt,
+      registerListenFailure,
+      runBackgroundGeneration,
+    ],
+  );
 
   const retryGeneration = useCallback(async () => {
     if (!transcript || !selectedCategoryId) return;
 
     setGenerationFailed(false);
-
-    logRecordingPipeline("generation readiness: retry", {
-      transcriptLength: transcript.length,
-    });
-
-    const readiness = await checkGenerationReadiness();
-    if (!readiness.ok) {
-      logRecordingPipeline("generation readiness: failed", {
-        error: readiness.error,
-        elapsedMs: readiness.elapsedMs,
-      });
-      updateRecordingPipelineDiagnostic({ pipelineError: readiness.error });
-      setGenerationFailed(true);
-      phaseRef.current = "processing";
-      setPhase("processing");
-      return;
-    }
-
-    logRecordingPipeline("generation readiness: ok", {
-      elapsedMs: readiness.elapsedMs,
-    });
-
-    phaseRef.current = "revealed";
-    setPhase("revealed");
-  }, [transcript, selectedCategoryId]);
-
-  const startDiaryGeneration = useCallback(() => {
-    if (isDevSimulated) return;
-    if (!transcript || !selectedCategoryId) return;
-
     const endedAt = recordedAt ?? new Date().toISOString();
     const key = generationKey(transcript, endedAt);
     if (inflightGenerationKeyRef.current === key) return;
 
     inflightGenerationKeyRef.current = key;
-    setGenerationFailed(false);
 
-    logRecordingPipeline("diary generation: start", {
+    logRecordingPipeline("night pipeline: retry generation", {
       transcriptLength: transcript.length,
-      transcript,
-      selectedCategoryId,
-      selectedDrinkId,
     });
 
-    updateRecordingPipelineDiagnostic({ diaryTranscript: transcript });
+    const readinessStartedAt = performance.now();
+    const readiness = await checkGenerationReadiness();
+    const readinessMs = Math.round(performance.now() - readinessStartedAt);
 
-    void generation
-      .generate(transcript, selectedCategoryId, endedAt, selectedDrinkId)
-      .then((outcome) => {
-        if (outcome.ok) {
-          logRecordingPipeline("diary generation: success", {
-            transcriptLength: transcript.length,
-            transcript,
-            bottleTag: outcome.diary.bottleTag,
-            diaryPreview: outcome.diary.diary.slice(0, 120),
-          });
-          return;
-        }
-        logRecordingPipeline("diary generation: failed", {
-          transcriptLength: transcript.length,
-          transcript,
-        });
-        inflightGenerationKeyRef.current = null;
-        setGenerationFailed(true);
-        console.error("Background diary generation failed");
+    if (!readiness.ok) {
+      logRecordingPipeline("night pipeline: retry readiness failed", {
+        elapsedMs: readinessMs,
+        error: readiness.error,
       });
-  }, [
-    isDevSimulated,
-    transcript,
-    selectedCategoryId,
-    selectedDrinkId,
-    recordedAt,
-    generation,
-  ]);
+      updateRecordingPipelineDiagnostic({ pipelineError: readiness.error });
+      setGenerationFailed(true);
+      inflightGenerationKeyRef.current = null;
+      return;
+    }
+
+    const diaryStartedAt = performance.now();
+    const outcome = await generation.generate(
+      transcript,
+      selectedCategoryId,
+      endedAt,
+      selectedDrinkId,
+    );
+    const diaryGenerationMs = Math.round(performance.now() - diaryStartedAt);
+
+    setPipelineTimings((prev) => ({
+      ...prev,
+      readinessMs,
+      diaryGenerationMs,
+    }));
+
+    if (!outcome.ok) {
+      setGenerationFailed(true);
+      inflightGenerationKeyRef.current = null;
+      return;
+    }
+
+    phaseRef.current = "revealed";
+    setPhase("revealed");
+    logRecordingPipeline("night pipeline: retry generation complete", {
+      diaryGenerationMs,
+    });
+  }, [transcript, selectedCategoryId, selectedDrinkId, recordedAt, generation]);
+
+  const notifyStoreEndingComplete = useCallback(() => {
+    const generationCompleteAtStoreEnding =
+      phaseRef.current === "revealed" && generation.status === "success";
+
+    setPipelineTimings((prev) => ({
+      ...prev,
+      generationCompleteAtStoreEnding,
+    }));
+
+    logRecordingPipeline("store ending: complete", {
+      generationCompleteAtStoreEnding,
+      phase: phaseRef.current,
+      generationStatus: generation.status,
+      pipelineTimings: {
+        ...pipelineTimingsRef.current,
+        generationCompleteAtStoreEnding,
+      },
+    });
+  }, [generation.status]);
+
+  const recordAlleyWaitComplete = useCallback((alleyWaitMs: number) => {
+    setPipelineTimings((prev) => ({
+      ...prev,
+      alleyWaitMs,
+    }));
+    logRecordingPipeline("alley wait: complete", {
+      alleyWaitMs,
+      pipelineTimings: {
+        ...pipelineTimingsRef.current,
+        alleyWaitMs,
+      },
+    });
+  }, []);
 
   const abandonNightWithoutRecord = useCallback(() => {
     pipelineLock.current = false;
@@ -336,8 +516,9 @@ export function useNightSession() {
     setListenFailureVisible(false);
     setGenerationFailed(false);
     setIsDevSimulated(false);
+    resetPipelineTimings();
     setPhase("idle");
-  }, [recorder, generation]);
+  }, [recorder, generation, resetPipelineTimings]);
 
   const prepareDevSkipFromLatestDiary = useCallback(async (): Promise<Drink | null> => {
     if (!isDevShortcutEnabled()) return null;
@@ -348,7 +529,7 @@ export function useNightSession() {
     const drink =
       getDrinkById(snapshot.drinkId) ??
       fallbackDrinkFromName(snapshot.drinkName);
-    const recordedAt = new Date().toISOString();
+    const endedAt = new Date().toISOString();
 
     phaseRef.current = "revealed";
     setPhase("revealed");
@@ -360,13 +541,13 @@ export function useNightSession() {
     generation.injectDevResult(snapshot.record);
     inflightGenerationKeyRef.current = generationKey(
       snapshot.transcript,
-      recordedAt,
+      endedAt,
     );
     setSelectedCategoryId(snapshot.categoryId);
     setSelectedDrinkId(snapshot.drinkId);
     setContinuedFrom(null);
     setTranscript(snapshot.transcript);
-    setRecordedAt(recordedAt);
+    setRecordedAt(endedAt);
     setIsDevSimulated(false);
     setGenerationFailed(false);
 
@@ -402,131 +583,34 @@ export function useNightSession() {
     [recorder, generation, resetListenFailure],
   );
 
-  const runTranscribePipeline = useCallback(
-    async (blob: Blob, mimeType: string) => {
-      if (!selectedCategoryId) return;
-
-      logRecordingPipeline("transcribe pipeline: start", {
-        blobSize: blob.size,
-        blobType: blob.type || mimeType,
-        mimeType,
-        minRecordingBytes: MIN_RECORDING_BYTES,
-      });
-
-      try {
-        const { transcript: text, debug } = await transcribeAudio(blob, mimeType);
-
-        updateRecordingPipelineDiagnostic({
-          whisperRaw: debug?.whisperRaw,
-          refinedTranscript: text,
-        });
-
-        logRecordingPipeline("transcribe pipeline: response", {
-          transcriptLength: text.length,
-          transcript: text,
-        });
-
-        const validation = validateTranscriptInput(text);
-        if (!validation.ok) {
-          const reason = `validation:${validation.code} — ${validation.message}`;
-          updateRecordingPipelineDiagnostic({
-            pipelineError: reason,
-          });
-          logRecordingPipeline("transcribe pipeline: validation failed", {
-            code: validation.code,
-            message: validation.message,
-            transcriptLength: text.length,
-            transcript: text,
-          });
-          registerListenFailure({
-            advanceCount: true,
-            reason,
-          });
-          return;
-        }
-
-        clearListenFailureUi();
-        setTranscript(text);
-
-        logRecordingPipeline("generation readiness: start");
-        const readiness = await checkGenerationReadiness();
-        if (!readiness.ok) {
-          updateRecordingPipelineDiagnostic({
-            pipelineError: readiness.error,
-          });
-          logRecordingPipeline("generation readiness: failed", {
-            error: readiness.error,
-            elapsedMs: readiness.elapsedMs,
-          });
-          setGenerationFailed(true);
-          phaseRef.current = "processing";
-          setPhase("processing");
-          return;
-        }
-
-        logRecordingPipeline("generation readiness: ok", {
-          elapsedMs: readiness.elapsedMs,
-        });
-
-        updateRecordingPipelineDiagnostic({
-          diaryTranscript: text,
-        });
-
-        phaseRef.current = "revealed";
-        setPhase("revealed");
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        updateRecordingPipelineDiagnostic({
-          pipelineError: message,
-        });
-        logRecordingPipeline("transcribe pipeline: error", {
-          error: message,
-        });
-        registerListenFailure({
-          advanceCount: true,
-          reason: `transcribe: ${message}`,
-        });
-      } finally {
-        pipelineLock.current = false;
-      }
-    },
-    [
-      selectedCategoryId,
-      recordedAt,
-      registerListenFailure,
-      clearListenFailureUi,
-    ],
-  );
-
   useEffect(() => {
     if (phase !== "recording") return;
     if (recorder.status !== "stopped" || !recorder.blob) return;
-    logRecordingPipeline("recording finished: resume BGM, enter processing", {
+    logRecordingPipeline("recording finished: resume BGM, enter checking", {
       audio: getBarAudioDiagnostics(),
       blobSize: recorder.blob.size,
       mimeType: recorder.mimeType,
       elapsedMs: recorder.elapsedMs,
     });
     barAudioEngine.resumeJazzAfterRecording();
-    setPhase("processing");
+    setPhase("checking");
   }, [phase, recorder.status, recorder.blob, recorder.mimeType, recorder.elapsedMs]);
 
   useEffect(() => {
-    if (phase !== "processing") return;
+    if (phase !== "checking") return;
     if (recorder.status !== "stopped") return;
     if (!recorder.blob || !recorder.mimeType) return;
     if (!selectedCategoryId) return;
-    if (pipelineLock.current) return;
 
-    pipelineLock.current = true;
-    void runTranscribePipeline(recorder.blob, recorder.mimeType);
+    runRecordingCheck(recorder.blob, recorder.mimeType, recorder.elapsedMs);
   }, [
     phase,
     recorder.status,
     recorder.blob,
     recorder.mimeType,
+    recorder.elapsedMs,
     selectedCategoryId,
-    runTranscribePipeline,
+    runRecordingCheck,
   ]);
 
   return {
@@ -539,6 +623,7 @@ export function useNightSession() {
     record: generation.result,
     generationStatus: generation.status,
     generationFailed,
+    pipelineTimings,
     selectedCategoryId,
     selectedDrinkId,
     continuedFrom,
@@ -551,7 +636,8 @@ export function useNightSession() {
     resumeSpeaking,
     retrySpeaking,
     retryGeneration,
-    startDiaryGeneration,
+    notifyStoreEndingComplete,
+    recordAlleyWaitComplete,
     abandonNightWithoutRecord,
     simulateDevNight,
     prepareDevSkipFromLatestDiary,

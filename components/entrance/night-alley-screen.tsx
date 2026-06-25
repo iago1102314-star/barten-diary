@@ -40,6 +40,14 @@ export function NightAlleyScreen({
 
       <div className="absolute inset-0 z-30 flex flex-col items-center justify-end px-8 pb-[22%] pt-16">
         <div className="w-full max-w-xs space-y-9 text-center">
+          {outcome.kind === "composing" && (
+            <Reveal delay={0.6} duration={1.6}>
+              <p className={outcomeTextClass}>
+                今夜の記録を綴っています…
+              </p>
+            </Reveal>
+          )}
+
           {outcome.kind === "saved" && (
             <>
               <Reveal delay={0.7} duration={1.7}>

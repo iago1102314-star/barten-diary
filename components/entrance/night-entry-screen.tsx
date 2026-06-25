@@ -9,7 +9,6 @@ import {
 import { BarButton } from "@/components/ui/bar-button";
 import { SHOW_LOADING_GATE_MESSAGE_ON_HOME } from "@/lib/entrance/loading-gate-message-tuning";
 import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
-import { isNonProd } from "@/lib/env/app-env";
 import {
   DOOR_EXIT_DURATION_SEC,
   DOOR_EXIT_IMAGE_ZOOM_SCALE,
@@ -320,7 +319,7 @@ export function NightEntryScreen({
             >
               メモを見る
             </BarButton>
-            {isNonProd && onOpenDiaryPaperMock && (
+            {onOpenDiaryPaperMock && (
               <BarButton
                 variant="quiet"
                 onClick={interactionLocked ? undefined : onOpenDiaryPaperMock}

@@ -11,12 +11,14 @@ type MoodSelectSceneProps = {
   skipPastBottleEntrance?: boolean;
   /** 選択確定 — 退場演出開始 */
   onSelectionStart?: () => void;
+  onRegisterExitSkip?: (skip: (() => void) | null) => void;
   onSelect: (categoryId: DrinkCategoryId, drink: Drink) => void;
   onDecline: () => void;
 };
 
 export function MoodSelectScene({
   onSelectionStart,
+  onRegisterExitSkip,
   onSelect,
   onDecline,
   skipPastBottleEntrance = false,
@@ -34,6 +36,7 @@ export function MoodSelectScene({
         onSelect={onSelect}
         onDecline={onDecline}
         onConfirmStart={handleConfirmStart}
+        onRegisterExitSkip={onRegisterExitSkip}
         skipPastBottleEntrance={skipPastBottleEntrance}
       />
     </div>

@@ -15,6 +15,12 @@ export const MOOD_VIGNETTE_TUNING = {
   vignetteShellZIndex: 34,
   /** entrance-flow — 気分選択・過去ボトル UI shell */
   uiShellZIndex: 40,
+  /** 入場演出連打スキップ — UI より下（ボタンを塞がない） */
+  moodEntranceSkipZIndex: 33,
+  /** 確定退場〜grass 再生前の連打スキップ */
+  moodExitSkipZIndex: 41,
+  /** grass 後〜口をつける前の連打スキップ */
+  drinkPostGrassSkipZIndex: 45,
   /** entrance-flow —「過去のボトルから」リンク */
   pastBottleLinkZIndex: 45,
 

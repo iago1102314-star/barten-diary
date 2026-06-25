@@ -8,7 +8,7 @@ import { drinkHasImage } from "@/lib/entrance/drink-image-path";
 
 const DEFAULT_TIME_ZONE = "Asia/Tokyo";
 
-/** heavy + 画像あり — Old Fashioned / 山崎 12年 を半々 */
+/** heavy + 画像あり — Old Fashioned / Yamazaki 18 を半々 */
 const HEAVY_VISUAL_DRINK_IDS = ["old-fashioned", "yamazaki-12"] as const satisfies readonly DrinkId[];
 
 function getSelectableDrinks(categoryId: DrinkCategoryId): Drink[] {

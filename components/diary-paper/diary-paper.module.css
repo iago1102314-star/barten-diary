@@ -300,16 +300,28 @@
   justify-content: center;
 }
 
+.drinkPhotoLift {
+  display: block;
+  width: min(81%, 18.95rem);
+  transform-origin: center center;
+  filter: drop-shadow(0 8px 16px rgba(40, 28, 12, 0.22));
+}
+
 .drinkPhoto {
   position: relative;
-  width: min(81%, 18.95rem);
+  width: 100%;
   padding: 3% 3% 9% 3%;
   background: #faf6ee;
-  transform-origin: center center;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.65),
-    0 6px 12px -2px rgba(45, 32, 14, 0.15),
-    0 18px 32px -6px rgba(40, 28, 12, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* 画像化 — transform + 多層 box-shadow の重複描画を避ける */
+:global([data-diary-exporting="true"]) .drinkPhotoLift {
+  filter: drop-shadow(0 8px 16px rgba(40, 28, 12, 0.22));
+}
+
+:global([data-diary-exporting="true"]) .drinkPhoto {
+  box-shadow: none;
 }
 
 /* 白・茶マスキング共通 — 位置・大きさは写真に依存せず固定 */
@@ -411,28 +423,20 @@
 }
 
 .editDimmedInner {
-  opacity: 0.22;
+  position: relative;
+  isolation: isolate;
   pointer-events: none;
   user-select: none;
   transition: opacity 0.35s ease;
 }
 
-.editSepiaScreenTop,
-.editSepiaScreenBottom {
-  position: fixed;
-  left: 0;
-  right: 0;
+.editDimmedInner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
   z-index: 1;
   background: rgba(92, 64, 36, 0.5);
   pointer-events: none;
-}
-
-.editSepiaScreenTop {
-  top: 0;
-}
-
-.editSepiaScreenBottom {
-  bottom: 0;
 }
 
 .bodyEditWrap {
@@ -442,6 +446,7 @@
   width: 100%;
   margin: 0;
   padding: 0;
+  overflow-anchor: none;
 }
 
 .bodyEditForm {
@@ -464,6 +469,7 @@
   outline: none;
   overflow: hidden;
   resize: none;
+  overflow-anchor: none;
   background: transparent;
   color: inherit;
   font: inherit;

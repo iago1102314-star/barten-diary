@@ -77,10 +77,10 @@ export const BAR_AUDIO_TIMING = {
   masterBubbleDelayAfterDoorMs: 2100,
   /** グラススライド SE の遅延（drinkServed から） */
   glassSlideDelayMs: 900,
-  /** カウンター明転のフェード（ms） */
-  counterRevealFadeMs: 3600,
+  /** カウンター明転のフェード（ms）— 遅延込みで約 2 秒 */
+  counterRevealFadeMs: 1900,
   /** カウンター明転フェード開始前の待ち（ms） */
-  counterRevealFadeDelayMs: 150,
+  counterRevealFadeDelayMs: 100,
   /** 明転完了から「今日はどうしようか？」まで（ms） */
   moodPromptDelayAfterRevealMs: 0,
   /**

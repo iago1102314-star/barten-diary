@@ -38,7 +38,7 @@ export const DRINK_CATEGORIES: DrinkCategory[] = [
       },
       {
         id: "yamazaki-12",
-        name: "山崎 12年",
+        name: "Yamazaki 18",
         note: "日本ウイスキー枠。「ちゃんとした夜」感が強い。",
       },
     ],

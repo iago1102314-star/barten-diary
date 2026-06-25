@@ -19,6 +19,11 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto;
+}
+
+.body[data-diary-editing="true"] {
+  padding-bottom: var(--diary-edit-keyboard-inset, 0px);
 }
 
 .note {

@@ -2,12 +2,13 @@
 
 import { DialogueAdvanceCue } from "@/components/entrance/dialogue-advance-cue";
 import { MasterDialogueBody } from "@/components/entrance/master-dialogue-body";
+import type { MasterDialogueBodyHandle } from "@/components/entrance/master-dialogue-body";
 import {
   MASTER_DIALOGUE_TYPOGRAPHY,
   SHOW_DIALOGUE_ADVANCE_CUE,
 } from "@/lib/entrance/master-dialogue-typography";
 import { motion } from "motion/react";
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 
 type DialogueBoxProps = {
   /** タイプライター + 折り返しレイアウト用 */
@@ -18,6 +19,7 @@ type DialogueBoxProps = {
   lineKey: number | string;
   label?: string;
   showAdvanceCue?: boolean;
+  dialogueBodyRef?: RefObject<MasterDialogueBodyHandle | null>;
 };
 
 /** マスター吹き出し — 画面端から端までの細い帯 */
@@ -29,6 +31,7 @@ export function DialogueBox({
   lineKey,
   label = "マスター",
   showAdvanceCue = false,
+  dialogueBodyRef,
 }: DialogueBoxProps) {
   const t = MASTER_DIALOGUE_TYPOGRAPHY;
   const horizontalPadding = `${t.horizontalPaddingRem}rem`;
@@ -81,6 +84,7 @@ export function DialogueBox({
         />
         {text != null ? (
           <MasterDialogueBody
+            ref={dialogueBodyRef}
             text={text}
             speed={typewriterSpeed}
             onDone={onTypewriterDone}

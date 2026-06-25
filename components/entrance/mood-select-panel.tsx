@@ -22,6 +22,7 @@ type MoodSelectPanelProps = {
   onSelect: (categoryId: DrinkCategoryId, drink: Drink) => void;
   onDecline: () => void;
   onConfirmStart?: (option: MoodOption) => void;
+  onRegisterExitSkip?: (skip: (() => void) | null) => void;
   declineDisabled?: boolean;
   skipPastBottleEntrance?: boolean;
 };
@@ -44,6 +45,7 @@ export function MoodSelectPanel({
   onSelect,
   onDecline,
   onConfirmStart,
+  onRegisterExitSkip,
   declineDisabled = false,
   skipPastBottleEntrance = false,
 }: MoodSelectPanelProps) {
@@ -93,6 +95,7 @@ export function MoodSelectPanel({
       onSelect={() => {}}
       onConfirmStart={onConfirmStart}
       onConfirmExitComplete={handleConfirmExitComplete}
+      onRegisterExitSkip={onRegisterExitSkip}
       footer={
         <DeclineNightLink
           onDecline={onDecline}

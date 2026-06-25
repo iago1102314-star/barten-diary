@@ -1,11 +1,12 @@
 "use client";
 
 import { DialogueBox } from "@/components/entrance/dialogue-box";
-import { barAudioEngine } from "@/lib/entrance/bar-audio-engine";
+import type { MasterDialogueBodyHandle } from "@/components/entrance/master-dialogue-body";
+import { barAudioEngine, unlockBarAudioForUserGesture } from "@/lib/entrance/bar-audio-engine";
 import { useDialogueAdvance } from "@/hooks/use-dialogue-advance";
 import { MASTER_DIALOGUE_TYPOGRAPHY } from "@/lib/entrance/master-dialogue-typography";
 import { MASTER_MOOD_PROMPT } from "@/lib/entrance/master-greetings";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 
 type MasterMoodPromptPanelProps = {
   onComplete: () => void;
@@ -13,20 +14,23 @@ type MasterMoodPromptPanelProps = {
 
 /** マスター登場後 — 気分選択前の一言 */
 export function MasterMoodPromptPanel({ onComplete }: MasterMoodPromptPanelProps) {
+  const dialogueBodyRef = useRef<MasterDialogueBodyHandle>(null);
   const { index, done, setDone, advance, currentLine } = useDialogueAdvance(
     MASTER_MOOD_PROMPT,
     onComplete,
   );
 
   const handlePointerDown = useCallback(() => {
+    unlockBarAudioForUserGesture();
     if (!done) return;
     barAudioEngine.playClick();
   }, [done]);
 
   const handleTap = useCallback(() => {
+    unlockBarAudioForUserGesture();
     if (!done) return;
     advance();
-  }, [done, advance]);
+  }, [advance, done]);
 
   return (
     <button
@@ -42,6 +46,7 @@ export function MasterMoodPromptPanel({ onComplete }: MasterMoodPromptPanelProps
           text={currentLine}
           typewriterSpeed={MASTER_DIALOGUE_TYPOGRAPHY.typewriterSpeedMs}
           onTypewriterDone={() => setDone(true)}
+          dialogueBodyRef={dialogueBodyRef}
         />
       </div>
     </button>

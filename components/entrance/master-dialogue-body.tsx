@@ -5,13 +5,25 @@ import {
   type MasterDialogueLayout,
 } from "@/lib/entrance/master-dialogue-layout";
 import { MASTER_DIALOGUE_TYPOGRAPHY } from "@/lib/entrance/master-dialogue-typography";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 type MasterDialogueBodyProps = {
   text: string;
   speed?: number;
   startDelay?: number;
   onDone?: () => void;
+};
+
+export type MasterDialogueBodyHandle = {
+  completeTyping: () => void;
 };
 
 function remToPx(rem: number): number {
@@ -28,16 +40,27 @@ function emptyLayout(maxIndentPx: number): MasterDialogueLayout {
 }
 
 /** マスター吹き出し本文 — 1行目インデント詰め + タイプライター */
-export function MasterDialogueBody({
-  text,
-  speed = MASTER_DIALOGUE_TYPOGRAPHY.typewriterSpeedMs,
-  startDelay = 0,
-  onDone,
-}: MasterDialogueBodyProps) {
+export const MasterDialogueBody = forwardRef<
+  MasterDialogueBodyHandle,
+  MasterDialogueBodyProps
+>(function MasterDialogueBody(
+  {
+    text,
+    speed = MASTER_DIALOGUE_TYPOGRAPHY.typewriterSpeedMs,
+    startDelay = 0,
+    onDone,
+  },
+  ref,
+) {
   const t = MASTER_DIALOGUE_TYPOGRAPHY;
   const contentRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
   const doneRef = useRef(onDone);
+  const typingDoneRef = useRef(false);
+  const timersRef = useRef<{
+    start?: ReturnType<typeof setTimeout>;
+    tick?: ReturnType<typeof setTimeout>;
+  }>({});
   const [contentWidthPx, setContentWidthPx] = useState(0);
   const [shown, setShown] = useState("");
   const [typingDone, setTypingDone] = useState(false);
@@ -49,6 +72,27 @@ export function MasterDialogueBody({
   );
 
   doneRef.current = onDone;
+  typingDoneRef.current = typingDone;
+
+  const clearTypingTimers = useCallback(() => {
+    const { start, tick } = timersRef.current;
+    if (start) clearTimeout(start);
+    if (tick) clearTimeout(tick);
+    timersRef.current = {};
+  }, []);
+
+  const finishTyping = useCallback(() => {
+    if (typingDoneRef.current) return;
+    clearTypingTimers();
+    setShown(text);
+    setTypingDone(true);
+    typingDoneRef.current = true;
+    doneRef.current?.();
+  }, [clearTypingTimers, text]);
+
+  useImperativeHandle(ref, () => ({
+    completeTyping: finishTyping,
+  }), [finishTyping]);
 
   useEffect(() => {
     const node = contentRef.current;
@@ -65,10 +109,11 @@ export function MasterDialogueBody({
   useEffect(() => {
     setShown("");
     setTypingDone(false);
+    typingDoneRef.current = false;
     setLayout(emptyLayout(maxIndentPx));
+    clearTypingTimers();
 
     let index = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
 
     const startTimer = setTimeout(() => {
       const tick = () => {
@@ -76,21 +121,19 @@ export function MasterDialogueBody({
         setShown(text.slice(0, index));
 
         if (index < text.length) {
-          timer = setTimeout(tick, speed);
+          timersRef.current.tick = setTimeout(tick, speed);
         } else {
-          setTypingDone(true);
-          doneRef.current?.();
+          finishTyping();
         }
       };
 
       tick();
     }, startDelay);
 
-    return () => {
-      clearTimeout(startTimer);
-      if (timer) clearTimeout(timer);
-    };
-  }, [text, speed, startDelay, maxIndentPx]);
+    timersRef.current.start = startTimer;
+
+    return clearTypingTimers;
+  }, [text, speed, startDelay, maxIndentPx, clearTypingTimers, finishTyping]);
 
   useLayoutEffect(() => {
     const measureNode = measureRef.current;
@@ -191,4 +234,4 @@ export function MasterDialogueBody({
       </div>
     </div>
   );
-}
+});
