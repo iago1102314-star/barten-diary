@@ -633,7 +633,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       return;
     }
     if (!leaveAnimationDoneRef.current) return;
-    if (entranceState === "alley") return;
+    if (entranceState === "alley" || entranceState === "memories") return;
     attemptGoToAlley();
   }, [
     session.saveStatus,
@@ -751,6 +751,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleOpenSavedDiary = (diaryId: string) => {
+    saveExpectedRef.current = false;
     setMemoriesLaunch({
       backdrop: "afterNight",
       initialDiaryId: diaryId,
@@ -759,6 +760,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleAlleyDiaryFadeOutComplete = () => {
+    saveExpectedRef.current = false;
     setAlleyDiaryFadeOut(false);
     setEntranceState("memories");
   };
