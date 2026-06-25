@@ -1,4 +1,5 @@
 import { isRecordingDiagnosticEnabled } from "@/lib/env/recording-diagnostic-env";
+import { bumpRecordingPipelineDiagnostic } from "@/lib/recorder/recording-pipeline-diagnostic";
 
 const MAX_EVENTS = 40;
 
@@ -39,6 +40,8 @@ export function logRecordingPipeline(
   if (typeof window !== "undefined") {
     window.__RECORDING_PIPELINE_LOG__ = ring;
   }
+
+  bumpRecordingPipelineDiagnostic();
 }
 
 /** 失敗時 — 診断 OFF でも console.error と lastError を残す */
@@ -71,4 +74,29 @@ export function logRecordingPipelineServer(
   }
 
   console.info(`[RecordingPipeline] ${message}`);
+}
+
+export function getRecordingPipelineEventLog(): PipelineLogEntry[] {
+  if (typeof window !== "undefined" && window.__RECORDING_PIPELINE_LOG__) {
+    return window.__RECORDING_PIPELINE_LOG__;
+  }
+  return ring;
+}
+
+export function formatRecordingPipelineEventLog(): string {
+  const entries = getRecordingPipelineEventLog();
+  if (entries.length === 0) {
+    return "(イベントなし)";
+  }
+
+  return entries
+    .map((entry) => {
+      const time = new Date(entry.t).toISOString().slice(11, 23);
+      const detail =
+        entry.detail && Object.keys(entry.detail).length > 0
+          ? ` ${JSON.stringify(entry.detail)}`
+          : "";
+      return `${time} ${entry.message}${detail}`;
+    })
+    .join("\n");
 }

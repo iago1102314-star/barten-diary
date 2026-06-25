@@ -23,6 +23,7 @@ import { validateRecordingForTranscribe } from "@/lib/night/validate-recording-f
 import {
   getRecordingPipelineDiagnostic,
   resetRecordingPipelineDiagnostic,
+  syncPipelineTimingsToDiagnostic,
   updateRecordingPipelineDiagnostic,
 } from "@/lib/recorder/recording-pipeline-diagnostic";
 import { logRecordingPipeline, logRecordingPipelineError } from "@/lib/recorder/recording-pipeline-log";
@@ -104,7 +105,23 @@ export function useNightSession() {
 
   const resetPipelineTimings = useCallback(() => {
     setPipelineTimings(EMPTY_NIGHT_PIPELINE_TIMINGS);
+    syncPipelineTimingsToDiagnostic(EMPTY_NIGHT_PIPELINE_TIMINGS);
   }, []);
+
+  const applyPipelineTimings = useCallback(
+    (
+      updater:
+        | NightPipelineTimings
+        | ((prev: NightPipelineTimings) => NightPipelineTimings),
+    ) => {
+      setPipelineTimings((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        syncPipelineTimingsToDiagnostic(next);
+        return next;
+      });
+    },
+    [],
+  );
 
   const registerListenFailure = useCallback(
     (options?: { advanceCount?: boolean; reason?: string }) => {
@@ -305,13 +322,17 @@ export function useNightSession() {
         generate: generation.generate,
       });
 
-      setPipelineTimings((prev) => ({
-        ...prev,
-        whisperMs: result.timings.whisperMs,
-        readinessMs: result.timings.readinessMs,
-        diaryGenerationMs: result.timings.diaryGenerationMs,
-        totalMs: prev.recordingCheckMs + result.timings.totalMs,
-      }));
+      setPipelineTimings((prev) => {
+        const next = {
+          ...prev,
+          whisperMs: result.timings.whisperMs,
+          readinessMs: result.timings.readinessMs,
+          diaryGenerationMs: result.timings.diaryGenerationMs,
+          totalMs: prev.recordingCheckMs + result.timings.totalMs,
+        };
+        syncPipelineTimingsToDiagnostic(next);
+        return next;
+      });
 
       if (!result.ok) {
         if (result.phase === "transcribe" || result.phase === "validation") {
@@ -379,7 +400,7 @@ export function useNightSession() {
       });
       const recordingCheckMs = Math.round(performance.now() - checkStartedAt);
 
-      setPipelineTimings((prev) => ({
+      applyPipelineTimings((prev) => ({
         ...prev,
         recordingCheckMs,
       }));
@@ -411,6 +432,7 @@ export function useNightSession() {
       recordedAt,
       registerListenFailure,
       runBackgroundGeneration,
+      applyPipelineTimings,
     ],
   );
 
@@ -452,7 +474,7 @@ export function useNightSession() {
     );
     const diaryGenerationMs = Math.round(performance.now() - diaryStartedAt);
 
-    setPipelineTimings((prev) => ({
+    applyPipelineTimings((prev) => ({
       ...prev,
       readinessMs,
       diaryGenerationMs,
@@ -469,13 +491,13 @@ export function useNightSession() {
     logRecordingPipeline("night pipeline: retry generation complete", {
       diaryGenerationMs,
     });
-  }, [transcript, selectedCategoryId, selectedDrinkId, recordedAt, generation]);
+  }, [transcript, selectedCategoryId, selectedDrinkId, recordedAt, generation, applyPipelineTimings]);
 
   const notifyStoreEndingComplete = useCallback(() => {
     const generationCompleteAtStoreEnding =
       phaseRef.current === "revealed" && generation.status === "success";
 
-    setPipelineTimings((prev) => ({
+    applyPipelineTimings((prev) => ({
       ...prev,
       generationCompleteAtStoreEnding,
     }));
@@ -489,10 +511,10 @@ export function useNightSession() {
         generationCompleteAtStoreEnding,
       },
     });
-  }, [generation.status]);
+  }, [generation.status, applyPipelineTimings]);
 
   const recordAlleyWaitComplete = useCallback((alleyWaitMs: number) => {
-    setPipelineTimings((prev) => ({
+    applyPipelineTimings((prev) => ({
       ...prev,
       alleyWaitMs,
     }));
@@ -503,7 +525,7 @@ export function useNightSession() {
         alleyWaitMs,
       },
     });
-  }, []);
+  }, [applyPipelineTimings]);
 
   const abandonNightWithoutRecord = useCallback(() => {
     pipelineLock.current = false;

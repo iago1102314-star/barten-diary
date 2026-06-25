@@ -2,6 +2,10 @@ import {
   isRecordingDiagnosticEnabled,
   recordingDiagnosticEnvLabel,
 } from "@/lib/env/recording-diagnostic-env";
+import {
+  EMPTY_NIGHT_PIPELINE_TIMINGS,
+  type NightPipelineTimings,
+} from "@/lib/night/night-pipeline-timings";
 
 export type RecordingPipelineJazzSnapshot = {
   currentVolume: number | null;
@@ -20,12 +24,18 @@ export type RecordingPipelineDiagnosticSnapshot = {
   diaryTranscript?: string;
   pipelineError?: string;
   jazz?: RecordingPipelineJazzSnapshot;
+  pipelineTimings?: NightPipelineTimings;
 };
 
 declare global {
   interface Window {
     __RECORDING_PIPELINE_DIAGNOSTIC__?: RecordingPipelineDiagnosticSnapshot;
     __RECORDING_PIPELINE_DIAGNOSTIC_LISTENERS__?: Set<() => void>;
+    __RECORDING_PIPELINE_LOG__?: Array<{
+      t: number;
+      message: string;
+      detail?: Record<string, unknown>;
+    }>;
   }
 }
 
@@ -85,6 +95,19 @@ export function updateRecordingPipelineDiagnostic(
   writeSnapshot({ ...readSnapshot(), ...patch, updatedAt: Date.now() });
 }
 
+export function syncPipelineTimingsToDiagnostic(
+  timings: NightPipelineTimings,
+): void {
+  if (!isRecordingDiagnosticEnabled()) return;
+  updateRecordingPipelineDiagnostic({ pipelineTimings: timings });
+}
+
+/** イベントログ追記時にパネルへ反映するため updatedAt のみ更新 */
+export function bumpRecordingPipelineDiagnostic(): void {
+  if (!isRecordingDiagnosticEnabled()) return;
+  writeSnapshot({ ...readSnapshot(), updatedAt: Date.now() });
+}
+
 export function extractJazzFromAudioDiagnostics(
   diagnostics: Record<string, unknown>,
 ): RecordingPipelineJazzSnapshot {
@@ -110,13 +133,66 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
+function formatMs(value: number | undefined): string {
+  if (value === undefined) return "(未記録)";
+  return `${value} ms`;
+}
+
+function formatGenerationCompleteAtStoreEnding(
+  value: boolean | null | undefined,
+): string {
+  if (value === null || value === undefined) return "(未記録)";
+  return value
+    ? "はい（店内エンディング終了時に生成完了）"
+    : "いいえ（路地で待機あり）";
+}
+
+function formatRecordingPipelineEventLog(): string {
+  const entries =
+    typeof window !== "undefined" ? window.__RECORDING_PIPELINE_LOG__ ?? [] : [];
+
+  if (entries.length === 0) {
+    return "(イベントなし)";
+  }
+
+  return entries
+    .map((entry) => {
+      const time = new Date(entry.t).toISOString().slice(11, 23);
+      const detail =
+        entry.detail && Object.keys(entry.detail).length > 0
+          ? ` ${JSON.stringify(entry.detail)}`
+          : "";
+      return `${time} ${entry.message}${detail}`;
+    })
+    .join("\n");
+}
+
+function formatPipelineTimings(
+  timings: NightPipelineTimings = EMPTY_NIGHT_PIPELINE_TIMINGS,
+): string[] {
+  return [
+    "--- phase timings ---",
+    `recordingCheckMs: ${formatMs(timings.recordingCheckMs)}`,
+    `whisperMs: ${formatMs(timings.whisperMs)}`,
+    `readinessMs: ${formatMs(timings.readinessMs)}`,
+    `diaryGenerationMs: ${formatMs(timings.diaryGenerationMs)}`,
+    `totalMs: ${formatMs(timings.totalMs)}`,
+    `generationCompleteAtStoreEnding: ${formatGenerationCompleteAtStoreEnding(timings.generationCompleteAtStoreEnding)}`,
+    `alleyWaitMs: ${formatMs(timings.alleyWaitMs)}`,
+  ];
+}
+
 export function formatRecordingPipelineDiagnostic(
   data: RecordingPipelineDiagnosticSnapshot = readSnapshot(),
 ): string {
+  const timings = data.pipelineTimings ?? EMPTY_NIGHT_PIPELINE_TIMINGS;
+
   const lines = [
     "=== Recording Pipeline Diagnostic ===",
     `env: ${recordingDiagnosticEnvLabel()}`,
     `updatedAt: ${new Date(data.updatedAt).toISOString()}`,
+    "",
+    ...formatPipelineTimings(timings),
     "",
     `blobSize: ${formatValue(data.blobSize)}`,
     `chunkCount: ${formatValue(data.chunkCount)}`,
@@ -139,6 +215,9 @@ export function formatRecordingPipelineDiagnostic(
     `currentVolume: ${formatValue(data.jazz?.currentVolume)}`,
     `targetVolume: ${formatValue(data.jazz?.targetVolume)}`,
     `paused: ${formatValue(data.jazz?.paused)}`,
+    "",
+    "--- event log ---",
+    formatRecordingPipelineEventLog(),
   ];
 
   return lines.join("\n");
@@ -153,6 +232,7 @@ export function hasRecordingPipelineDiagnosticData(
     data.refinedTranscript !== undefined ||
     data.diaryTranscript !== undefined ||
     data.pipelineError !== undefined ||
-    data.jazz !== undefined
+    data.jazz !== undefined ||
+    data.pipelineTimings !== undefined
   );
 }
