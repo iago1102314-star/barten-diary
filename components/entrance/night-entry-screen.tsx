@@ -7,6 +7,7 @@ import {
   START_ENTRY_ALLEY_KEN_BURNS,
 } from "@/components/entrance/start-entry-alley-layer";
 import { BarButton } from "@/components/ui/bar-button";
+import { SHOW_HOME_DIARY_DESIGN_BUTTON } from "@/lib/entrance/home-entry-tuning";
 import { SHOW_LOADING_GATE_MESSAGE_ON_HOME } from "@/lib/entrance/loading-gate-message-tuning";
 import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
 import {
@@ -319,7 +320,7 @@ export function NightEntryScreen({
             >
               メモを見る
             </BarButton>
-            {onOpenDiaryPaperMock && (
+            {SHOW_HOME_DIARY_DESIGN_BUTTON && onOpenDiaryPaperMock && (
               <BarButton
                 variant="quiet"
                 onClick={interactionLocked ? undefined : onOpenDiaryPaperMock}

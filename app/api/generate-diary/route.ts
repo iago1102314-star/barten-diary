@@ -10,7 +10,7 @@ import type {
   GenerateDiaryVariantsResult,
 } from "@/lib/ai/types";
 import { GENERATION_PARSE_ERROR_MESSAGE } from "@/lib/ai/security/generation-errors";
-import { validateTranscript } from "@/lib/ai/validate-transcript";
+import { assertTranscriptPresentForGeneration } from "@/lib/night/assert-transcript-present";
 import { assembleBottleTag } from "@/lib/bottle-tag/assemble-record";
 import { buildDrinkContext } from "@/lib/drinks/build-drink-context";
 import {
@@ -110,10 +110,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const validationError = validateTranscript(transcript);
-
-  if (validationError) {
-    return NextResponse.json({ error: validationError }, { status: 400 });
+  try {
+    assertTranscriptPresentForGeneration(transcript);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "音声が届きませんでした。",
+      },
+      { status: 400 },
+    );
   }
 
   const categoryId = selectedCategoryId as DrinkCategoryId;

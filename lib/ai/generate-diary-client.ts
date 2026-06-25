@@ -5,7 +5,7 @@ import type {
   GenerateDiaryVariantsResult,
 } from "@/lib/ai/types";
 import type { DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
-import { validateTranscript } from "@/lib/ai/validate-transcript";
+import { assertTranscriptPresentForGeneration } from "@/lib/night/assert-transcript-present";
 import { FetchTimeoutError, fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 const GENERATE_TIMEOUT_MS = 90_000;
@@ -61,11 +61,7 @@ async function requestGeneration(
   transcript: string,
   options: GenerateOptions,
 ): Promise<GeneratedDiary | GenerateDiaryVariantsResult> {
-  const validationError = validateTranscript(transcript);
-
-  if (validationError) {
-    throw new Error(validationError);
-  }
+  assertTranscriptPresentForGeneration(transcript);
 
   let response: Response;
 

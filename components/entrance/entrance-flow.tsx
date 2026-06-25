@@ -1,6 +1,5 @@
 "use client";
 
-import { saveAiDiary } from "@/app/(app)/diaries/actions";
 import { CounterScene } from "@/components/entrance/counter-scene";
 import { DrinkNameReveal } from "@/components/entrance/drink-name-reveal";
 import { DrinkRecordIntroPanel } from "@/components/entrance/drink-record-intro-panel";
@@ -87,10 +86,7 @@ import type { LoadingGateSnapshot } from "@/lib/entrance/loading-gate-init";
 import {
   markReturningVisitor,
 } from "@/lib/entrance/visit-state";
-import type {
-  BackgroundWorkState,
-  NightAlleyOutcome,
-} from "@/lib/entrance/night-outcome";
+import type { NightAlleyOutcome } from "@/lib/entrance/night-outcome";
 import { getDrinkImagePath } from "@/lib/entrance/drink-image-path";
 import { pickPastBottleMasterLine } from "@/lib/entrance/past-bottle-master-line";
 import { MoodVignetteOverlay } from "@/components/entrance/mood-vignette-overlay";
@@ -212,12 +208,9 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const declineOriginRef = useRef<DeclineOrigin>("moodSelect");
   const [declineBlackoutReady, setDeclineBlackoutReady] = useState(false);
   const [declineFarewellExiting, setDeclineFarewellExiting] = useState(false);
-  const lastSavedTranscriptRef = useRef<string | null>(null);
   const farewellStartedRef = useRef(false);
   const saveExpectedRef = useRef(false);
   const leaveAnimationDoneRef = useRef(false);
-  const backgroundWorkRef = useRef<BackgroundWorkState>("idle");
-  const savedDiaryIdRef = useRef<string | null>(null);
   const alleyWaitStartedRef = useRef<number | null>(null);
   const [moodCameraPose, setMoodCameraPose] = useState<CameraPose>("neutral");
   const [moodSelectExitActive, setMoodSelectExitActive] = useState(false);
@@ -271,7 +264,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   );
   const [alleyDiaryFadeOut, setAlleyDiaryFadeOut] = useState(false);
   const [alleyHomeFadeOut, setAlleyHomeFadeOut] = useState(false);
-  const [nightSaveTick, setNightSaveTick] = useState(0);
   const [devSkipLoading, setDevSkipLoading] = useState(false);
 
   const unlockBarAudio = useCallback(() => {
@@ -416,12 +408,10 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   }, []);
 
   const resetNightRefs = useCallback(() => {
-    lastSavedTranscriptRef.current = null;
     farewellStartedRef.current = false;
     saveExpectedRef.current = false;
     leaveAnimationDoneRef.current = false;
-    backgroundWorkRef.current = "idle";
-    savedDiaryIdRef.current = null;
+    alleyWaitStartedRef.current = null;
     moodSelectVisitedRef.current = false;
     moodThinkPlayedRef.current = false;
     moodGrassPlayedRef.current = false;
@@ -463,6 +453,28 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     returnToHomeSteady();
   }, [returnToHomeSteady]);
 
+  const handleAlleySpeakAgain = useCallback(() => {
+    if (alleyOutcome?.kind !== "saveFailed") return;
+
+    saveExpectedRef.current = false;
+    farewellStartedRef.current = false;
+    leaveAnimationDoneRef.current = false;
+    alleyWaitStartedRef.current = null;
+    setAlleyOutcome(null);
+
+    audio.stopOutside();
+    audio.startJazz(
+      BAR_AUDIO_LEVELS.jazz.counter,
+      BAR_AUDIO_TIMING.jazzEntryFadeMs,
+    );
+
+    void session.restartRecordingAfterPipelineFailure().then((started) => {
+      if (started) {
+        setEntranceState("recording");
+      }
+    });
+  }, [alleyOutcome, session, audio]);
+
   const attemptGoToAlley = useCallback(() => {
     if (!leaveAnimationDoneRef.current) return;
 
@@ -476,29 +488,35 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     markReturningVisitor();
 
     const saveReady =
-      backgroundWorkRef.current === "saved" && Boolean(savedDiaryIdRef.current);
+      session.saveStatus === "saved" && Boolean(session.savedDiaryId);
 
-    if (backgroundWorkRef.current === "devSaved") {
+    if (session.isDevSimulated) {
       setAlleyOutcome({ kind: "devSaved" });
     } else if (saveReady) {
       alleyWaitStartedRef.current = null;
       setAlleyOutcome({
         kind: "saved",
-        diaryId: savedDiaryIdRef.current!,
+        diaryId: session.savedDiaryId!,
       });
     } else if (
       session.generationFailed ||
-      backgroundWorkRef.current === "failed"
+      session.saveStatus === "failed"
     ) {
       alleyWaitStartedRef.current = null;
       setAlleyOutcome({ kind: "saveFailed" });
     } else {
-      alleyWaitStartedRef.current = performance.now();
-      setAlleyOutcome({ kind: "composing" });
+      const startedAt = performance.now();
+      alleyWaitStartedRef.current = startedAt;
+      setAlleyOutcome({ kind: "composing", startedAt });
     }
 
     setEntranceState("alley");
-  }, [session.phase, session.record, session.transcript, session.generationFailed]);
+  }, [
+    session.isDevSimulated,
+    session.saveStatus,
+    session.savedDiaryId,
+    session.generationFailed,
+  ]);
 
   useEffect(() => {
     syncBarAudioUnlockFromClient(audioUnlocked);
@@ -562,8 +580,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
     saveExpectedRef.current = true;
     farewellStartedRef.current = true;
-    backgroundWorkRef.current = "pending";
-    savedDiaryIdRef.current = null;
     setEntranceState("postRecordThanks");
     audio.startJazz(
       BAR_AUDIO_LEVELS.jazz.counter,
@@ -572,124 +588,66 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   }, [entranceState, session.phase, session.isDevSimulated, audio]);
 
   useEffect(() => {
-    if (entranceState !== "alley") return;
-    if (alleyOutcome?.kind !== "composing") return;
-
-    if (
-      backgroundWorkRef.current === "saved" &&
-      savedDiaryIdRef.current
-    ) {
-      const alleyWaitMs = alleyWaitStartedRef.current
-        ? Math.round(performance.now() - alleyWaitStartedRef.current)
-        : 0;
-      session.recordAlleyWaitComplete(alleyWaitMs);
-      alleyWaitStartedRef.current = null;
-      setAlleyOutcome({
-        kind: "saved",
-        diaryId: savedDiaryIdRef.current,
-      });
-      return;
-    }
-
-    if (
-      session.generationFailed ||
-      backgroundWorkRef.current === "failed"
-    ) {
-      alleyWaitStartedRef.current = null;
-      setAlleyOutcome({ kind: "saveFailed" });
-    }
-  }, [
-    entranceState,
-    alleyOutcome,
-    nightSaveTick,
-    session.generationFailed,
-    session.phase,
-    session.record,
-    session.transcript,
-    session.recordAlleyWaitComplete,
-  ]);
-
-  useEffect(() => {
     if (entranceState !== "postRecordBlackout") return;
     if (session.phase !== "recording" || !session.listenFailureVisible) return;
     setEntranceState("recording");
   }, [entranceState, session.phase, session.listenFailureVisible]);
 
   useEffect(() => {
-    if (session.isDevSimulated) return;
-    if (session.phase !== "revealed" || !session.record || !session.transcript) {
+    if (entranceState !== "alley") return;
+    if (alleyOutcome?.kind !== "composing") return;
+
+    if (session.saveStatus === "saved" && session.savedDiaryId) {
+      const waitingInAlleyMs = alleyWaitStartedRef.current
+        ? Math.round(performance.now() - alleyWaitStartedRef.current)
+        : 0;
+      session.recordWaitingInAlleyComplete(waitingInAlleyMs);
+      alleyWaitStartedRef.current = null;
+      setAlleyOutcome({
+        kind: "saved",
+        diaryId: session.savedDiaryId,
+      });
       return;
     }
-    if (lastSavedTranscriptRef.current === session.transcript) return;
-    if (
-      backgroundWorkRef.current === "saved" ||
-      backgroundWorkRef.current === "failed"
-    ) {
-      return;
+
+    if (session.generationFailed || session.saveStatus === "failed") {
+      alleyWaitStartedRef.current = null;
+      setAlleyOutcome({ kind: "saveFailed" });
     }
-
-    const payload = {
-      bottleTag: session.record.bottleTag,
-      diary: session.record.diary,
-      drinkNote: session.record.drinkNote,
-      masterComment: session.record.masterComment,
-      transcript: session.transcript,
-      continuedFromDiaryId: session.continuedFrom?.diaryId ?? null,
-      continuedFromBottleTag: session.continuedFrom?.bottleTag ?? null,
-    };
-
-    lastSavedTranscriptRef.current = session.transcript;
-
-    void (async () => {
-      const result = await saveAiDiary(payload);
-
-      if (result.error || !result.success || !result.diaryId) {
-        console.error("Background save failed:", result.error);
-        lastSavedTranscriptRef.current = null;
-        backgroundWorkRef.current = "failed";
-        setNightSaveTick((tick) => tick + 1);
-        if (leaveAnimationDoneRef.current) {
-          attemptGoToAlley();
-        }
-        return;
-      }
-
-      savedDiaryIdRef.current = result.diaryId;
-      backgroundWorkRef.current = "saved";
-      setNightSaveTick((tick) => tick + 1);
-      router.refresh();
-      if (leaveAnimationDoneRef.current) {
-        attemptGoToAlley();
-      }
-    })();
   }, [
-    session.phase,
-    session.isDevSimulated,
-    session.record,
-    session.transcript,
-    session.continuedFrom,
-    router,
-    attemptGoToAlley,
+    entranceState,
+    alleyOutcome,
+    session.saveStatus,
+    session.savedDiaryId,
+    session.generationFailed,
+    session.recordWaitingInAlleyComplete,
   ]);
 
   useEffect(() => {
-    if (session.isDevSimulated) return;
     if (!saveExpectedRef.current) return;
-    if (backgroundWorkRef.current !== "pending") return;
-    if (session.generationStatus !== "error") return;
-
-    backgroundWorkRef.current = "failed";
-    setNightSaveTick((tick) => tick + 1);
-    if (leaveAnimationDoneRef.current) {
-      attemptGoToAlley();
+    if (
+      session.saveStatus !== "saved" &&
+      session.saveStatus !== "failed" &&
+      !session.generationFailed
+    ) {
+      return;
     }
-  }, [session.generationStatus, session.isDevSimulated, attemptGoToAlley]);
+    if (!leaveAnimationDoneRef.current) return;
+    if (entranceState === "alley") return;
+    attemptGoToAlley();
+  }, [
+    session.saveStatus,
+    session.generationFailed,
+    session.savedDiaryId,
+    entranceState,
+    attemptGoToAlley,
+  ]);
 
   useEffect(() => {
     if (entranceState !== "postRecordExitBlack") return;
     if (!leaveAnimationDoneRef.current) return;
     attemptGoToAlley();
-  }, [entranceState, nightSaveTick, session.generationStatus, attemptGoToAlley]);
+  }, [entranceState, session.saveStatus, session.generationFailed, attemptGoToAlley]);
 
   const handleDevSkipToPostRecord = async () => {
     if (devSkipLoading) return;
@@ -704,11 +662,8 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       setDrinkEnteringReveal(false);
       setPickedDrink(drink);
       setPastMasterLine(null);
-      lastSavedTranscriptRef.current = null;
       saveExpectedRef.current = true;
       farewellStartedRef.current = true;
-      backgroundWorkRef.current = "pending";
-      savedDiaryIdRef.current = null;
       leaveAnimationDoneRef.current = false;
 
       unlockBarAudio();
@@ -1212,6 +1167,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
           <NightAlleyScreen
             outcome={alleyOutcome}
             onDismiss={handleDismissAlley}
+            onRetry={handleAlleySpeakAgain}
             onOpenDiary={handleOpenSavedDiary}
             diaryFadeOut={alleyDiaryFadeOut}
             onDiaryFadeOutComplete={handleAlleyDiaryFadeOutComplete}

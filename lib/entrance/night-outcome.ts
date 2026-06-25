@@ -1,5 +1,5 @@
 export type NightAlleyOutcome =
-  | { kind: "composing" }
+  | { kind: "composing"; startedAt: number }
   | { kind: "saved"; diaryId: string }
   | { kind: "devSaved" }
   | { kind: "saveFailed" }

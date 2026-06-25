@@ -1,6 +1,5 @@
 import { checkGenerationReadiness } from "@/lib/ai/check-generation-readiness";
 import type { GenerateDiaryOutcome } from "@/hooks/use-generate-diary";
-import { validateTranscriptInput } from "@/lib/ai/security/validate-input";
 import type { DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
 import type { NightPipelineTimings } from "@/lib/night/night-pipeline-timings";
 import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
@@ -9,6 +8,7 @@ import { transcribeAudio } from "@/lib/transcribe/transcribe-audio";
 export type NightGenerationPipelineSuccess = {
   ok: true;
   transcript: string;
+  whisperRaw?: string;
   generation: Extract<GenerateDiaryOutcome, { ok: true }>;
   timings: Pick<
     NightPipelineTimings,
@@ -19,7 +19,7 @@ export type NightGenerationPipelineSuccess = {
 export type NightGenerationPipelineFailure = {
   ok: false;
   reason: string;
-  phase: "transcribe" | "validation" | "readiness" | "generation";
+  phase: "transcribe" | "readiness" | "generation";
   timings: Pick<
     NightPipelineTimings,
     "whisperMs" | "readinessMs" | "diaryGenerationMs" | "totalMs"
@@ -56,6 +56,7 @@ export async function runNightGenerationPipeline(
   };
 
   let transcript: string;
+  let whisperRaw: string | undefined;
 
   try {
     const whisperStartedAt = performance.now();
@@ -65,6 +66,7 @@ export async function runNightGenerationPipeline(
     );
     timings.whisperMs = Math.round(performance.now() - whisperStartedAt);
     transcript = text;
+    whisperRaw = debug?.whisperRaw;
 
     logRecordingPipeline("night pipeline: whisper complete", {
       elapsedMs: timings.whisperMs,
@@ -82,13 +84,12 @@ export async function runNightGenerationPipeline(
     };
   }
 
-  const validation = validateTranscriptInput(transcript);
-  if (!validation.ok) {
+  if (!transcript.trim()) {
     timings.totalMs = Math.round(performance.now() - pipelineStartedAt);
     return {
       ok: false,
-      reason: `validation:${validation.code} — ${validation.message}`,
-      phase: "validation",
+      reason: "文字起こし結果が空でした。",
+      phase: "transcribe",
       timings,
     };
   }
@@ -148,6 +149,7 @@ export async function runNightGenerationPipeline(
   return {
     ok: true,
     transcript,
+    whisperRaw,
     generation,
     timings,
   };

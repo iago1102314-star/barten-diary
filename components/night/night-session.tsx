@@ -6,7 +6,7 @@ import { ShelfReturnButton } from "@/components/night/shelf-return-button";
 import { useNightSession } from "@/hooks/use-night-session";
 import {
   canLeaveWithoutRecord,
-  listenFailureMasterLines,
+  resolveListenFailureLines,
 } from "@/lib/night/listen-failure";
 
 export function NightSession() {
@@ -34,7 +34,10 @@ export function NightSession() {
 
       {session.phase === "recording" && session.listenFailureVisible && (
           <div className="space-y-3 py-2">
-            {listenFailureMasterLines(Math.max(session.listenFailureCount, 1)).map((line) => (
+            {resolveListenFailureLines(
+              session.listenFailureCount,
+              session.listenFailureReason,
+            ).map((line) => (
               <p
                 key={line}
                 className="text-[13px] leading-relaxed tracking-wide text-stone-500/90"

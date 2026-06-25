@@ -171,14 +171,16 @@ function formatPipelineTimings(
   timings: NightPipelineTimings = EMPTY_NIGHT_PIPELINE_TIMINGS,
 ): string[] {
   return [
-    "--- phase timings ---",
+    "--- pipeline timings ---",
     `recordingCheckMs: ${formatMs(timings.recordingCheckMs)}`,
     `whisperMs: ${formatMs(timings.whisperMs)}`,
     `readinessMs: ${formatMs(timings.readinessMs)}`,
     `diaryGenerationMs: ${formatMs(timings.diaryGenerationMs)}`,
+    `saveMs: ${formatMs(timings.saveMs)}`,
     `totalMs: ${formatMs(timings.totalMs)}`,
     `generationCompleteAtStoreEnding: ${formatGenerationCompleteAtStoreEnding(timings.generationCompleteAtStoreEnding)}`,
-    `alleyWaitMs: ${formatMs(timings.alleyWaitMs)}`,
+    `waitingInStoreMs: ${formatMs(timings.waitingInStoreMs)}`,
+    `waitingInAlleyMs: ${formatMs(timings.waitingInAlleyMs)}`,
   ];
 }
 

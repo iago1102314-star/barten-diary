@@ -5,6 +5,7 @@ import {
 import { getAudioExtension } from "@/lib/transcribe/get-audio-extension";
 
 const MAX_TRANSCRIBE_BYTES = 25 * 1024 * 1024;
+export const MIN_RECORDING_MS = 2000;
 
 export type RecordingCheckResult =
   | { ok: true }
@@ -12,7 +13,7 @@ export type RecordingCheckResult =
 
 /**
  * 録音終了直後のローカルチェックのみ（Whisper は呼ばない）。
- * 送信可能な形式・サイズ・長さかを確認する。
+ * 録音品質エラーの判定に使う。
  */
 export function validateRecordingForTranscribe(params: {
   blob: Blob;
@@ -20,10 +21,16 @@ export function validateRecordingForTranscribe(params: {
   elapsedMs: number;
 }): RecordingCheckResult {
   const { blob, mimeType, elapsedMs } = params;
-  const durationSec = Math.max(1, Math.round(elapsedMs / 1000));
 
   if (!blob || blob.size === 0) {
     return { ok: false, reason: "recording check: empty blob" };
+  }
+
+  if (elapsedMs < MIN_RECORDING_MS) {
+    return {
+      ok: false,
+      reason: `recording check: too short (${elapsedMs}ms < ${MIN_RECORDING_MS}ms)`,
+    };
   }
 
   if (blob.size < MIN_RECORDING_BYTES) {
@@ -40,6 +47,7 @@ export function validateRecordingForTranscribe(params: {
     };
   }
 
+  const durationSec = Math.max(1, Math.round(elapsedMs / 1000));
   if (isRecordingLikelyTooQuiet(blob.size, durationSec)) {
     return {
       ok: false,
@@ -56,4 +64,10 @@ export function validateRecordingForTranscribe(params: {
   }
 
   return { ok: true };
+}
+
+export function isRecordingQualityFailureReason(
+  reason: string | null | undefined,
+): boolean {
+  return reason?.startsWith("recording check:") ?? false;
 }
