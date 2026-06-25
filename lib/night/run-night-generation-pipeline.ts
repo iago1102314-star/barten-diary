@@ -1,4 +1,5 @@
 import { checkGenerationReadiness } from "@/lib/ai/check-generation-readiness";
+import { validateTranscriptInput } from "@/lib/ai/security/validate-input";
 import type { GenerateDiaryOutcome } from "@/hooks/use-generate-diary";
 import type { DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
 import type { NightPipelineTimings } from "@/lib/night/night-pipeline-timings";
@@ -89,6 +90,20 @@ export async function runNightGenerationPipeline(
     return {
       ok: false,
       reason: "文字起こし結果が空でした。",
+      phase: "transcribe",
+      timings,
+    };
+  }
+
+  const transcriptValidation = validateTranscriptInput(transcript);
+  if (!transcriptValidation.ok) {
+    timings.totalMs = Math.round(performance.now() - pipelineStartedAt);
+    logRecordingPipeline("night pipeline: transcript rejected", {
+      code: transcriptValidation.code,
+    });
+    return {
+      ok: false,
+      reason: transcriptValidation.message,
       phase: "transcribe",
       timings,
     };

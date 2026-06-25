@@ -41,7 +41,8 @@ export function ambientMessageFromValidationCode(
   code: TranscriptValidationCode,
 ): AmbientMessage {
   if (code === "empty") return SILENT;
-  if (code === "too_short" || code === "filler_only") return TOO_SHORT;
+  if (code === "too_short") return TOO_SHORT;
+  if (code === "filler_only") return GENERIC;
   if (
     code === "symbols_only" ||
     code === "repetition_only" ||

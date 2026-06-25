@@ -4,7 +4,7 @@ import { GeneratedDiaryCards } from "@/components/diary-ai/generated-diary-cards
 import { SaveAiDiaryButton } from "@/components/diary-ai/save-ai-diary-button";
 import type { GenerateDiaryStatus } from "@/hooks/use-generate-diary";
 import type { GeneratedDiary } from "@/lib/ai/types";
-import { MIN_TRANSCRIPT_LENGTH } from "@/lib/ai/validate-transcript";
+import { isFillerOnlyTranscript } from "@/lib/ai/speech-fillers";
 
 type DiaryGenerationPanelProps = {
   transcript: string;
@@ -21,8 +21,9 @@ export function DiaryGenerationPanel({
   error,
   onGenerate,
 }: DiaryGenerationPanelProps) {
-  const trimmedLength = transcript.trim().length;
-  const isTooShort = trimmedLength < MIN_TRANSCRIPT_LENGTH;
+  const trimmed = transcript.trim();
+  const isFillerOnly = trimmed.length > 0 && isFillerOnlyTranscript(trimmed);
+  const isEmpty = trimmed.length === 0;
 
   return (
     <div className="mt-4 space-y-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-950">
@@ -35,13 +36,14 @@ export function DiaryGenerationPanel({
         </p>
       </div>
 
-      {isTooShort ? (
+      {isEmpty || isFillerOnly ? (
         <p
           role="alert"
           className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
         >
-          文字起こしが短すぎます（{MIN_TRANSCRIPT_LENGTH}
-          文字以上）。もう少し話してから文字起こしし直してください。
+          {isEmpty
+            ? "文字起こしが空です。もう一度話してから文字起こしし直してください。"
+            : "フィラーだけしか聞き取れませんでした。もう少し話してから文字起こしし直してください。"}
         </p>
       ) : (
         <button

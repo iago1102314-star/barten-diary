@@ -1,6 +1,9 @@
-/** 日記生成へ渡す前の最低限チェック — 空文字のみ拒否（内容品質は判定しない） */
+import { validateTranscriptInput } from "@/lib/ai/security/validate-input";
+
+/** 日記生成へ渡す前のチェック — 空・フィラーのみ・無意味な文字列を拒否 */
 export function assertTranscriptPresentForGeneration(transcript: string): void {
-  if (!transcript.trim()) {
-    throw new Error("文字起こし結果が空でした。");
+  const result = validateTranscriptInput(transcript);
+  if (!result.ok) {
+    throw new Error(result.message);
   }
 }

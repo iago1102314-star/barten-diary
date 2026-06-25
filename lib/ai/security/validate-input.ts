@@ -1,5 +1,7 @@
+import { isFillerOnlyTranscript } from "@/lib/ai/speech-fillers";
 import { isWhisperPromptHallucination } from "@/lib/transcribe/whisper-context";
 
+/** 無意味な繰り返し検出のしきい値（短い意味ある発話は拒否しない） */
 export const MIN_TRANSCRIPT_LENGTH = 20;
 
 export type TranscriptValidationCode =
@@ -17,12 +19,9 @@ const MESSAGES: Record<TranscriptValidationCode, string> = {
   symbols_only: "うまく拾えなかった。\nもう一度だけ頼む。",
   repetition_only: "うまく拾えなかった。\nもう一度だけ頼む。",
   same_char_run: "うまく拾えなかった。\nもう一度だけ頼む。",
-  filler_only: "まだ少し言葉が足りないみたいだ。\nもう少しだけ聞かせてくれ。",
+  filler_only: "うまく拾えなかった。\nもう一度だけ頼む。",
   prompt_echo: "うまく拾えなかった。\nもう一度だけ頼む。",
 };
-
-const FILLER_PATTERN =
-  /^(あ+|ぁ+|ア+|あー+|うん+|ううん+|はい+|ハイ+|え+|えー+|ん+|うー+|うーん+|hm+|um+|mmm+|…+|\.+|、+)$/iu;
 
 export type TranscriptValidationResult =
   | { ok: true }
@@ -36,7 +35,11 @@ function countSpeechChars(text: string): number {
 }
 
 function isSymbolsOnly(text: string): boolean {
-  return countSpeechChars(text) < 5;
+  const speech = countSpeechChars(text);
+  if (speech === 0) return true;
+  // 短い意味ある発話（「眠い」「疲れた」等）は通す
+  if (text.trim().length < MIN_TRANSCRIPT_LENGTH) return false;
+  return speech < 5;
 }
 
 function hasLongSameCharRun(text: string): boolean {
@@ -67,19 +70,6 @@ function isMeaninglessRepetition(text: string): boolean {
   return false;
 }
 
-function isFillerOnly(text: string): boolean {
-  const segments = text
-    .trim()
-    .split(/[\s\u3000、。．，,]+/)
-    .filter(Boolean);
-
-  if (segments.length === 0) {
-    return true;
-  }
-
-  return segments.every((segment) => FILLER_PATTERN.test(segment));
-}
-
 export function validateTranscriptInput(
   transcript: string,
 ): TranscriptValidationResult {
@@ -89,11 +79,7 @@ export function validateTranscriptInput(
     return { ok: false, code: "empty", message: MESSAGES.empty };
   }
 
-  if (trimmed.length < MIN_TRANSCRIPT_LENGTH) {
-    return { ok: false, code: "too_short", message: MESSAGES.too_short };
-  }
-
-  if (isFillerOnly(trimmed)) {
+  if (isFillerOnlyTranscript(trimmed)) {
     return { ok: false, code: "filler_only", message: MESSAGES.filler_only };
   }
 
