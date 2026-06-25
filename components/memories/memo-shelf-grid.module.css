@@ -321,7 +321,7 @@
 
 .topBarTitle {
   margin: 0;
-  font-family: var(--font-serif-jp);
+  font-family: var(--font-app-title);
   font-size: 0.98rem;
   font-weight: 500;
   letter-spacing: 0.16em;
@@ -525,7 +525,7 @@
   font-family: var(--font-serif-jp);
   font-size: 0.82rem;
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--font-serif-jp-tracking);
   color: rgba(225, 214, 196, 0.95);
   text-align: left;
   cursor: pointer;
@@ -561,7 +561,7 @@
   font-family: var(--font-serif-jp);
   font-size: 0.88rem;
   font-weight: 500;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--font-serif-jp-tracking);
   color: rgba(221, 210, 192, 0.94);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -597,7 +597,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--font-serif-jp);
+  font-family: var(--font-app-title);
   font-size: 0.98rem;
   font-weight: 500;
   letter-spacing: 0.16em;
@@ -639,7 +639,7 @@
   font-family: var(--font-serif-jp);
   font-size: 0.9rem;
   line-height: 1.85;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--font-serif-jp-tracking);
   text-align: center;
   color: rgba(232, 222, 205, 0.95);
 }
@@ -661,7 +661,7 @@
   font-family: var(--font-serif-jp);
   font-size: 0.84rem;
   font-weight: 500;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--font-serif-jp-tracking);
   cursor: pointer;
   transition: opacity 0.18s ease, background-color 0.18s ease, color 0.18s ease;
 }
@@ -729,7 +729,7 @@
   text-align: center;
   font-family: var(--font-serif-jp);
   font-size: 0.72rem;
-  letter-spacing: 0.18em;
+  letter-spacing: var(--font-serif-jp-tracking);
   color: var(--shelf-paper-ink-muted);
 }
 
@@ -742,6 +742,7 @@
   font-family: var(--font-serif-jp);
   font-size: 0.82rem;
   line-height: 1.7;
+  letter-spacing: var(--font-serif-jp-tracking);
   color: #6b3a32;
 }
 
@@ -1042,13 +1043,14 @@
   font-family: var(--font-serif-jp);
   font-size: clamp(0.87rem, 4.2vw, 1.02rem);
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--font-serif-jp-tracking);
   line-height: 1.35;
   color: var(--shelf-paper-ink);
 }
 
 .dateSlash {
   font-family: var(--font-serif-jp);
+  letter-spacing: var(--font-serif-jp-tracking);
 }
 
 .drinkName {
@@ -1057,7 +1059,7 @@
   font-size: clamp(0.84rem, 3.9vw, 0.99rem);
   font-style: italic;
   font-weight: 500;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--font-serif-jp-tracking);
   line-height: 1.35;
   text-align: center;
   color: var(--shelf-paper-ink);
@@ -1070,7 +1072,7 @@
   font-family: var(--font-serif-jp);
   font-size: 0.82rem;
   line-height: 1.85;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--font-serif-jp-tracking);
   color: rgba(63, 54, 41, 0.72);
 }
 
@@ -1089,7 +1091,7 @@
 .pagerButton {
   font-family: var(--font-serif-jp);
   font-size: 0.68rem;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--font-serif-jp-tracking);
   color: rgba(63, 54, 41, 0.78);
   text-decoration: none;
   background: transparent;

@@ -14,14 +14,14 @@ export const MASTER_DIALOGUE_TYPOGRAPHY = {
 
   /** 「マスター」ラベル */
   labelFontSize: "1.0rem",
-  labelLetterSpacing: "0.3em",
+  labelLetterSpacing: "var(--font-serif-jp-tracking)",
   /** ラベルと本文ブロックの間（rem） */
   labelPaddingBottomRem: 0.625,
 
   /** セリフ本文 */
   bodyFontSize: "1.2rem",
   bodyLineHeight: 1.9,
-  bodyLetterSpacing: "0.2em",
+  bodyLetterSpacing: "var(--font-serif-jp-tracking)",
   /** 本文エリアの最小高さ（rem） */
   bodyMinHeightRem: 2.375,
   /** 縦線の右 — 本文をさらに右へ（rem） */

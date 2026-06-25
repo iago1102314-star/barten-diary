@@ -55,7 +55,7 @@ export function ShelfDiaryCard({
       </header>
 
       <div className="mt-8 text-left">
-        <p className="font-serif-jp whitespace-pre-wrap text-[15px] leading-[2.1] tracking-[0.05em] text-stone-300/88">
+        <p className="font-serif-jp whitespace-pre-wrap text-[15px] leading-[2.1] text-stone-300/88">
           {bodyText}
         </p>
         {compact && preview?.isTruncated && id && (

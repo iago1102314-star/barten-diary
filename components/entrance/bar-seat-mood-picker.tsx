@@ -99,7 +99,6 @@ const MOOD_OPTION_TEXT = {
   titleFontSizePx: 17,
   /** ラベル（少し濃いめで 等）の太さ — 400=通常, 500=やや太, 600=セミボールド */
   titleFontWeight: 510,
-  titleLetterSpacingEm: 0.25,
   /** タイトルに対する明るさ 45% */
   sub: "rgba(196, 184, 164, 0.5)",
   subFontSizePx: 11,
@@ -447,7 +446,6 @@ function MoodOptionButton(
           color: MOOD_OPTION_TEXT.title,
           fontSize: MOOD_OPTION_TEXT.titleFontSizePx,
           fontWeight: MOOD_OPTION_TEXT.titleFontWeight,
-          letterSpacing: `${MOOD_OPTION_TEXT.titleLetterSpacingEm}em`,
         }}
       >
         {option.label}
@@ -702,7 +700,7 @@ export function BarSeatMoodPicker({
 
             <div className="pointer-events-none absolute inset-0">
               {promptText && (
-                <p className="pointer-events-auto mb-6 px-10 text-center font-serif-jp text-[14px] leading-loose tracking-[0.12em] text-[#e8dcc4]">
+                <p className="pointer-events-auto mb-6 px-10 text-center font-serif-jp text-[14px] leading-loose text-[#e8dcc4]">
                   <Typewriter text={promptText} speed={TIMING.promptTypeSpeed} />
                 </p>
               )}
@@ -812,7 +810,7 @@ export function BarSeatMoodPicker({
               animate={poured ? { opacity: 1 } : {}}
               transition={{ duration: 1, delay: 1.2 }}
             >
-              <p className="font-serif-jp text-[15px] tracking-[0.3em] text-[#f4d9a6]">
+              <p className="font-serif-jp text-[15px] text-[#f4d9a6]">
                 {picked.resultLabel ?? picked.label}
               </p>
               {picked.resultSub && (

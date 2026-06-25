@@ -122,7 +122,7 @@ export function moodLinkTextStyle(
 ) {
   return {
     fontSize: text.fontSizePx,
-    letterSpacing: `${text.letterSpacingEm}em`,
+    letterSpacing: "var(--font-serif-jp-tracking)",
     color: text.color,
     fontWeight: text.fontWeight,
   } as const;

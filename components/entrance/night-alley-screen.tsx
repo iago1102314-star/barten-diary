@@ -25,7 +25,7 @@ type NightAlleyScreenProps = {
 };
 
 const outcomeTextClass =
-  "font-serif-jp text-[15px] font-normal leading-[2] tracking-[0.12em] text-stone-200/85";
+  "font-serif-jp text-[15px] font-normal leading-[2] text-stone-200/85";
 
 function useComposingElapsedMs(startedAt: number | undefined): number {
   const [elapsedMs, setElapsedMs] = useState(0);

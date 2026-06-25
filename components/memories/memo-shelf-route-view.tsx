@@ -100,7 +100,7 @@ export function MemoShelfRouteView({
         >
           ← 路地に戻る
         </Link>
-        <h1 className="font-serif-jp pt-4 text-xl font-normal tracking-[0.14em] text-stone-300">
+        <h1 className="font-app-title pt-4 text-xl font-normal tracking-[0.14em] text-stone-300">
           夜の記録
         </h1>
       </header>

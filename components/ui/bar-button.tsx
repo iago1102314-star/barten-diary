@@ -59,7 +59,7 @@ export function BarButton({
           style={{ transitionDuration: `${hoverMs}ms` }}
         />
         <span
-          className="relative text-[11px] tracking-[0.4em] text-stone-300/85 transition-colors group-hover:text-amber-50/95 group-active:text-amber-50"
+          className="relative text-[17px] tracking-[0.2em] text-stone-300/85 transition-colors group-hover:text-amber-50/95 group-active:text-amber-50"
           style={{ transitionDuration: `${hoverMs}ms` }}
         >
           {children}
@@ -72,7 +72,7 @@ export function BarButton({
   if (variant === "ghost") {
     const content = (
       <span
-        className="pointer-events-none group relative inline-block px-1 py-1 text-[11px] tracking-[0.3em] text-stone-300/80 transition-colors duration-500 group-hover:text-amber-50/90"
+        className="pointer-events-none group relative inline-block px-1 py-1 text-[17px] tracking-[0.2em] text-stone-300/80 transition-colors duration-500 group-hover:text-amber-50/90"
       >
         {children}
         <span

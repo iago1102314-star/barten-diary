@@ -29,10 +29,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <p className="text-[11px] tracking-[0.35em] text-stone-600 uppercase">
             back bar
           </p>
-          <h1 className="font-serif-jp text-xl font-normal tracking-[0.18em] text-stone-300">
+          <h1 className="font-app-title text-xl font-normal tracking-[0.18em] text-stone-300">
             扉を開ける
           </h1>
-          <p className="font-serif-jp text-sm leading-relaxed tracking-[0.08em] text-stone-500">
+          <p className="font-serif-jp text-sm leading-relaxed text-stone-500">
             静かなカウンターへ。
           </p>
         </header>

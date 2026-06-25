@@ -20,6 +20,11 @@ import {
   lampGlowElementOpacity,
 } from "@/lib/entrance/lamp-glow-visual";
 import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
+import {
+  StartEntryAtmosphereGrade,
+  StartEntryBarWarmGrade,
+} from "@/components/entrance/start-entry-atmosphere-grade";
+import { START_ENTRY_ATMOSPHERE_GRADE } from "@/lib/entrance/start-entry-atmosphere-grade";
 import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
 import { getStartLampBreatheProfile } from "@/lib/entrance/start-lamp-glow-breathe";
 import {
@@ -275,6 +280,7 @@ export function StartEntryAlleyLayer({
     () => pairStartGlowsById(bokehLampGlows, steadyLampGlows),
     [bokehLampGlows, steadyLampGlows],
   );
+  const grade = START_ENTRY_ATMOSPHERE_GRADE;
 
   return (
     <motion.div className="absolute inset-0" {...kenBurnsMotion}>
@@ -304,6 +310,10 @@ export function StartEntryAlleyLayer({
             />
           </motion.div>
         </div>
+      )}
+
+      {showAtmosphere && (
+        <StartEntryAtmosphereGrade steadyLampGlows={steadyLampGlows} />
       )}
 
       {showLights && (showAnchoredGlows || showBokehOnlyMarkers) && (
@@ -413,13 +423,20 @@ export function StartEntryAlleyLayer({
         <>
           <Haze y={36} intensity={1} />
           <div
-            className="pointer-events-none absolute inset-0 bg-gradient-to-b from-stone-950/40 via-transparent to-stone-950/80"
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background: `linear-gradient(to bottom, rgba(12, 10, 8, ${grade.verticalTopWashOpacity}) 0%, transparent 42%, rgba(12, 10, 8, ${grade.verticalBottomWashOpacity}) 100%)`,
+            }}
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute inset-0 bg-[#0a1020]/20 mix-blend-multiply"
+            className="pointer-events-none absolute inset-0 mix-blend-multiply"
+            style={{
+              backgroundColor: `rgba(${grade.blueWashRgb}, ${grade.blueWashOpacity})`,
+            }}
             aria-hidden
           />
+          <StartEntryBarWarmGrade />
         </>
       )}
       {showOrderMarkers && <LoadingGateLightOrderMarkers />}

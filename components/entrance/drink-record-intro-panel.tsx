@@ -47,7 +47,7 @@ export function DrinkRecordIntroPanel({
   return (
     <div className="flex h-full w-full flex-col justify-end px-5 pb-[12%]">
       {micBlock && (
-        <p className="mx-auto mb-4 max-w-sm whitespace-pre-line text-center font-serif-jp text-[12px] leading-relaxed tracking-[0.06em] text-amber-100/75">
+        <p className="mx-auto mb-4 max-w-sm whitespace-pre-line text-center font-serif-jp text-[12px] leading-relaxed text-amber-100/75">
           {micBlockedHintText(micBlock)}
         </p>
       )}

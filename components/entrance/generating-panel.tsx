@@ -35,7 +35,7 @@ export function GeneratingPanel({
   if (failed) {
     return (
       <div className="space-y-6 text-center">
-        <p className="font-serif-jp text-[14px] leading-relaxed tracking-[0.1em] text-stone-300/85">
+        <p className="font-serif-jp text-[14px] leading-relaxed text-stone-300/85">
           ……うまく紡げなかった。
           <br />
           もう一度だけ試してくれ。
@@ -62,7 +62,7 @@ export function GeneratingPanel({
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.8 }}
-        className="font-serif-jp text-[14px] tracking-[0.1em] text-stone-300/85"
+        className="font-serif-jp text-[14px] text-stone-300/85"
       >
         <Typewriter text={STATUS_LINES[lineIndex]} speed={45} />
       </motion.p>

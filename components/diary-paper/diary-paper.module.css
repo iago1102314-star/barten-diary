@@ -252,7 +252,7 @@
   font-family: var(--font-serif-jp);
   font-size: 0.92rem;
   font-weight: 500;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--font-serif-jp-tracking);
   line-height: 1.45;
   color: var(--diary-paper-ink);
   text-decoration: underline;
@@ -263,6 +263,7 @@
 
 .dateSlash {
   font-family: var(--font-serif-jp);
+  letter-spacing: var(--font-serif-jp-tracking);
 }
 
 .mainRuledSection {

@@ -8,10 +8,15 @@
   --stage-aspect-w: 1536;
   --stage-aspect-h: 2560;
 
-  /* 文学的な声 — 明朝（システム明朝を主に、webフォントは差し替え可） */
+  /* 画面タイトル — Zen Old Mincho Bold（next/font → --font-zen-old-mincho-bold） */
+  --font-app-title:
+    var(--font-zen-old-mincho-bold), "Hiragino Mincho ProN", serif;
+  /* マスター・記録本文 — Shippori Mincho（next/font → --font-shippori-mincho） */
   --font-serif-jp:
-    "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", "YuMincho",
-    "Noto Serif JP", serif;
+    var(--font-shippori-mincho), "Hiragino Mincho ProN", "Yu Mincho",
+    "YuMincho", serif;
+  /** Shippori 字間 — 17px × 0.2em と同じ比率（em はフォントサイズに追従） */
+  --font-serif-jp-tracking: 0.2em;
   /* UI ラベル — 落ち着いたゴシック */
   --font-ui-jp:
     var(--font-geist-sans), "Hiragino Kaku Gothic ProN", "Yu Gothic",
@@ -199,10 +204,18 @@ body.login-route {
   }
 }
 
-/* 世界観の声 — 明朝。タイトル・セリフ・記録本文に */
+/* 画面タイトル — Zen Old Mincho Bold */
+.font-app-title {
+  font-family: var(--font-app-title);
+  font-weight: 700;
+  font-feature-settings: "palt";
+}
+
+/* マスター台詞・記録本文 — Shippori Mincho */
 .font-serif-jp {
   font-family: var(--font-serif-jp);
   font-feature-settings: "palt";
+  letter-spacing: var(--font-serif-jp-tracking);
 }
 
 .night-glow {

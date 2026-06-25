@@ -21,7 +21,7 @@ export function MasterLine({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: DURATION.line, ease: EASE_SOFT, delay }}
-      className={`font-serif-jp text-center text-[16px] leading-relaxed tracking-[0.1em] text-stone-100/92 drop-shadow-[0_2px_14px_rgba(0,0,0,0.9)] ${className}`}
+      className={`font-serif-jp text-center text-[16px] leading-relaxed text-stone-100/92 drop-shadow-[0_2px_14px_rgba(0,0,0,0.9)] ${className}`}
     >
       {children}
     </motion.p>

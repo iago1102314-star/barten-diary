@@ -11,7 +11,7 @@
   font-family: var(--font-serif-jp);
   font-size: 0.72rem;
   line-height: 1.65;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--font-serif-jp-tracking);
   text-align: center;
   white-space: pre-line;
   pointer-events: none;

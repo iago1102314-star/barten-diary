@@ -34,7 +34,7 @@
   font-family: var(--font-serif-jp), serif;
   font-size: var(--drink-name-katakana-size, 0.72rem);
   line-height: var(--drink-name-katakana-line-height, 1.5);
-  letter-spacing: var(--drink-name-katakana-tracking, 0.14em);
+  letter-spacing: var(--drink-name-katakana-tracking, var(--font-serif-jp-tracking));
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,13 +1,20 @@
 "use client";
 
 import { SceneFrame } from "@/components/entrance/scene-frame";
+import { HomeEntryButton } from "@/components/entrance/home-entry-button";
+import { HomeAuthButton } from "@/components/entrance/home-auth-button";
 import { LoadingGateMessage } from "@/components/entrance/loading-gate-message";
 import {
   StartEntryAlleyLayer,
   START_ENTRY_ALLEY_KEN_BURNS,
 } from "@/components/entrance/start-entry-alley-layer";
 import { BarButton } from "@/components/ui/bar-button";
-import { SHOW_HOME_DIARY_DESIGN_BUTTON } from "@/lib/entrance/home-entry-tuning";
+import {
+  HOME_AUTH_BUTTON_TUNING,
+  HOME_ENTRY_BUTTON_TUNING,
+  HOME_ENTRY_TITLE_TUNING,
+  SHOW_HOME_DIARY_DESIGN_BUTTON,
+} from "@/lib/entrance/home-entry-tuning";
 import { SHOW_LOADING_GATE_MESSAGE_ON_HOME } from "@/lib/entrance/loading-gate-message-tuning";
 import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
 import {
@@ -287,13 +294,47 @@ export function NightEntryScreen({
             y: showUi ? 0 : isSteadyReturn ? 0 : -8,
           }}
           transition={titleTransition}
-          className="pointer-events-none absolute inset-x-0 top-[14%] z-30 space-y-3 px-7 text-center"
+          className={`absolute z-30 ${
+            !showUi || interactionLocked ? "pointer-events-none" : "pointer-events-auto"
+          }`}
+          style={{
+            top: `${HOME_AUTH_BUTTON_TUNING.topPercent}%`,
+            right: `${HOME_AUTH_BUTTON_TUNING.rightRem}rem`,
+          }}
         >
-          <p className="text-[10px] tracking-[0.5em] text-stone-400/65 uppercase">
-            back bar
-          </p>
-          <h1 className="font-serif-jp text-[22px] font-normal tracking-[0.22em] text-stone-100/90">
-            バーテン日記
+          <HomeAuthButton disabled={interactionLocked} />
+        </motion.div>
+
+        <motion.div
+          initial={isSteadyReturn ? false : { opacity: 0, y: -8 }}
+          animate={{
+            opacity: showUi ? 1 : 0,
+            y: showUi ? 0 : isSteadyReturn ? 0 : -8,
+          }}
+          transition={titleTransition}
+          className="pointer-events-none absolute inset-x-0 z-30 px-7"
+          style={{ top: `${HOME_ENTRY_TITLE_TUNING.topPercent}%` }}
+        >
+          <h1
+            className="font-app-title ml-auto flex w-fit flex-col items-end text-right font-normal leading-none text-stone-100/90"
+            style={{
+              transform: `translateX(${HOME_ENTRY_TITLE_TUNING.translateXRem}rem)`,
+              fontSize: HOME_ENTRY_TITLE_TUNING.fontSizePx,
+              letterSpacing: `${HOME_ENTRY_TITLE_TUNING.letterSpacingEm}em`,
+            }}
+          >
+            <span>バーテン</span>
+            <span
+              className="inline-block border-current"
+              style={{
+                marginTop: HOME_ENTRY_TITLE_TUNING.lineGapPx,
+                borderBottomWidth: HOME_ENTRY_TITLE_TUNING.underlineHeightPx,
+                borderBottomStyle: "solid",
+                paddingBottom: HOME_ENTRY_TITLE_TUNING.underlineGapPx,
+              }}
+            >
+              日記
+            </span>
           </h1>
         </motion.div>
 
@@ -301,25 +342,32 @@ export function NightEntryScreen({
           initial={isSteadyReturn ? false : { opacity: 0 }}
           animate={{ opacity: showUi ? 1 : 0 }}
           transition={buttonsTransition}
-          className={`absolute inset-x-0 bottom-[14%] z-40 flex justify-center px-7 ${
+          className={`absolute inset-x-0 z-40 flex justify-center px-7 ${
             !showUi || interactionLocked ? "pointer-events-none" : "pointer-events-auto"
           }`}
+          style={{ bottom: `${HOME_ENTRY_BUTTON_TUNING.bottomPercent}%` }}
         >
-          <div className="w-full max-w-[260px] space-y-4 text-center">
-            <BarButton
-              variant="primary"
-              transparent
-              hoverDurationMs={350}
+          <div
+            className="w-full text-center"
+            style={{
+              maxWidth: HOME_ENTRY_BUTTON_TUNING.maxWidthPx,
+              display: "flex",
+              flexDirection: "column",
+              gap: `${HOME_ENTRY_BUTTON_TUNING.stackGapRem}rem`,
+            }}
+          >
+            <HomeEntryButton
               onClick={interactionLocked ? undefined : onEnterCounter}
+              disabled={interactionLocked}
             >
-              扉を開ける
-            </BarButton>
-            <BarButton
-              variant="ghost"
+              カウンターへ
+            </HomeEntryButton>
+            <HomeEntryButton
               onClick={interactionLocked ? undefined : onOpenMemories}
+              disabled={interactionLocked}
             >
-              メモを見る
-            </BarButton>
+              記録を開く
+            </HomeEntryButton>
             {SHOW_HOME_DIARY_DESIGN_BUTTON && onOpenDiaryPaperMock && (
               <BarButton
                 variant="quiet"
