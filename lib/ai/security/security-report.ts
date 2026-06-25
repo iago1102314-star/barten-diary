@@ -1,6 +1,6 @@
 import { detectInjectionInTranscript } from "@/lib/ai/security/detect-injection";
 import { validateOutputSecurity } from "@/lib/ai/security/validate-output";
-import { validateTranscriptInput } from "@/lib/ai/security/validate-input";
+import { evaluateTranscriptForGeneration } from "@/lib/night/transcript-generation-boundary";
 import { buildQuietnessReport } from "@/lib/ai/quality/quality-report";
 import type { GeneratedDiary } from "@/lib/ai/types";
 
@@ -9,6 +9,10 @@ export type InputSecurityReport = {
   inputMessage: string | null;
   injectionHits: ReturnType<typeof detectInjectionInTranscript>;
   warnings: string[];
+  /** 境界拒否（フィラーのみ等）— インジェクション疑いとは別 */
+  boundaryWarnings: string[];
+  /** インジェクション疑い — 生成はブロックしない */
+  injectionWarnings: string[];
 };
 
 export type OutputSecurityReport = {
@@ -16,17 +20,18 @@ export type OutputSecurityReport = {
 };
 
 export function buildInputSecurityReport(transcript: string): InputSecurityReport {
-  const validation = validateTranscriptInput(transcript);
+  const validation = evaluateTranscriptForGeneration(transcript);
   const injectionHits = detectInjectionInTranscript(transcript);
-  const warnings: string[] = [];
+  const boundaryWarnings: string[] = [];
+  const injectionWarnings: string[] = [];
 
   if (!validation.ok) {
-    warnings.push(`入力: ${validation.message}`);
+    boundaryWarnings.push(`境界: ${validation.message}`);
   }
 
   for (const hit of injectionHits) {
-    warnings.push(
-      `インジェクション疑い: ${hit.pattern.label}（「${hit.excerpt}」）— 発話として扱う`,
+    injectionWarnings.push(
+      `インジェクション疑い: ${hit.pattern.label}（「${hit.excerpt}」）— 発話として日記化`,
     );
   }
 
@@ -34,7 +39,9 @@ export function buildInputSecurityReport(transcript: string): InputSecurityRepor
     inputOk: validation.ok,
     inputMessage: validation.ok ? null : validation.message,
     injectionHits,
-    warnings,
+    warnings: [...boundaryWarnings, ...injectionWarnings],
+    boundaryWarnings,
+    injectionWarnings,
   };
 }
 

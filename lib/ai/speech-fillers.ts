@@ -36,17 +36,9 @@ export function transcriptWithoutFillers(transcript: string): string {
   return kept.join(" ").trim();
 }
 
+/** フィラーしか残らない → 日記生成しない（聞き取れなかった扱い） */
 export function isFillerOnlyTranscript(transcript: string): boolean {
   const trimmed = transcript.trim();
   if (!trimmed) return true;
-
-  const withoutFillers = transcriptWithoutFillers(trimmed);
-  if (countSpeechChars(withoutFillers) === 0) {
-    return true;
-  }
-
-  const segments = trimmed.split(/[\s\u3000、。．，,.!?！？]+/).filter(Boolean);
-  if (segments.length === 0) return true;
-
-  return segments.every((segment) => isFillerSegment(segment));
+  return countSpeechChars(transcriptWithoutFillers(trimmed)) === 0;
 }

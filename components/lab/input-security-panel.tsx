@@ -18,27 +18,31 @@ export function InputSecurityPanel({ transcript }: InputSecurityPanelProps) {
   }
 
   return (
-    <div
-      className={`space-y-2 rounded-lg border px-3 py-2 ${
-        report.inputOk
-          ? "border-stone-700/50 bg-stone-950/40"
-          : "border-red-900/30 bg-red-950/20"
-      }`}
-    >
-      <p
-        className={`text-[11px] tracking-wide uppercase ${
-          report.inputOk ? "text-stone-500" : "text-red-200/70"
-        }`}
-      >
-        入力チェック
-      </p>
-      <ul className="space-y-1 text-xs text-stone-400">
-        {report.warnings.map((warning) => (
-          <li key={warning}>
-            {report.inputOk ? "◇" : "✕"} {warning}
-          </li>
-        ))}
-      </ul>
+    <div className="space-y-2">
+      {report.boundaryWarnings.length > 0 ? (
+        <div className="rounded-lg border border-red-900/30 bg-red-950/20 px-3 py-2">
+          <p className="text-[11px] tracking-wide uppercase text-red-200/70">
+            境界（生成しない）
+          </p>
+          <ul className="mt-1 space-y-1 text-xs text-stone-400">
+            {report.boundaryWarnings.map((warning) => (
+              <li key={warning}>✕ {warning}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {report.injectionWarnings.length > 0 ? (
+        <div className="rounded-lg border border-stone-700/50 bg-stone-950/40 px-3 py-2">
+          <p className="text-[11px] tracking-wide uppercase text-stone-500">
+            インジェクション疑い（生成は続行）
+          </p>
+          <ul className="mt-1 space-y-1 text-xs text-stone-400">
+            {report.injectionWarnings.map((warning) => (
+              <li key={warning}>◇ {warning}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

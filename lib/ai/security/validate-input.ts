@@ -70,6 +70,10 @@ function isMeaninglessRepetition(text: string): boolean {
   return false;
 }
 
+/**
+ * 日記生成前の入力境界（フィラー・無音 hallucination 等）。
+ * プロンプトインジェクションはここでは判定しない。
+ */
 export function validateTranscriptInput(
   transcript: string,
 ): TranscriptValidationResult {
@@ -80,7 +84,11 @@ export function validateTranscriptInput(
   }
 
   if (isFillerOnlyTranscript(trimmed)) {
-    return { ok: false, code: "filler_only", message: MESSAGES.filler_only };
+    return {
+      ok: false,
+      code: "filler_only",
+      message: MESSAGES.filler_only,
+    };
   }
 
   if (isWhisperPromptHallucination(trimmed)) {
