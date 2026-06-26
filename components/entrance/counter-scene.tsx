@@ -44,6 +44,8 @@ type CounterSceneProps = {
   showLampGlowLight?: boolean;
   /** @experimental マスター画像レイヤーを非表示 */
   hideMaster?: boolean;
+  /** メニュー背景用 — ドリンク UI のみ省略 */
+  backgroundOnly?: boolean;
 };
 
 function KenBurnsWrap({
@@ -286,6 +288,7 @@ export function CounterScene({
   lampGlows,
   showLampGlowLight,
   hideMaster = false,
+  backgroundOnly = false,
 }: CounterSceneProps) {
   const accent = moodAccent(moodCategoryId ?? null);
   const masterAnim =
@@ -388,7 +391,7 @@ export function CounterScene({
         </>
       )}
 
-      {drinkImageSrc && drinkOnCounter && (
+      {!backgroundOnly && drinkImageSrc && drinkOnCounter && (
         <ParallaxLayer layer="drink" pose={cameraPose} className="absolute inset-0 z-[6]">
           <DrinkOnCounter
             src={drinkImageSrc}
@@ -398,7 +401,7 @@ export function CounterScene({
         </ParallaxLayer>
       )}
 
-      {drinkImageSrc && !drinkOnCounter && (
+      {!backgroundOnly && drinkImageSrc && !drinkOnCounter && (
         <ParallaxLayer layer="drink" pose={cameraPose} className="absolute inset-0 z-[6]">
           <motion.div
             className="absolute inset-0"

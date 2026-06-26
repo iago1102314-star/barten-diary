@@ -11,6 +11,18 @@ import {
 import { withResolvedTotalCount } from "@/lib/memories/resolve-memo-shelf-total-count";
 import { preloadMemoShelfImages } from "@/lib/memories/preload-memo-shelf-images";
 
+type ClearableMemoShelfPageCache = {
+  clear: () => void;
+};
+
+const activeMemoShelfPageCaches = new Set<ClearableMemoShelfPageCache>();
+
+export function clearAllMemoShelfPageCaches(): void {
+  for (const cache of activeMemoShelfPageCaches) {
+    cache.clear();
+  }
+}
+
 export type MemoShelfPageCacheEntry = MemoShelfFetchedPage & {
   hasMore: boolean;
 };
@@ -200,7 +212,13 @@ export function createMemoShelfPageCache() {
     });
   };
 
-  return {
+  const clear = () => {
+    pageCache.clear();
+    inflight.clear();
+    totalCount = 0;
+  };
+
+  const api = {
     bootstrapInitialPages,
     fetchAndCachePage,
     getCached,
@@ -211,7 +229,12 @@ export function createMemoShelfPageCache() {
     getTotalCount: () => totalCount,
     setTotalCount,
     pageCache,
+    clear,
   };
+
+  activeMemoShelfPageCaches.add(api);
+
+  return api;
 }
 
 export type MemoShelfPageCache = ReturnType<typeof createMemoShelfPageCache>;

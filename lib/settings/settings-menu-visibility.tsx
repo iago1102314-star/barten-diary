@@ -11,9 +11,9 @@ import {
 } from "react";
 
 export type SettingsMenuHideReason =
-  | "memories-list"
-  | "diary-detail"
-  | "recording-flow";
+  | "loading-gate"
+  | "entrance-scene"
+  | "diary-detail";
 
 type SettingsMenuVisibilityContextValue = {
   visible: boolean;
@@ -80,6 +80,6 @@ export function useSettingsMenuHidden(
 
   useEffect(() => {
     setHidden(reason, hidden);
-    return () => setHidden(reason, hidden);
+    return () => setHidden(reason, false);
   }, [hidden, reason, setHidden]);
 }

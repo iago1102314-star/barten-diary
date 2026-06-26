@@ -1,0 +1,17 @@
+.root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.black {
+  position: absolute;
+  inset: 0;
+  background: #000;
+}
+
+.leaving {
+  position: absolute;
+  inset: 0;
+}

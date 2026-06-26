@@ -115,12 +115,16 @@ import {
   DEFAULT_MEMORIES_LAUNCH,
   type MemoriesLaunch,
 } from "@/lib/entrance/memories-launch";
+import { takeCounterLaunchFromShelf } from "@/lib/entrance/counter-launch-from-shelf";
 import { MASTER_DECLINE_FAREWELL } from "@/lib/entrance/master-greetings";
 import { DECLINE_NIGHT_TUNING } from "@/lib/entrance/decline-night-tuning";
 import { AnimatePresence, motion } from "motion/react";
+import { resolveEntranceSettingsMenuHidden } from "@/lib/settings/resolve-entrance-settings-menu-hidden";
 import { useSettingsMenuHidden } from "@/lib/settings/settings-menu-visibility";
+import { useRegisterSettingsMenuBackdrop } from "@/lib/settings/settings-menu-backdrop-context";
+import { resolveEntranceMenuBackdrop } from "@/lib/settings/resolve-entrance-menu-backdrop";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 type EntranceState =
   | "entry"
@@ -184,14 +188,6 @@ const OUTSIDE_AMBIENT_STATES = new Set<EntranceState>([
   "alley",
 ]);
 
-const SETTINGS_MENU_RECORDING_STATES = new Set<EntranceState>([
-  "recording",
-  "postRecordBlackout",
-  "postRecordThanks",
-  "postRecordExitBlack",
-  "leaving",
-]);
-
 function getSceneMotionKey(state: EntranceState): string {
   return COUNTER_SCENE_STATES.has(state) ? "counter" : state;
 }
@@ -221,6 +217,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const saveExpectedRef = useRef(false);
   const leaveAnimationDoneRef = useRef(false);
   const alleyWaitStartedRef = useRef<number | null>(null);
+  const retryReturningToSipRef = useRef(false);
   const [moodCameraPose, setMoodCameraPose] = useState<CameraPose>("neutral");
   const [moodSelectExitActive, setMoodSelectExitActive] = useState(false);
   const [moodAwaitingGrass, setMoodAwaitingGrass] = useState(false);
@@ -275,11 +272,45 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const [alleyHomeFadeOut, setAlleyHomeFadeOut] = useState(false);
   const [devSkipLoading, setDevSkipLoading] = useState(false);
 
-  useSettingsMenuHidden("memories-list", entranceState === "memories");
+  const nightGenerationComplete =
+    session.phase === "revealed" && session.generationStatus === "success";
+  const nightSaveInProgress =
+    session.saveStatus === "pending" || session.saveStatus === "saving";
+
   useSettingsMenuHidden(
-    "recording-flow",
-    SETTINGS_MENU_RECORDING_STATES.has(entranceState),
+    "entrance-scene",
+    resolveEntranceSettingsMenuHidden(entranceState, moodSelectExitActive, {
+      entryPhase: entranceState === "entry" ? entryPhase : undefined,
+      entryTransition: entranceState === "entry" ? entryTransition : undefined,
+      nightPipeline: {
+        generationComplete: nightGenerationComplete,
+        saveInProgress: nightSaveInProgress,
+        alleyOutcomeKind:
+          entranceState === "alley" ? (alleyOutcome?.kind ?? null) : null,
+      },
+    }),
   );
+
+  const settingsMenuBackdrop = useMemo(
+    () =>
+      resolveEntranceMenuBackdrop({
+        entranceState,
+        moodCategoryId: session.selectedCategoryId,
+        moodCameraPose,
+        pickedDrinkId: pickedDrink?.id ?? null,
+        moodSelectExitActive,
+        declineBlackoutReady,
+      }),
+    [
+      declineBlackoutReady,
+      entranceState,
+      moodCameraPose,
+      moodSelectExitActive,
+      pickedDrink?.id,
+      session.selectedCategoryId,
+    ],
+  );
+  useRegisterSettingsMenuBackdrop(settingsMenuBackdrop);
 
   const unlockBarAudio = useCallback(() => {
     setAudioUnlocked((unlocked) => {
@@ -307,7 +338,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
   const startEntryOutsideAmbience = useCallback(() => {
     if (entranceState !== "entry" || entryTransition !== "idle") return;
-    if (entryOutsideStartedRef.current && audio.isOutsidePlaying()) return;
+    if (entryOutsideStartedRef.current && audio.hasOutsideSession()) return;
     entryOutsideStartedRef.current = true;
     primeBarAudioUnlock();
     audio.primeOutsidePlayOnUserGesture();
@@ -441,6 +472,22 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     setAlleyOutcome(null);
   }, []);
 
+  const shelfCounterLaunchHandledRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (shelfCounterLaunchHandledRef.current) return;
+    if (!takeCounterLaunchFromShelf()) return;
+
+    shelfCounterLaunchHandledRef.current = true;
+    resetNightRefs();
+    primeCounterEntryAudio();
+    setEntranceState("masterOnBlack");
+    fadeTimerRef.current = setTimeout(() => {
+      fadeTimerRef.current = null;
+      audio.playDoor();
+    }, BAR_AUDIO_TIMING.doorDelayAfterEntryFadeMs);
+  }, [audio, primeCounterEntryAudio, resetNightRefs]);
+
   const returnToHomeSteady = useCallback(() => {
     clearTimers();
     session.reset();
@@ -477,18 +524,22 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     alleyWaitStartedRef.current = null;
     setAlleyOutcome(null);
 
+    session.prepareRetryFromSip();
+    retryReturningToSipRef.current = true;
+
     audio.stopOutside();
     audio.startJazz(
       BAR_AUDIO_LEVELS.jazz.counter,
       BAR_AUDIO_TIMING.jazzEntryFadeMs,
     );
-
-    void session.restartRecordingAfterPipelineFailure().then((started) => {
-      if (started) {
-        setEntranceState("recording");
-      }
-    });
+    setEntranceState("postRecordBlackout");
   }, [alleyOutcome, session, audio]);
+
+  const handleRetrySpeaking = useCallback(() => {
+    session.prepareRetryFromSip();
+    retryReturningToSipRef.current = true;
+    setEntranceState("postRecordBlackout");
+  }, [session]);
 
   const attemptGoToAlley = useCallback(() => {
     if (!leaveAnimationDoneRef.current) return;
@@ -504,6 +555,9 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
     const saveReady =
       session.saveStatus === "saved" && Boolean(session.savedDiaryId);
+    const needsLogin =
+      session.saveStatus === "loginRequired" &&
+      session.generationStatus === "success";
 
     if (session.isDevSimulated) {
       setAlleyOutcome({ kind: "devSaved" });
@@ -513,6 +567,9 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         kind: "saved",
         diaryId: session.savedDiaryId!,
       });
+    } else if (needsLogin) {
+      alleyWaitStartedRef.current = null;
+      setAlleyOutcome({ kind: "needsLogin" });
     } else if (
       session.generationFailed ||
       session.saveStatus === "failed"
@@ -531,6 +588,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     session.saveStatus,
     session.savedDiaryId,
     session.generationFailed,
+    session.generationStatus,
   ]);
 
   useEffect(() => {
@@ -538,7 +596,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     if (!audioUnlocked) return;
 
     if (entranceState === "memories") {
-      audio.startOutside(BAR_AUDIO_LEVELS.outside.alley);
       return;
     }
 
@@ -609,6 +666,22 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   }, [entranceState, session.phase, session.listenFailureVisible]);
 
   useEffect(() => {
+    if (entranceState !== "postRecordBlackout") return;
+    if (!retryReturningToSipRef.current) return;
+
+    const timer = setTimeout(() => {
+      retryReturningToSipRef.current = false;
+      setDrinkEnteringReveal(false);
+      setDrinkIntroSkipToSip(true);
+      setEntranceState("drinkServed");
+    }, POST_RECORD_EXIT_TUNING.softBlackFadeInMs);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [entranceState]);
+
+  useEffect(() => {
     if (entranceState !== "alley") return;
     if (alleyOutcome?.kind !== "composing") return;
 
@@ -625,6 +698,15 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       return;
     }
 
+    if (
+      session.saveStatus === "loginRequired" &&
+      session.generationStatus === "success"
+    ) {
+      alleyWaitStartedRef.current = null;
+      setAlleyOutcome({ kind: "needsLogin" });
+      return;
+    }
+
     if (session.generationFailed || session.saveStatus === "failed") {
       alleyWaitStartedRef.current = null;
       setAlleyOutcome({ kind: "saveFailed" });
@@ -635,6 +717,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     session.saveStatus,
     session.savedDiaryId,
     session.generationFailed,
+    session.generationStatus,
     session.recordWaitingInAlleyComplete,
   ]);
 
@@ -643,6 +726,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     if (
       session.saveStatus !== "saved" &&
       session.saveStatus !== "failed" &&
+      session.saveStatus !== "loginRequired" &&
       !session.generationFailed
     ) {
       return;
@@ -752,6 +836,16 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       audio.playDoor();
     }, BAR_AUDIO_TIMING.doorDelayAfterEntryFadeMs);
   };
+
+  const handleLaunchCounterFromMemories = useCallback(() => {
+    resetNightRefs();
+    primeCounterEntryAudio();
+    setEntranceState("masterOnBlack");
+    fadeTimerRef.current = setTimeout(() => {
+      fadeTimerRef.current = null;
+      audio.playDoor();
+    }, BAR_AUDIO_TIMING.doorDelayAfterEntryFadeMs);
+  }, [audio, primeCounterEntryAudio, resetNightRefs]);
 
   const handleOpenMemories = () => {
     if (entryTransition !== "idle") return;
@@ -1121,6 +1215,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         <motion.div key="memories" {...sceneExitInstant}>
           <MemoriesScreen
             onBack={handleBackFromMemories}
+            onLaunchCounter={handleLaunchCounterFromMemories}
             initialDiaryId={memoriesLaunch.initialDiaryId}
           />
         </motion.div>
@@ -1489,7 +1584,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
                   listenFailureVisible={session.listenFailureVisible}
                   listenFailureReason={session.listenFailureReason}
                   onFinish={handleFinishTalk}
-                  onRetrySpeaking={() => void session.retrySpeaking()}
+                  onRetrySpeaking={handleRetrySpeaking}
                   onLeaveWithoutRecord={handleLeaveWithoutRecord}
                   onPauseSpeaking={() => session.pauseSpeaking()}
                   onResumeSpeaking={() => session.resumeSpeaking()}

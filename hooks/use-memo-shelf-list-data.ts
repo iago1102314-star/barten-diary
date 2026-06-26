@@ -1,7 +1,9 @@
 "use client";
 
 import type { DiaryListItem } from "@/components/diaries/diary-list";
+import { useAuthUser } from "@/hooks/use-auth-user";
 import type { MemoShelfFetchedPage } from "@/lib/memories/memo-shelf-page-motion";
+import { fetchGuestDiaryDraftShelfPage } from "@/lib/memories/guest-diary-shelf-page";
 import {
   createMemoShelfPageCache,
   measureMemoShelfRender,
@@ -9,6 +11,7 @@ import {
 } from "@/lib/memories/memo-shelf-page-cache";
 import { resolveMemoShelfTotalCount } from "@/lib/memories/resolve-memo-shelf-total-count";
 import { skipMemoShelfPolaroidIntro } from "@/lib/memories/memo-shelf-polaroid-intro";
+import { subscribeGuestDiaryDrafts } from "@/lib/night/guest-diary-drafts";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type MemoShelfPolaroidIntroSession = {
@@ -29,6 +32,9 @@ export function useMemoShelfListData({
   initialSeed,
   polaroidIntroSession,
 }: UseMemoShelfListDataOptions = {}) {
+  const { isLoggedIn, isLoading: authLoading } = useAuthUser();
+  const guestListMode = enabled && !authLoading && !isLoggedIn;
+
   const cacheRef = useRef<MemoShelfPageCache | null>(null);
   if (!cacheRef.current) {
     cacheRef.current = createMemoShelfPageCache();
@@ -44,6 +50,7 @@ export function useMemoShelfListData({
   const [totalCount, setTotalCount] = useState(initialSeed?.totalCount ?? 0);
   const [loading, setLoading] = useState(!initialSeed);
   const [error, setError] = useState<string | null>(null);
+  const prevGuestListModeRef = useRef<boolean | null>(null);
 
   const applyEntry = useCallback(
     (pageNum: number, entry: MemoShelfFetchedPage) => {
@@ -59,13 +66,40 @@ export function useMemoShelfListData({
       if (resolvedTotal > 0) {
         cache.setTotalCount(resolvedTotal);
       }
-      cache.prefetchAheadOf(pageNum, entry.hasMore);
+      if (!guestListMode) {
+        cache.prefetchAheadOf(pageNum, entry.hasMore);
+      }
     },
-    [cache],
+    [cache, guestListMode],
+  );
+
+  const loadGuestPage = useCallback(
+    (pageNum: number) => {
+      const entry = fetchGuestDiaryDraftShelfPage(pageNum);
+      applyEntry(pageNum, entry);
+      setLoading(false);
+      if (pageNum === 0) {
+        measureMemoShelfRender();
+      }
+    },
+    [applyEntry],
   );
 
   useEffect(() => {
-    if (!enabled || initialSeed) return;
+    if (!enabled || authLoading) return;
+
+    if (guestListMode) {
+      prevGuestListModeRef.current = true;
+      loadGuestPage(page);
+      return subscribeGuestDiaryDrafts(() => {
+        loadGuestPage(page);
+      });
+    }
+
+    const wasGuest = prevGuestListModeRef.current === true;
+    prevGuestListModeRef.current = false;
+
+    if (!wasGuest) return;
 
     let cancelled = false;
     setLoading(true);
@@ -91,10 +125,39 @@ export function useMemoShelfListData({
     return () => {
       cancelled = true;
     };
-  }, [applyEntry, cache, enabled, initialSeed]);
+  }, [applyEntry, authLoading, cache, enabled, guestListMode, loadGuestPage, page]);
 
   useEffect(() => {
-    if (!enabled || !initialSeed) return;
+    if (!enabled || initialSeed || guestListMode || authLoading) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    void (async () => {
+      try {
+        const { page: startPage, entry } = await cache.bootstrapInitialPages();
+        if (cancelled) return;
+        applyEntry(startPage, entry);
+        measureMemoShelfRender();
+      } catch {
+        if (!cancelled) {
+          setError("夜のメモを開けませんでした。");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyEntry, authLoading, cache, enabled, guestListMode, initialSeed]);
+
+  useEffect(() => {
+    if (!enabled || !initialSeed || guestListMode) return;
 
     const pagesToWarm = [initialPage + 1, initialPage + 2].filter(
       (pageNum) => pageNum > initialPage,
@@ -110,14 +173,17 @@ export function useMemoShelfListData({
         // 初回 SSR シードは表示済み — 裏の先読み失敗は無視
       }
     })();
-  }, [cache, enabled, initialPage, initialSeed]);
+  }, [cache, enabled, guestListMode, initialPage, initialSeed]);
 
   const fetchPagePreview = useCallback(
     async (pageNum: number): Promise<MemoShelfFetchedPage> => {
+      if (guestListMode) {
+        return fetchGuestDiaryDraftShelfPage(pageNum);
+      }
       const entry = await cache.resolvePageForNavigation(pageNum);
       return entry;
     },
-    [cache],
+    [cache, guestListMode],
   );
 
   const navigateToPage = useCallback(
@@ -134,6 +200,11 @@ export function useMemoShelfListData({
         return;
       }
 
+      if (guestListMode) {
+        loadGuestPage(nextPage);
+        return;
+      }
+
       const cached = cache.getCached(nextPage);
       if (cached) {
         applyEntry(nextPage, cached);
@@ -143,7 +214,29 @@ export function useMemoShelfListData({
       const entry = await cache.resolvePageForNavigation(nextPage);
       applyEntry(nextPage, entry);
     },
-    [applyEntry, cache, polaroidIntroSession],
+    [applyEntry, cache, guestListMode, loadGuestPage, polaroidIntroSession],
+  );
+
+  const removeMemoLocally = useCallback(
+    (memoId: string) => {
+      cache.clear();
+      setMemos((prev) => prev.filter((memo) => memo.id !== memoId));
+      setTotalCount((prev) => Math.max(0, prev - 1));
+      setHasMore(false);
+      setPage(0);
+      setError(null);
+    },
+    [cache],
+  );
+
+  const syncShelfSeed = useCallback(
+    (pageNum: number, entry: MemoShelfFetchedPage) => {
+      cache.clear();
+      cache.seedPage(pageNum, entry);
+      applyEntry(pageNum, entry);
+      setLoading(false);
+    },
+    [applyEntry, cache],
   );
 
   return {
@@ -151,10 +244,13 @@ export function useMemoShelfListData({
     memos,
     hasMore,
     totalCount,
-    loading,
+    loading: loading || authLoading,
     error,
     fetchPagePreview,
     navigateToPage,
+    removeMemoLocally,
+    syncShelfSeed,
     sharedPageCacheRef: cache.pageCache,
+    guestListMode,
   };
 }

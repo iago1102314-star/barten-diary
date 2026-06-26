@@ -8,9 +8,17 @@ export type NightSavePayload = {
   transcript: string;
   continuedFromDiaryId: string | null;
   continuedFromBottleTag: string | null;
+  /** ゲスト引き継ぎ — 元の生成時刻を DB に反映 */
+  createdAt?: string;
 };
 
-export type NightSaveStatus = "idle" | "pending" | "saving" | "saved" | "failed";
+export type NightSaveStatus =
+  | "idle"
+  | "pending"
+  | "saving"
+  | "saved"
+  | "failed"
+  | "loginRequired";
 
 export type NightPipelineFailurePhase =
   | "transcribe"

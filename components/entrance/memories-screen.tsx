@@ -6,21 +6,35 @@ import { DiaryExportNoticePanel } from "@/components/diary-paper/diary-export-no
 import { MemoDetailPanel } from "@/components/memories/memo-detail-panel";
 import { MemoShelfSwipePager } from "@/components/memories/memo-shelf-swipe-pager";
 import { MemoShelfBottomBar } from "@/components/memories/memo-shelf-bottom-bar";
+import { GuestDiaryTransferToast } from "@/components/memories/guest-diary-transfer-toast";
+import { GuestShelfInfoBar } from "@/components/memories/guest-shelf-info-bar";
+import { MemoShelfEmptyCounterCta } from "@/components/memories/memo-shelf-empty-counter-cta";
 import { MemoShelfRecordBottomBar } from "@/components/memories/memo-shelf-detail-bar";
 import styles from "@/components/memories/memo-shelf-grid.module.css";
 import { MemoShelfScreen } from "@/components/memories/memo-shelf-surface";
 import type { DiaryListItem } from "@/components/diaries/diary-list";
 import { useMemoShelfListData } from "@/hooks/use-memo-shelf-list-data";
 import { useMemoShelfPageNavigation } from "@/hooks/use-memo-shelf-page-navigation";
+import { useShelfOutsideAmbience } from "@/hooks/use-shelf-outside-ambience";
 import { useDiaryDelete } from "@/hooks/use-diary-delete";
 import { useDiaryPaperExport } from "@/hooks/use-diary-paper-export";
 import { skipMemoShelfPolaroidIntro } from "@/lib/memories/memo-shelf-polaroid-intro";
+import {
+  findGuestDiaryDraftByListId,
+  guestDraftToDiaryListItem,
+  guestListIdToClientId,
+  isGuestDiaryListId,
+  removeGuestDiaryDraft,
+} from "@/lib/night/guest-diary-drafts";
+import { useSettingsMenuHidden } from "@/lib/settings/settings-menu-visibility";
 import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type MemoriesScreenProps = {
   onBack: () => void;
+  /** 空の棚からカウンター入店 — 暗転完了後に呼ぶ */
+  onLaunchCounter?: () => void;
   /** 指定時は一覧を飛ばしてその記録を開く（帰り道からなど） */
   initialDiaryId?: string;
 };
@@ -35,12 +49,14 @@ const contentFade = {
 /** 路地で過去の記録を振り返る — ページ遷移なし */
 export function MemoriesScreen({
   onBack,
+  onLaunchCounter,
   initialDiaryId,
 }: MemoriesScreenProps) {
   const [selectedMemo, setSelectedMemo] = useState<DiaryListItem | null>(null);
   const [detailEditing, setDetailEditing] = useState(false);
   const [detailDirty, setDetailDirty] = useState(false);
   const [deletedMemoIds, setDeletedMemoIds] = useState<Set<string>>(() => new Set());
+  const [guestDeleting, setGuestDeleting] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(Boolean(initialDiaryId));
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const diaryExportRef = useRef<HTMLDivElement>(null);
@@ -51,6 +67,10 @@ export function MemoriesScreen({
     playedVisitIdRef: polaroidIntroPlayedVisitIdRef,
   };
   const directOpen = Boolean(initialDiaryId);
+
+  useShelfOutsideAmbience();
+
+  useSettingsMenuHidden("diary-detail", selectedMemo !== null);
 
   const listData = useMemoShelfListData({
     enabled: !initialDiaryId,
@@ -67,6 +87,8 @@ export function MemoriesScreen({
     fetchPagePreview,
     navigateToPage,
     sharedPageCacheRef,
+    guestListMode,
+    removeMemoLocally,
   } = listData;
   const visibleMemos = useMemo(
     () => memos.filter((memo) => !deletedMemoIds.has(memo.id)),
@@ -81,6 +103,7 @@ export function MemoriesScreen({
     onDeleted: () => {
       if (!selectedMemo) return;
 
+      removeMemoLocally(selectedMemo.id);
       setDeletedMemoIds((prev) => {
         const next = new Set(prev);
         next.add(selectedMemo.id);
@@ -94,6 +117,18 @@ export function MemoriesScreen({
 
   useEffect(() => {
     if (!initialDiaryId) return;
+
+    if (isGuestDiaryListId(initialDiaryId)) {
+      const draft = findGuestDiaryDraftByListId(initialDiaryId);
+      if (draft) {
+        setSelectedMemo(guestDraftToDiaryListItem(draft));
+        skipMemoShelfPolaroidIntro(polaroidIntroSession);
+      } else {
+        setErrorDetail("記録を開けませんでした。");
+      }
+      setLoadingDetail(false);
+      return;
+    }
 
     let cancelled = false;
     setLoadingDetail(true);
@@ -133,6 +168,14 @@ export function MemoriesScreen({
   }, [initialDiaryId, polaroidIntroSession]);
 
   const refreshMemo = useCallback(async (id: string) => {
+    if (isGuestDiaryListId(id)) {
+      const draft = findGuestDiaryDraftByListId(id);
+      if (draft) {
+        setSelectedMemo(guestDraftToDiaryListItem(draft));
+      }
+      return;
+    }
+
     const res = await fetch(`/api/memories/${id}`);
     const data = (await res.json()) as {
       diary?: DiaryListItem;
@@ -147,7 +190,7 @@ export function MemoriesScreen({
   const handleOpenMemo = useCallback((memo: DiaryListItem) => {
     skipMemoShelfPolaroidIntro(polaroidIntroSession);
 
-    if (memo.body?.trim()) {
+    if (isGuestDiaryListId(memo.id) || memo.body?.trim()) {
       setSelectedMemo(memo);
       return;
     }
@@ -185,6 +228,26 @@ export function MemoriesScreen({
     setDetailDirty(false);
   }, [selectedMemo?.id]);
 
+  const handleGuestDelete = useCallback(() => {
+    if (!selectedMemo || !isGuestDiaryListId(selectedMemo.id)) return;
+
+    const clientId = guestListIdToClientId(selectedMemo.id);
+    if (!clientId) return;
+
+    setGuestDeleting(true);
+    removeGuestDiaryDraft(clientId);
+    removeMemoLocally(selectedMemo.id);
+    setDeletedMemoIds((prev) => {
+      const next = new Set(prev);
+      next.add(selectedMemo.id);
+      return next;
+    });
+    setSelectedMemo(null);
+    setDetailEditing(false);
+    setDetailDirty(false);
+    setGuestDeleting(false);
+  }, [removeMemoLocally, selectedMemo]);
+
   const diaryExport = useDiaryPaperExport({
     captureRef: diaryExportRef,
     createdAt: selectedMemo?.created_at ?? "",
@@ -211,9 +274,21 @@ export function MemoriesScreen({
   const backToListLabel = "一覧に戻る";
 
   const listPaginationEnabled =
-    !initialDiaryId && !selectedMemo && !loading && !error && memos.length > 0;
+    !initialDiaryId &&
+    !selectedMemo &&
+    !loading &&
+    !error &&
+    visibleTotalCount > 0;
 
-  const showIndexBar = !selectedMemo && !directOpen;
+  const showIndexBar =
+    !selectedMemo && !directOpen && visibleTotalCount > 0;
+
+  const showEmptyShelf =
+    !selectedMemo &&
+    !directOpen &&
+    !loading &&
+    !error &&
+    visibleMemos.length === 0;
 
   const {
     goToPage,
@@ -228,6 +303,10 @@ export function MemoriesScreen({
     enabled: listPaginationEnabled,
   });
 
+  const selectedMemoIsGuest = selectedMemo
+    ? isGuestDiaryListId(selectedMemo.id)
+    : false;
+
   const recordBackLabel = selectedMemo
     ? directOpen
       ? backFromScreenLabel
@@ -241,15 +320,20 @@ export function MemoriesScreen({
       <MemoShelfScreen>
         <div className={styles.shelfChromeLayout}>
           {showIndexBar && (
-            <MemoShelfBottomBar
-              placement="top"
-              page={page}
-              totalCount={visibleTotalCount}
-              hasMore={hasMore}
-              loading={loading}
-              transitioning={transitioning}
-              onPageChange={goToPage}
-            />
+            <>
+              <MemoShelfBottomBar
+                placement="top"
+                page={page}
+                totalCount={visibleTotalCount}
+                hasMore={hasMore}
+                loading={loading}
+                transitioning={transitioning}
+                onPageChange={goToPage}
+              />
+              <div className={styles.guestShelfInfoHost}>
+                <GuestShelfInfoBar visible={guestListMode && visibleMemos.length > 0} />
+              </div>
+            </>
           )}
 
           <div className={styles.shelfContentStage}>
@@ -299,7 +383,7 @@ export function MemoriesScreen({
                           </div>
                         )}
 
-                        {!loading && !error && memos.length > 0 && (
+                        {!loading && !error && visibleMemos.length > 0 && (
                           <MemoShelfSwipePager
                             page={page}
                             hasMore={hasMore}
@@ -325,6 +409,14 @@ export function MemoriesScreen({
                             sharedPageCache={sharedPageCacheRef}
                           />
                         )}
+
+                        {showEmptyShelf && (
+                          <div className={styles.listAlbumGrid}>
+                            <MemoShelfEmptyCounterCta
+                              onLaunchCounter={onLaunchCounter}
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -340,13 +432,25 @@ export function MemoriesScreen({
             backLabel={recordBackLabel}
             detailActions={
               selectedMemo && !detailEditing
-                ? {
-                    onEdit: () => setDetailEditing(true),
-                    onShare: diaryExport.exportDiary,
-                    shareDisabled: diaryExport.exporting || diaryDelete.deleting,
-                    onDelete: diaryDelete.deleteDiary,
-                    deleteDisabled: diaryDelete.deleting || diaryExport.exporting,
-                  }
+                ? selectedMemoIsGuest
+                  ? {
+                      onEdit: () => setDetailEditing(true),
+                      onShare: diaryExport.exportDiary,
+                      shareDisabled:
+                        diaryExport.exporting || guestDeleting,
+                      onDelete: handleGuestDelete,
+                      deleteDisabled:
+                        guestDeleting || diaryExport.exporting,
+                    }
+                  : {
+                      onEdit: () => setDetailEditing(true),
+                      onShare: diaryExport.exportDiary,
+                      shareDisabled:
+                        diaryExport.exporting || diaryDelete.deleting,
+                      onDelete: diaryDelete.deleteDiary,
+                      deleteDisabled:
+                        diaryDelete.deleting || diaryExport.exporting,
+                    }
                 : undefined
             }
           />
@@ -360,6 +464,10 @@ export function MemoriesScreen({
           <DiaryExportNoticePanel
             notice={diaryDelete.notice}
             onDismiss={diaryDelete.dismissNotice}
+          />
+          <GuestDiaryTransferToast
+            enabled={!guestListMode}
+            loading={loading}
           />
         </div>
       </MemoShelfScreen>

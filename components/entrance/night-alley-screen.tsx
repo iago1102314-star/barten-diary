@@ -1,6 +1,7 @@
 "use client";
 
 import { AfterNightBackdrop } from "@/components/entrance/after-night-backdrop";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { Reveal } from "@/components/motion/reveal";
 import { SceneFrame } from "@/components/entrance/scene-frame";
 import { BarButton } from "@/components/ui/bar-button";
@@ -121,6 +122,38 @@ export function NightAlleyScreen({
                 </p>
               </Reveal>
               <Reveal delay={1.8}>
+                <BarButton variant="quiet" onClick={onDismiss}>
+                  また今度読む
+                </BarButton>
+              </Reveal>
+            </>
+          )}
+
+          {outcome.kind === "needsLogin" && (
+            <>
+              <Reveal delay={0.7} duration={1.7}>
+                <p className={outcomeTextClass}>
+                  今夜の記録を
+                  <br />
+                  一時的に預かりました。
+                </p>
+              </Reveal>
+              <Reveal delay={1.2} duration={1.5}>
+                <p className={`${outcomeTextClass} text-[13px] text-stone-300/70`}>
+                  ログインすると、あとからも読み返せます。
+                </p>
+              </Reveal>
+              <Reveal
+                delay={1.5}
+                duration={1.4}
+                className="flex flex-col items-center gap-6"
+              >
+                <GoogleSignInButton
+                  next="/diaries"
+                  label="Googleでログイン"
+                  googleIconPosition="right"
+                  className="w-full max-w-xs"
+                />
                 <BarButton variant="quiet" onClick={onDismiss}>
                   また今度読む
                 </BarButton>

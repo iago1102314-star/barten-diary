@@ -19,6 +19,8 @@ type RecordCounterSceneProps = {
   drinkId?: DrinkId | null;
   /** 配置キーを直接指定（lab 用） */
   placementKey?: RecordDrinkPlacementKey;
+  /** メニュー背景用 — グラスのみ省略 */
+  backgroundOnly?: boolean;
 };
 
 function RecordSceneLayerShell({
@@ -74,6 +76,7 @@ function RecordSceneLayerImage({
 export function RecordCounterScene({
   drinkId,
   placementKey,
+  backgroundOnly = false,
 }: RecordCounterSceneProps) {
   const key = placementKey ?? resolveRecordDrinkPlacementKey(drinkId);
   const drinkPlacement = getRecordDrinkPlacement(key);
@@ -97,7 +100,9 @@ export function RecordCounterScene({
           tuning={RECORD_COUNTER_SCENE_TUNING.counter}
           priority
         />
-        <DrinkOnRecordCounter src={drinkSrc} placement={drinkPlacement} />
+        {!backgroundOnly ? (
+          <DrinkOnRecordCounter src={drinkSrc} placement={drinkPlacement} />
+        ) : null}
       </RecordSceneLayerShell>
     </div>
   );

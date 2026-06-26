@@ -1,30 +1,66 @@
 "use client";
 
+import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 
-/** クライアント — ログイン状態（将来の未ログイン入店にも対応） */
+export type AuthUserProfile = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  avatarUrl: string | null;
+};
+
+function mapAuthUser(user: User | null): AuthUserProfile | null {
+  if (!user) return null;
+
+  const metadata = user.user_metadata as Record<string, unknown> | undefined;
+  const name =
+    (typeof metadata?.full_name === "string" && metadata.full_name) ||
+    (typeof metadata?.name === "string" && metadata.name) ||
+    null;
+  const avatarUrl =
+    (typeof metadata?.avatar_url === "string" && metadata.avatar_url) ||
+    (typeof metadata?.picture === "string" && metadata.picture) ||
+    null;
+
+  return {
+    id: user.id,
+    email: user.email ?? null,
+    name,
+    avatarUrl,
+  };
+}
+
+/** クライアント — ログイン状態とプロフィール */
 export function useAuthUser() {
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+  const [user, setUser] = useState<AuthUserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const supabase = createClient();
 
-    void supabase.auth.getUser().then(({ data }) => {
-      setIsLoggedIn(Boolean(data.user));
-    });
+    const syncUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUser(mapAuthUser(data.user));
+      setIsLoading(false);
+    };
+
+    void syncUser();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsLoggedIn(Boolean(session?.user));
+      setUser(mapAuthUser(session?.user ?? null));
+      setIsLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   return {
-    isLoggedIn: isLoggedIn ?? false,
-    isLoading: isLoggedIn === null,
+    user,
+    isLoggedIn: user !== null,
+    isLoading,
   };
 }

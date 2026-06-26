@@ -25,6 +25,8 @@ export const BAR_AUDIO_LEVELS = {
     glassSlide: 0.48,
     send: 0.35,
     click: 0.3,
+    menuOpen: 0.32,
+    menuClick: 0.28,
     page: 0.4,
     think: 0.6,
   },
@@ -41,6 +43,8 @@ const SFX_PEAK_DBFS: Record<BarSfxKind, number> = {
   glassSlide: -0.2,
   send: -6,
   click: -5.9,
+  menuOpen: -5.9,
+  menuClick: -5.9,
   page: -6,
   think: -15.5,
 };

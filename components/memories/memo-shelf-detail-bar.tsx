@@ -7,7 +7,7 @@ import { MoreActionsIcon } from "@/components/ui/more-actions-icon";
 import { ShareSaveIcon } from "@/components/ui/share-save-icon";
 import { ShebronIcon } from "@/components/ui/shebron-icon";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type MemoShelfRecordBottomBarDetailActions = {
   onEdit: () => void;
@@ -35,6 +35,7 @@ export function MemoShelfRecordBottomBar({
 }: MemoShelfRecordBottomBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const menuShellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!detailActions) {
@@ -42,6 +43,26 @@ export function MemoShelfRecordBottomBar({
       setConfirmOpen(false);
     }
   }, [detailActions]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (menuShellRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+
+    const timerId = window.setTimeout(() => {
+      document.addEventListener("pointerdown", onPointerDown);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timerId);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [menuOpen]);
 
   const backControl =
     backHref != null ? (
@@ -64,12 +85,14 @@ export function MemoShelfRecordBottomBar({
     );
 
   return (
-    <footer className={styles.bottomBar}>
+    <footer
+      className={`${styles.bottomBar} ${menuOpen ? styles.bottomBarMenuOpen : ""}`}
+    >
       <div className={styles.bottomBarSide}>{backControl}</div>
       <p className={styles.bottomBarIndicator}>{title}</p>
       <div className={`${styles.bottomBarSide} ${styles.bottomBarSideRight}`}>
         {detailActions ? (
-          <div className={styles.bottomBarMenuShell}>
+          <div ref={menuShellRef} className={styles.bottomBarMenuShell}>
             <button
               type="button"
               className={styles.bottomBarAction}

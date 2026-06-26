@@ -1,6 +1,6 @@
 "use server";
 
-import { buildAuthCallbackUrl } from "@/lib/auth/auth-callback-url";
+import { buildAuthCallbackUrl, sanitizeAuthNextPath } from "@/lib/auth/auth-callback-url";
 import { getRequestOriginFromHeaders } from "@/lib/auth/request-origin";
 import { createClient } from "@/lib/supabase/server";
 import { headers } from "next/headers";
@@ -12,10 +12,15 @@ export type SignInWithGoogleState = {
 
 export async function signInWithGoogleAction(
   _prevState: SignInWithGoogleState,
+  formData: FormData,
 ): Promise<SignInWithGoogleState> {
   try {
     const origin = getRequestOriginFromHeaders(await headers());
-    const callbackUrl = buildAuthCallbackUrl(origin);
+    const next = formData.get("next");
+    const callbackUrl = buildAuthCallbackUrl(
+      origin,
+      typeof next === "string" ? next : undefined,
+    );
     const supabase = await createClient();
 
     const { data, error } = await supabase.auth.signInWithOAuth({

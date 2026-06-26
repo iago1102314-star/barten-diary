@@ -9,9 +9,15 @@ import { MemoShelfRecordBottomBar } from "@/components/memories/memo-shelf-detai
 import styles from "@/components/memories/memo-shelf-grid.module.css";
 import { useDiaryBodyEdit } from "@/hooks/use-diary-body-edit";
 import { useDiaryDelete } from "@/hooks/use-diary-delete";
+import { useGuestDiaryBodyEdit } from "@/hooks/use-guest-diary-body-edit";
 import { useDiaryPaperExport } from "@/hooks/use-diary-paper-export";
+import { useShelfOutsideAmbience } from "@/hooks/use-shelf-outside-ambience";
 import type { DiaryListRow } from "@/lib/diaries/fetch-diaries";
 import { mapDiaryListRowToDiaryPaper } from "@/lib/diary-paper/map-diary-to-paper";
+import {
+  guestListIdToClientId,
+  isGuestDiaryListId,
+} from "@/lib/night/guest-diary-drafts";
 import { useSettingsMenuHidden } from "@/lib/settings/settings-menu-visibility";
 import { useRouter } from "next/navigation";
 import {
@@ -82,16 +88,27 @@ function useMemoDetailBodyEdit({
   onPersisted?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
+  const isGuest = isGuestDiaryListId(diary.id);
+  const guestClientId = guestListIdToClientId(diary.id) ?? "";
+
   const handleSaved = useCallback(() => {
     setEditing(false);
     onPersisted?.();
   }, [onPersisted, setEditing]);
 
-  const bodyEdit = useDiaryBodyEdit({
-    diaryId: diary.id,
+  const serverBodyEdit = useDiaryBodyEdit({
+    diaryId: isGuest ? "" : diary.id,
     initialBody: diary.body,
-    onSaved: handleSaved,
+    onSaved: isGuest ? undefined : handleSaved,
   });
+
+  const guestBodyEdit = useGuestDiaryBodyEdit({
+    clientId: guestClientId,
+    initialBody: diary.body,
+    onSaved: isGuest ? handleSaved : undefined,
+  });
+
+  const bodyEdit = isGuest ? guestBodyEdit : serverBodyEdit;
 
   useEffect(() => {
     if (editing) return;
@@ -186,6 +203,7 @@ function MemoDetailPanelScreen({
   onEditingChange,
   onDirtyChange,
 }: Omit<MemoDetailPanelProps, "layout" | "exportRef">) {
+  useShelfOutsideAmbience();
   const router = useRouter();
   const exportRef = useRef<HTMLDivElement>(null);
   const { editing, setEditing } = useDetailEditing(editingProp, onEditingChange);

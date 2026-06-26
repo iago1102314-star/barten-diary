@@ -9,16 +9,46 @@ import { useFormStatus } from "react-dom";
 
 const initialState: SignInWithGoogleState = { error: null };
 
-export function GoogleSignInButton() {
+type GoogleSignInButtonProps = {
+  next?: string;
+  label?: string;
+  className?: string;
+  buttonClassName?: string;
+  /** @deprecated googleIconPosition を使ってください */
+  showGoogleIcon?: boolean;
+  /** G アイコン — left / right / none */
+  googleIconPosition?: "left" | "right" | "none";
+  googleIconSizePx?: number;
+};
+
+export function GoogleSignInButton({
+  next = "/diaries",
+  label = "入店する",
+  className = "",
+  buttonClassName = "",
+  showGoogleIcon = true,
+  googleIconPosition,
+  googleIconSizePx = 18,
+}: GoogleSignInButtonProps) {
+  const iconPosition =
+    googleIconPosition ??
+    (showGoogleIcon ? "left" : "none");
+
   const [state, formAction] = useActionState(
     signInWithGoogleAction,
     initialState,
   );
 
   return (
-    <div className="relative z-[110] space-y-3">
+    <div className={`relative z-[110] space-y-3 ${className}`}>
       <form action={formAction}>
-        <SignInSubmitButton />
+        <input type="hidden" name="next" value={next} />
+        <GoogleSignInSubmitButton
+          label={label}
+          buttonClassName={buttonClassName}
+          googleIconPosition={iconPosition}
+          googleIconSizePx={googleIconSizePx}
+        />
       </form>
       {state.error ? (
         <p
@@ -32,24 +62,48 @@ export function GoogleSignInButton() {
   );
 }
 
-function SignInSubmitButton() {
+function GoogleSignInSubmitButton({
+  label,
+  buttonClassName,
+  googleIconPosition,
+  googleIconSizePx,
+}: {
+  label: string;
+  buttonClassName: string;
+  googleIconPosition: "left" | "right" | "none";
+  googleIconSizePx: number;
+}) {
   const { pending } = useFormStatus();
+  const showIcon = googleIconPosition !== "none";
 
   return (
     <button
       type="submit"
       disabled={pending}
-      className="relative z-[110] mx-auto flex h-11 min-h-[44px] w-full max-w-xs touch-manipulation cursor-pointer items-center justify-center gap-3 rounded-full border border-stone-700/50 bg-stone-900/60 px-8 text-sm text-stone-400 transition-colors hover:border-stone-600 hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-50"
+      className={
+        buttonClassName ||
+        "relative z-[110] mx-auto flex h-11 min-h-[44px] w-full max-w-xs touch-manipulation cursor-pointer items-center justify-center gap-3 rounded-full border border-stone-700/50 bg-stone-900/60 px-8 text-sm text-stone-400 transition-colors hover:border-stone-600 hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-50"
+      }
     >
-      <GoogleIcon />
-      {pending ? "…" : "入店する"}
+      {showIcon && googleIconPosition === "left" ? (
+        <GoogleIcon sizePx={googleIconSizePx} />
+      ) : null}
+      {pending ? "…" : label}
+      {showIcon && googleIconPosition === "right" ? (
+        <GoogleIcon sizePx={googleIconSizePx} />
+      ) : null}
     </button>
   );
 }
 
-function GoogleIcon() {
+export function GoogleIcon({ sizePx = 18 }: { sizePx?: number }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+    <svg
+      width={sizePx}
+      height={sizePx}
+      viewBox="0 0 18 18"
+      aria-hidden="true"
+    >
       <path
         fill="#4285F4"
         d="M17.64 9.2c0-.74-.06-1.28-.19-1.84H9v3.34h4.84a4.14 4.14 0 0 1-1.42 2.72v2.26h2.3c1.34-1.24 2.12-3.06 2.12-5.38z"

@@ -1,6 +1,17 @@
-/** OAuth 完了後に戻る URL（クエリなし — Supabase の Redirect URLs と完全一致させる） */
-export function buildAuthCallbackUrl(origin: string): string {
-  return `${origin.replace(/\/$/, "")}/auth/callback`;
+/** OAuth 完了後に戻る URL */
+export function buildAuthCallbackUrl(origin: string, next = "/diaries"): string {
+  const url = new URL(`${origin.replace(/\/$/, "")}/auth/callback`);
+  const safeNext = sanitizeAuthNextPath(next);
+  url.searchParams.set("next", safeNext);
+  return url.toString();
+}
+
+/** 同一オリジン内の相対パスのみ許可 */
+export function sanitizeAuthNextPath(value: string | null | undefined): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/diaries";
+  }
+  return value;
 }
 
 /** Supabase が返した OAuth URL の redirect_to を検証する */

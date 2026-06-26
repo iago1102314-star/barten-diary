@@ -25,6 +25,13 @@ import type {
 } from "@/lib/night/night-pipeline-types";
 import { runNightGenerationPipeline } from "@/lib/night/run-night-generation-pipeline";
 import { runNightSave } from "@/lib/night/run-night-save";
+import type { NightSavePayload } from "@/lib/night/night-pipeline-types";
+import {
+  addGuestDiaryDraft,
+  buildGuestDiaryDraftFromNightSave,
+  removeGuestDiaryDraftByTranscript,
+} from "@/lib/night/guest-diary-drafts";
+import { createClient } from "@/lib/supabase/client";
 import { validateRecordingForTranscribe } from "@/lib/night/validate-recording-for-transcribe";
 import {
   getRecordingPipelineDiagnostic,
@@ -335,17 +342,34 @@ export function useNightSession() {
     return true;
   }, [recorder, generation, resetPipelineTimings]);
 
-  const executeSave = useCallback(async (): Promise<boolean> => {
-    if (isDevSimulated) return false;
-
-    const record = generation.result;
-    if (!record || !transcript) return false;
-
-    setSaveStatus("saving");
+  /** 聞き取り失敗後 — 録音は始めず、口をつけるからやり直す */
+  const prepareRetryFromSip = useCallback(() => {
+    setListenFailureVisible(false);
     setGenerationFailed(false);
     setPipelineFailurePhase(null);
+    pipelineLock.current = false;
+    inflightGenerationKeyRef.current = null;
+    recordingBlobRef.current = null;
+    pipelineStartAtRef.current = null;
+    lastSavedTranscriptRef.current = null;
+    setSaveStatus("idle");
+    setSavedDiaryId(null);
+    generation.reset();
+    setTranscript(null);
+    setRecordedAt(null);
+    resetPipelineTimings();
+    updateRecordingPipelineDiagnostic({ pipelineError: undefined });
+    recorder.reset();
+    barAudioEngine.resumeJazzAfterRecording();
+    phaseRef.current = "idle";
+    setPhase("idle");
+  }, [recorder, generation, resetPipelineTimings]);
 
-    const result = await runNightSave({
+  const buildSavePayload = useCallback((): NightSavePayload | null => {
+    const record = generation.result;
+    if (!record || !transcript) return null;
+
+    return {
       bottleTag: record.bottleTag,
       diary: record.diary,
       drinkNote: record.drinkNote,
@@ -353,9 +377,47 @@ export function useNightSession() {
       transcript,
       continuedFromDiaryId: continuedFrom?.diaryId ?? null,
       continuedFromBottleTag: continuedFrom?.bottleTag ?? null,
-    });
+    };
+  }, [generation.result, transcript, continuedFrom]);
+
+  const deferSaveForLogin = useCallback(() => {
+    const payload = buildSavePayload();
+    if (payload) {
+      addGuestDiaryDraft(buildGuestDiaryDraftFromNightSave(payload));
+    }
+    setSaveStatus("loginRequired");
+  }, [buildSavePayload]);
+
+  const executeSave = useCallback(async (): Promise<boolean> => {
+    if (isDevSimulated) return false;
+
+    const payload = buildSavePayload();
+    if (!payload) return false;
+
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      deferSaveForLogin();
+      logRecordingPipeline("save deferred: login required (client guard)");
+      return false;
+    }
+
+    setSaveStatus("saving");
+    setGenerationFailed(false);
+    setPipelineFailurePhase(null);
+
+    const result = await runNightSave(payload);
 
     if (!result.ok) {
+      if (result.needsLogin) {
+        deferSaveForLogin();
+        logRecordingPipeline("save deferred: login required");
+        return false;
+      }
+
       lastSavedTranscriptRef.current = null;
       setSaveStatus("failed");
       setGenerationFailed(true);
@@ -369,6 +431,9 @@ export function useNightSession() {
       return false;
     }
 
+    if (payload) {
+      removeGuestDiaryDraftByTranscript(payload.transcript);
+    }
     setSavedDiaryId(result.diaryId);
     setSaveStatus("saved");
     applyPipelineTimings((prev) => {
@@ -384,9 +449,8 @@ export function useNightSession() {
     return true;
   }, [
     isDevSimulated,
-    generation.result,
-    transcript,
-    continuedFrom,
+    buildSavePayload,
+    deferSaveForLogin,
     applyPipelineTimings,
     router,
   ]);
@@ -699,14 +763,36 @@ export function useNightSession() {
     if (
       saveStatus === "saving" ||
       saveStatus === "saved" ||
-      saveStatus === "failed"
+      saveStatus === "failed" ||
+      saveStatus === "loginRequired"
     ) {
       return;
     }
     if (lastSavedTranscriptRef.current === transcript) return;
 
-    lastSavedTranscriptRef.current = transcript;
-    void executeSave();
+    let cancelled = false;
+
+    void (async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (cancelled) return;
+
+      lastSavedTranscriptRef.current = transcript;
+
+      if (!user) {
+        deferSaveForLogin();
+        logRecordingPipeline("save skipped: login required before save");
+        return;
+      }
+
+      void executeSave();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     phase,
     generation.result,
@@ -714,6 +800,7 @@ export function useNightSession() {
     isDevSimulated,
     saveStatus,
     executeSave,
+    deferSaveForLogin,
   ]);
 
   const prepareDevSkipFromLatestDiary = useCallback(async (): Promise<Drink | null> => {
@@ -834,6 +921,7 @@ export function useNightSession() {
     pauseSpeaking,
     resumeSpeaking,
     retrySpeaking,
+    prepareRetryFromSip,
     retryGeneration,
     restartRecordingAfterPipelineFailure,
     notifyStoreEndingComplete,

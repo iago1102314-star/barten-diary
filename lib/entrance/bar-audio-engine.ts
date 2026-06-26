@@ -14,6 +14,8 @@ import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
 const SFX_SOURCES = [
   ENTRANCE_SOUNDS.door,
   ENTRANCE_SOUNDS.click,
+  ENTRANCE_SOUNDS.menuOpen,
+  ENTRANCE_SOUNDS.menuClick,
   ENTRANCE_SOUNDS.glassSlide,
   ENTRANCE_SOUNDS.send,
   ENTRANCE_SOUNDS.page,
@@ -23,6 +25,8 @@ const SFX_SOURCES = [
 const SFX_SRC_BY_KIND: Record<BarSfxKind, string> = {
   door: ENTRANCE_SOUNDS.door,
   click: ENTRANCE_SOUNDS.click,
+  menuOpen: ENTRANCE_SOUNDS.menuOpen,
+  menuClick: ENTRANCE_SOUNDS.menuClick,
   glassSlide: ENTRANCE_SOUNDS.glassSlide,
   send: ENTRANCE_SOUNDS.send,
   page: ENTRANCE_SOUNDS.page,
@@ -1135,8 +1139,19 @@ export function getBarAudioDiagnostics(): Record<string, unknown> {
 export const barAudioEngine = {
   warmUp: warmUpBarAudio,
 
+  /** メニュー SE — unlock とプール生成を同期で済ませる */
+  primeMenuSfxForUserGesture() {
+    unlockBarAudioForUserGesture();
+    ensureSfxPool();
+  },
+
   isOutsidePlaying() {
     return isLoopTrackPlaying(outsideTrack);
+  },
+
+  /** フェードイン途中も含め — 路地ループが既に立ち上がっているか */
+  hasOutsideSession() {
+    return Boolean(outsideTrack.started && outsideTrack.audio);
   },
 
   /** 扉を開ける操作内 — jazz を無音で先行ロード */
@@ -1271,6 +1286,14 @@ export const barAudioEngine = {
     playSfxNow("click");
   },
 
+  playMenuOpen() {
+    playSfxNow("menuOpen");
+  },
+
+  playMenuClick() {
+    playSfxNow("menuClick");
+  },
+
   playPage() {
     playSfxNow("page");
   },
@@ -1286,7 +1309,6 @@ export const barAudioEngine = {
   dispose() {
     bgmPausedForRecording = false;
     appBackgroundSuspended = false;
-    barAudioUserGestureUnlocked = false;
     stopLooping(outsideTrack, true);
     stopLooping(jazzTrack, true);
 

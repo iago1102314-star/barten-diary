@@ -1,6 +1,7 @@
 "use client";
 
 import { saveAiDiary } from "@/app/(app)/diaries/actions";
+import { isSaveAiDiaryNeedsLogin } from "@/lib/auth/save-ai-diary-auth";
 import type { GeneratedDiary } from "@/lib/ai/types";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -34,6 +35,11 @@ export function ShelfReturnButton({
 
     startTransition(async () => {
       const result = await saveAiDiary(payload);
+
+      if (result.needsLogin || isSaveAiDiaryNeedsLogin(result.error)) {
+        setMessage("記録を残すにはログインが必要です。");
+        return;
+      }
 
       if (result.error) {
         setMessage(result.error);

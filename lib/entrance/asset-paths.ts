@@ -33,6 +33,10 @@ export const ENTRANCE_SOUNDS = {
   send: "/sounds/send.mp4",
   /** 吹き出しタップ */
   click: "/sounds/click.mp4",
+  /** 設定シートを開く */
+  menuOpen: "/sounds/menu-open.mp4",
+  /** 設定シート内の操作 */
+  menuClick: "/sounds/menu-click.mp4",
   /** 夜のメモ — ページめくり */
   page: "/sounds/page.mp4",
   /** 気分選択の幕 */

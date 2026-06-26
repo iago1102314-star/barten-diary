@@ -1,6 +1,7 @@
 "use client";
 
 import { LoadingGateScene } from "@/components/entrance/loading-gate-scene";
+import { useSettingsMenuHidden } from "@/lib/settings/settings-menu-visibility";
 import {
   runLoadingGateInit,
   type LoadingGateSnapshot,
@@ -13,6 +14,8 @@ type LoadingGateProps = {
 
 /** 初期化完了まで — 路地の灯りが奥から手前へともり、ホーム入場へ繋ぐ */
 export function LoadingGate({ onReady }: LoadingGateProps) {
+  useSettingsMenuHidden("loading-gate", true);
+
   const startedRef = useRef(false);
   const [initSnapshot, setInitSnapshot] = useState<LoadingGateSnapshot | null>(
     null,

@@ -4,14 +4,17 @@ import type { DiaryListItem } from "@/components/diaries/diary-list";
 import { MigrationNotice } from "@/components/diaries/migration-notice";
 import { MemoList } from "@/components/memories/memo-list";
 import { MemoShelfBottomBar } from "@/components/memories/memo-shelf-bottom-bar";
+import { GuestDiaryTransferToast } from "@/components/memories/guest-diary-transfer-toast";
+import { GuestShelfInfoBar } from "@/components/memories/guest-shelf-info-bar";
+import { MemoShelfEmptyCounterCta } from "@/components/memories/memo-shelf-empty-counter-cta";
 import { MemoShelfSwipePager } from "@/components/memories/memo-shelf-swipe-pager";
 import styles from "@/components/memories/memo-shelf-grid.module.css";
 import { useMemoShelfListData } from "@/hooks/use-memo-shelf-list-data";
 import { useMemoShelfPageNavigation } from "@/hooks/use-memo-shelf-page-navigation";
-import { useSettingsMenuHidden } from "@/lib/settings/settings-menu-visibility";
+import { useShelfOutsideAmbience } from "@/hooks/use-shelf-outside-ambience";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 type MemoShelfRouteViewProps = {
   page: number;
@@ -30,6 +33,7 @@ export function MemoShelfRouteView({
   drinkNoteColumnMissing = false,
   error = false,
 }: MemoShelfRouteViewProps) {
+  useShelfOutsideAmbience(!error);
   const router = useRouter();
   const polaroidIntroVisitIdRef = useRef(1);
   const polaroidIntroPlayedVisitIdRef = useRef(0);
@@ -46,6 +50,9 @@ export function MemoShelfRouteView({
     fetchPagePreview,
     navigateToPage,
     sharedPageCacheRef,
+    guestListMode,
+    loading,
+    syncShelfSeed,
   } = useMemoShelfListData({
     enabled: !error,
     initialPage,
@@ -56,6 +63,29 @@ export function MemoShelfRouteView({
     },
     polaroidIntroSession,
   });
+
+  const serverSeedKey = useMemo(
+    () =>
+      `${initialTotalCount}:${initialDiaries.map((diary) => diary.id).join(",")}`,
+    [initialDiaries, initialTotalCount],
+  );
+
+  useEffect(() => {
+    if (guestListMode || error) return;
+    syncShelfSeed(initialPage, {
+      memos: initialDiaries,
+      hasMore: initialHasMore,
+      totalCount: initialTotalCount,
+    });
+  }, [
+    error,
+    guestListMode,
+    initialHasMore,
+    initialPage,
+    initialTotalCount,
+    serverSeedKey,
+    syncShelfSeed,
+  ]);
 
   useEffect(() => {
     router.replace(
@@ -89,8 +119,6 @@ export function MemoShelfRouteView({
     enabled: listEnabled,
   });
 
-  useSettingsMenuHidden("memories-list", true);
-
   return (
     <div className={`${styles.listLayout} mx-auto min-h-dvh w-full max-w-xl`}>
       <header className="px-6 pt-10">
@@ -104,6 +132,25 @@ export function MemoShelfRouteView({
           夜の記録
         </h1>
       </header>
+
+      {!error && diaries.length > 0 && (
+        <div className="px-6">
+          <MemoShelfBottomBar
+            placement="top"
+            page={page}
+            totalCount={totalCount}
+            hasMore={hasMore}
+            loading={loading}
+            transitioning={transitioning}
+            onPageChange={goToPage}
+          />
+          <div className={styles.guestShelfInfoHost}>
+            <GuestShelfInfoBar visible={guestListMode && totalCount > 0} />
+          </div>
+        </div>
+      )}
+
+      <GuestDiaryTransferToast enabled={!guestListMode} loading={loading} />
 
       <div className={styles.listMiddle}>
         <div className={styles.listTopSpacer} aria-hidden />
@@ -124,6 +171,12 @@ export function MemoShelfRouteView({
                 >
                   夜のメモを開けませんでした。
                 </p>
+              </div>
+            )}
+
+            {!error && !loading && totalCount === 0 && diaries.length === 0 && (
+              <div className={styles.listAlbumGrid}>
+                <MemoShelfEmptyCounterCta />
               </div>
             )}
 

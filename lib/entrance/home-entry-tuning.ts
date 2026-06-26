@@ -66,7 +66,7 @@ export const HOME_ENTRY_BUTTON_TUNING = {
 /** ホーム右上 — ログイン / ログアウト（プレースホルダー） */
 export const HOME_AUTH_BUTTON_TUNING = {
   /** 画面上端からの位置（%）— タイトルより上 */
-  topPercent: 0.7,
+  topPercent: 1.1,
   /** 右端からの余白（rem） */
   rightRem: 0.5,
   /** カプセル形 — 左右丸 */

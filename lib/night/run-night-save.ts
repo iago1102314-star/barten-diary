@@ -1,12 +1,16 @@
 "use client";
 
 import { saveAiDiary } from "@/app/(app)/diaries/actions";
+import { isSaveAiDiaryNeedsLogin } from "@/lib/auth/save-ai-diary-auth";
 import type { NightSavePayload } from "@/lib/night/night-pipeline-types";
-import { logRecordingPipeline, logRecordingPipelineError } from "@/lib/recorder/recording-pipeline-log";
+import {
+  logRecordingPipeline,
+  logRecordingPipelineError,
+} from "@/lib/recorder/recording-pipeline-log";
 
 export type RunNightSaveResult =
   | { ok: true; diaryId: string; saveMs: number }
-  | { ok: false; reason: string; saveMs: number };
+  | { ok: false; reason: string; saveMs: number; needsLogin?: boolean };
 
 export async function runNightSave(
   payload: NightSavePayload,
@@ -18,6 +22,11 @@ export async function runNightSave(
   try {
     const result = await saveAiDiary(payload);
     const saveMs = Math.round(performance.now() - startedAt);
+
+    if (result.needsLogin || isSaveAiDiaryNeedsLogin(result.error)) {
+      logRecordingPipeline("save deferred: login required", { saveMs });
+      return { ok: false, reason: "loginRequired", saveMs, needsLogin: true };
+    }
 
     if (result.error || !result.success || !result.diaryId) {
       const reason = result.error ?? "記録の保存に失敗しました。";

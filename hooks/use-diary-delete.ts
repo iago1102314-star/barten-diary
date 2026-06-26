@@ -2,6 +2,8 @@
 
 import { deleteDiary } from "@/app/(app)/diaries/actions";
 import type { DiaryExportNotice } from "@/hooks/use-diary-paper-export";
+import { clearAllMemoShelfPageCaches } from "@/lib/memories/memo-shelf-page-cache";
+import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState, useTransition } from "react";
 
 type UseDiaryDeleteOptions = {
@@ -13,6 +15,7 @@ export function useDiaryDelete({
   diaryId,
   onDeleted,
 }: UseDiaryDeleteOptions) {
+  const router = useRouter();
   const [deleting, startDeleting] = useTransition();
   const [notice, setNotice] = useState<DiaryExportNotice | null>(null);
   const onDeletedRef = useRef(onDeleted);
@@ -38,9 +41,11 @@ export function useDiaryDelete({
         return;
       }
 
+      clearAllMemoShelfPageCaches();
+      router.refresh();
       await onDeletedRef.current?.();
     });
-  }, [deleting, diaryId]);
+  }, [deleting, diaryId, router]);
 
   return {
     deleteDiary: requestDelete,

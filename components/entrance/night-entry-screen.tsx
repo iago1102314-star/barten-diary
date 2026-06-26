@@ -276,17 +276,6 @@ export function NightEntryScreen({
           />
         </motion.div>
 
-        <motion.button
-          type="button"
-          aria-label="バーの入口"
-          onClick={interactionLocked ? undefined : onEnterCounter}
-          animate={{ opacity: doorExiting ? 0 : 1 }}
-          transition={{ duration: doorExiting ? 0.35 : 0 }}
-          className={`absolute right-[10%] top-[36%] z-20 h-[26%] w-[34%] touch-manipulation [-webkit-tap-highlight-color:transparent] ${
-            interactionLocked || !showUi ? "pointer-events-none" : "pointer-events-auto"
-          }`}
-        />
-
         <motion.div
           initial={isSteadyReturn ? false : { opacity: 0, y: -8 }}
           animate={{

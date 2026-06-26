@@ -1,6 +1,7 @@
 "use client";
 
 import { saveAiDiary } from "@/app/(app)/diaries/actions";
+import { isSaveAiDiaryNeedsLogin } from "@/lib/auth/save-ai-diary-auth";
 import type { GeneratedDiary } from "@/lib/ai/types";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -37,6 +38,14 @@ export function SaveAiDiaryButton({
         masterComment: diary.masterComment,
         transcript,
       });
+
+      if (result.needsLogin || isSaveAiDiaryNeedsLogin(result.error)) {
+        setMessage({
+          type: "error",
+          text: "保存するにはログインしてください。",
+        });
+        return;
+      }
 
       if (result.error) {
         setMessage({ type: "error", text: result.error });

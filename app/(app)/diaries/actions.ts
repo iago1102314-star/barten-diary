@@ -6,6 +6,7 @@ import {
   isDrinkNoteColumnMissing,
 } from "@/lib/diaries/migration-errors";
 import { mergeShelfWineNote } from "@/lib/night/merge-shelf-wine-note";
+import { SAVE_AI_DIARY_NEEDS_LOGIN } from "@/lib/auth/save-ai-diary-auth";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -61,12 +62,14 @@ export type SaveAiDiaryInput = {
   transcript: string;
   continuedFromDiaryId?: string | null;
   continuedFromBottleTag?: string | null;
+  createdAt?: string;
 };
 
 export type SaveAiDiaryResult = {
   success?: boolean;
   diaryId?: string;
   error?: string;
+  needsLogin?: boolean;
 };
 
 export async function saveAiDiary(
@@ -78,7 +81,10 @@ export async function saveAiDiary(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login");
+    return {
+      needsLogin: true,
+      error: SAVE_AI_DIARY_NEEDS_LOGIN,
+    };
   }
 
   const bottleTag = input.bottleTag.trim();
@@ -112,6 +118,9 @@ export async function saveAiDiary(
     drink_note: drinkNote || null,
     master_comment: masterForDb,
     transcript,
+    ...(isValidCreatedAt(input.createdAt)
+      ? { created_at: input.createdAt }
+      : {}),
   };
 
   const continuedFromDiaryId = input.continuedFromDiaryId?.trim() || null;
@@ -274,4 +283,10 @@ export async function updateDiaryBody(
   revalidatePath("/memories");
   revalidatePath("/diaries");
   return { success: true };
+}
+
+function isValidCreatedAt(value: string | undefined): value is string {
+  if (!value) return false;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed);
 }
