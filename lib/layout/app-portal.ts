@@ -1,5 +1,7 @@
 /** PC 中央 shell と portal 先 — 767px 以下では viewport 基準のまま */
 
+import { isLayoutAppShellEnabled } from "@/lib/layout/layout-feature-flags";
+
 export const APP_SHELL_ID = "app-shell";
 export const APP_PORTAL_ROOT_ID = "app-portal-root";
 
@@ -8,6 +10,7 @@ export const DESKTOP_APP_SHELL_MAX_WIDTH_PX = 430;
 
 export function isDesktopAppShell(): boolean {
   if (typeof window === "undefined") return false;
+  if (!isLayoutAppShellEnabled()) return false;
   return window.matchMedia(
     `(min-width: ${DESKTOP_APP_SHELL_MIN_WIDTH_PX}px)`,
   ).matches;
@@ -18,10 +21,13 @@ export function getAppShellElement(): HTMLElement | null {
   return document.getElementById(APP_SHELL_ID);
 }
 
-/** portal 先 — shell 内にあれば PC でも fixed が shell 基準になる */
+/** portal 先 — shell OFF または未配置時は body（従来挙動） */
 export function getAppPortalRoot(): HTMLElement {
   if (typeof document === "undefined") {
     throw new Error("getAppPortalRoot is only available in the browser");
+  }
+  if (!isLayoutAppShellEnabled()) {
+    return document.body;
   }
   return document.getElementById(APP_PORTAL_ROOT_ID) ?? document.body;
 }

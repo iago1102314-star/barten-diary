@@ -685,7 +685,7 @@ body.login-route {
   color: rgba(255, 180, 160, 0.92);
 }
 
-/* app-shell — スマホは透過ラッパー（transform なし → fixed は viewport 基準のまま） */
+/* app-shell — 切り分け: lib/layout/layout-feature-flags.ts（?layoutShell=off） */
 .app-shell {
   display: flex;
   flex-direction: column;
@@ -708,8 +708,7 @@ body.login-route {
 }
 
 /*
- * iOS Safari 通常表示のみ — 100dvh より innerHeight を優先（PWA ではクラス未付与）
- * まず entrance-experience-root だけ。余白・配置は変えない。
+ * iOS Safari 通常表示のみ — 切り分け: ?layoutIosHeight=off / layout-feature-flags
  */
 html.ios-safari-browser-height .entrance-experience-root {
   height: var(--app-visual-height, 100dvh);

@@ -4,8 +4,13 @@ import {
   shipporiMincho,
   zenOldMinchoBold,
 } from "@/lib/fonts/jp-brand-fonts";
+import { LayoutFeatureFlagPanel } from "@/components/app/layout-feature-flag-panel";
+import {
+  LayoutShell,
+  readServerLayoutShellEnabled,
+} from "@/components/app/layout-shell";
 import { IosSafariVisualHeightSync } from "@/components/app/ios-safari-visual-height-sync";
-import { IOS_SAFARI_VISUAL_HEIGHT_BOOTSTRAP_SCRIPT } from "@/lib/layout/ios-safari-visual-height";
+import { buildIosSafariVisualHeightBootstrapScript } from "@/lib/layout/ios-safari-visual-height";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -45,17 +50,22 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const iosBootstrapScript = buildIosSafariVisualHeightBootstrapScript();
+  const serverAppShellEnabled = readServerLayoutShellEnabled();
+
   return (
     <html
       lang="ja"
       className={`${geistSans.variable} ${geistMono.variable} ${zenOldMinchoBold.variable} ${shipporiMincho.variable} h-full antialiased`}
     >
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: IOS_SAFARI_VISUAL_HEIGHT_BOOTSTRAP_SCRIPT,
-          }}
-        />
+        {iosBootstrapScript ? (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: iosBootstrapScript,
+            }}
+          />
+        ) : null}
         {/* Service Worker — production のみ（Preview/dev では JS チャンク競合を避ける） */}
         {process.env.NEXT_PUBLIC_APP_ENV === "production" && (
           <script
@@ -73,10 +83,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-stone-950 text-stone-200">
         <IosSafariVisualHeightSync />
-        <div id="app-shell" className="app-shell">
+        <LayoutShell serverAppShellEnabled={serverAppShellEnabled}>
           {children}
-          <div id="app-portal-root" className="app-portal-root" aria-hidden />
-        </div>
+        </LayoutShell>
+        <LayoutFeatureFlagPanel />
       </body>
     </html>
   );

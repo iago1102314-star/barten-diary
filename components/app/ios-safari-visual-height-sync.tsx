@@ -4,11 +4,17 @@ import {
   clearIosSafariVisualHeight,
   syncIosSafariVisualHeight,
 } from "@/lib/layout/ios-safari-visual-height";
+import { isLayoutIosSafariHeightEnabled } from "@/lib/layout/layout-feature-flags";
 import { useLayoutEffect } from "react";
 
-/** iOS Safari 通常表示 — innerHeight を --app-visual-height に同期（PWA では何もしない） */
+/** iOS Safari 通常表示 — innerHeight を --app-visual-height に同期（PWA / フラグ OFF では何もしない） */
 export function IosSafariVisualHeightSync() {
   useLayoutEffect(() => {
+    if (!isLayoutIosSafariHeightEnabled()) {
+      clearIosSafariVisualHeight();
+      return;
+    }
+
     const sync = () => {
       syncIosSafariVisualHeight();
     };
