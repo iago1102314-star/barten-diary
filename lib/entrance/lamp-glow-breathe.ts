@@ -1,5 +1,6 @@
 import type { CounterLampGlowAnchor } from "@/lib/entrance/counter-lamp-glows";
 import { lampGlowElementOpacity } from "@/lib/entrance/lamp-glow-visual";
+import { isPerfLampBreatheEnabled } from "@/lib/layout/perf-feature-flags";
 import type { CSSProperties } from "react";
 
 export type LampBreatheTiming = {
@@ -52,6 +53,7 @@ const BREATHE_CLASS: Record<LampBreatheVariant, string> = {
 export function getLampBreatheClassName(
   variant: LampBreatheVariant = "lantern",
 ): string {
+  if (!isPerfLampBreatheEnabled()) return "";
   return BREATHE_CLASS[variant];
 }
 
@@ -86,6 +88,11 @@ export function getLampBreatheStyleFromProfile(
   intensity: number,
 ): CSSProperties {
   const baseOpacity = lampGlowElementOpacity(intensity);
+
+  if (!isPerfLampBreatheEnabled()) {
+    return { opacity: baseOpacity };
+  }
+
   const delta = profile.opacityDelta ?? LAMP_BREATHE_OPACITY_DELTA;
   const scaleDelta = profile.scaleDelta ?? LAMP_BREATHE_SCALE_DELTA;
   const { periodSec, delaySec } = profile;

@@ -1,6 +1,7 @@
 "use client";
 
 import { Haze } from "@/components/entrance/atmosphere";
+import { isPerfHazeEnabled } from "@/lib/layout/perf-feature-flags";
 import { GlowAnchorMarker } from "@/components/entrance/glow-anchor-marker";
 import { LoadingGateLightOrderMarkers } from "@/components/entrance/loading-gate-light-order-markers";
 import { resolveLampGlowRgb } from "@/lib/entrance/lamp-glow-color";
@@ -419,9 +420,9 @@ export function StartEntryAlleyLayer({
         </div>
       )}
 
-      {showAtmosphere && (
+      {showAtmosphere ? (
         <>
-          <Haze y={36} intensity={1} />
+          {isPerfHazeEnabled() ? <Haze y={36} intensity={1} /> : null}
           <div
             className="pointer-events-none absolute inset-0"
             style={{
@@ -438,7 +439,7 @@ export function StartEntryAlleyLayer({
           />
           <StartEntryBarWarmGrade />
         </>
-      )}
+      ) : null}
       {showOrderMarkers && <LoadingGateLightOrderMarkers />}
     </motion.div>
   );

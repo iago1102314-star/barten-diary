@@ -28,6 +28,7 @@ import {
   buildSettingsMenuCssVars,
   SETTINGS_MENU_ITEMS_TUNING,
 } from "@/lib/settings/app-settings-menu-tuning";
+import { applyPerfMenuBlurCssOverrides } from "@/lib/layout/perf-feature-flags";
 import { useSettingsMenuVisibility } from "@/lib/settings/settings-menu-visibility";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
@@ -177,7 +178,9 @@ export function AppSettingsMenu() {
 
   if (!visible) return null;
 
-  const menuVars = buildSettingsMenuCssVars() as CSSProperties;
+  const menuVars = applyPerfMenuBlurCssOverrides(
+    buildSettingsMenuCssVars(),
+  ) as CSSProperties;
 
   return (
     <div style={menuVars}>

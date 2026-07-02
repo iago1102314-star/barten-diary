@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { isPerfGrainEnabled } from "@/lib/layout/perf-feature-flags";
 
 type SceneFrameProps = {
   children: ReactNode;
@@ -17,11 +18,12 @@ export function SceneFrame({
   atmosphere = true,
   onPointerDown,
 }: SceneFrameProps) {
+  const atmosphereLayers =
+    atmosphere && isPerfGrainEnabled() ? "grain vignette" : atmosphere ? "vignette" : "";
+
   return (
     <div
-      className={`stage relative overflow-hidden bg-black ${
-        atmosphere ? "grain vignette" : ""
-      } ${className}`}
+      className={`stage relative overflow-hidden bg-black ${atmosphereLayers} ${className}`}
       onPointerDown={onPointerDown}
     >
       {children}

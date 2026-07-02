@@ -1,6 +1,7 @@
 "use client";
 
 import { MOOD_CURTAIN } from "@/lib/entrance/mood-curtain";
+import { isPerfGrainEnabled } from "@/lib/layout/perf-feature-flags";
 import { motion } from "motion/react";
 
 export type MoodCurtainPhase = "hidden" | "dropping" | "down" | "closing";
@@ -69,6 +70,8 @@ export function MoodCurtain({
 }
 
 function CurtainGrain() {
+  if (!isPerfGrainEnabled()) return null;
+
   return (
     <div
       className="scene-grain pointer-events-none absolute inset-0 opacity-[0.035] mix-blend-overlay"

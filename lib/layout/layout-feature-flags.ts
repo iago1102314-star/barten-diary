@@ -6,6 +6,7 @@
  * URL 例:
  *   ?layoutShell=off        … app-shell + portal-root を無効（従来の body 直配置）
  *   ?layoutIosHeight=off    … iOS Safari innerHeight 補正を無効
+ *   ?layoutPortalOnly=off   … app-shell は残し portal-root のみ無効
  *
  * localStorage キー:
  *   barten.layout.appShell       … "on" | "off"
@@ -21,18 +22,21 @@ import { isNonProd } from "@/lib/env/app-env";
 export const LAYOUT_FLAG_STORAGE_KEYS = {
   appShell: "barten.layout.appShell",
   iosSafariHeight: "barten.layout.iosSafariHeight",
+  portalOnly: "barten.layout.portalOnly",
 } as const;
 
 export const LAYOUT_FLAG_URL_PARAMS = {
   appShell: "layoutShell",
   iosSafariHeight: "layoutIosHeight",
+  portalOnly: "layoutPortalOnly",
 } as const;
 
-export type LayoutFeatureFlagId = "appShell" | "iosSafariHeight";
+export type LayoutFeatureFlagId = "appShell" | "iosSafariHeight" | "portalOnly";
 
 const FLAG_ENV_KEYS: Record<LayoutFeatureFlagId, string> = {
   appShell: "NEXT_PUBLIC_LAYOUT_APP_SHELL",
   iosSafariHeight: "NEXT_PUBLIC_LAYOUT_IOS_SAFARI_HEIGHT",
+  portalOnly: "NEXT_PUBLIC_LAYOUT_PORTAL_ONLY",
 };
 
 function parseTriState(value: string | null | undefined): boolean | null {
@@ -54,21 +58,17 @@ function readEnvEnabled(flag: LayoutFeatureFlagId): boolean | null {
 
 function readUrlEnabled(flag: LayoutFeatureFlagId): boolean | null {
   if (typeof window === "undefined") return null;
-  const param =
-    flag === "appShell"
-      ? LAYOUT_FLAG_URL_PARAMS.appShell
-      : LAYOUT_FLAG_URL_PARAMS.iosSafariHeight;
-  return parseTriState(new URLSearchParams(window.location.search).get(param));
+  return parseTriState(
+    new URLSearchParams(window.location.search).get(LAYOUT_FLAG_URL_PARAMS[flag]),
+  );
 }
 
 function readStorageEnabled(flag: LayoutFeatureFlagId): boolean | null {
   if (typeof window === "undefined") return null;
   try {
-    const key =
-      flag === "appShell"
-        ? LAYOUT_FLAG_STORAGE_KEYS.appShell
-        : LAYOUT_FLAG_STORAGE_KEYS.iosSafariHeight;
-    return parseTriState(window.localStorage.getItem(key));
+    return parseTriState(
+      window.localStorage.getItem(LAYOUT_FLAG_STORAGE_KEYS[flag]),
+    );
   } catch {
     return null;
   }
@@ -96,6 +96,10 @@ export function isLayoutIosSafariHeightEnabledServer(): boolean {
   return readEnvEnabled("iosSafariHeight") ?? true;
 }
 
+export function isLayoutPortalRootEnabledServer(): boolean {
+  return readEnvEnabled("portalOnly") ?? true;
+}
+
 export function isLayoutAppShellEnabled(): boolean {
   return resolveLayoutFlag("appShell");
 }
@@ -104,23 +108,38 @@ export function isLayoutIosSafariHeightEnabled(): boolean {
   return resolveLayoutFlag("iosSafariHeight");
 }
 
+/** portal-only フラグ（app-shell とは独立に保存） */
+export function isLayoutPortalOnlyFlagEnabled(): boolean {
+  return resolveLayoutFlag("portalOnly");
+}
+
+/** app-shell ON かつ portal フラグ ON のときだけ portal-root を描画 */
+export function isLayoutPortalRootEnabled(): boolean {
+  if (!isLayoutAppShellEnabled()) return false;
+  return isLayoutPortalOnlyFlagEnabled();
+}
+
 export function readLayoutFeatureFlags(): {
   appShell: boolean;
   iosSafariHeight: boolean;
+  portalOnly: boolean;
 } {
   return {
     appShell: isLayoutAppShellEnabled(),
     iosSafariHeight: isLayoutIosSafariHeightEnabled(),
+    portalOnly: isLayoutPortalOnlyFlagEnabled(),
   };
 }
 
 export function readLayoutFeatureFlagsServer(): {
   appShell: boolean;
   iosSafariHeight: boolean;
+  portalOnly: boolean;
 } {
   return {
     appShell: isLayoutAppShellEnabledServer(),
     iosSafariHeight: isLayoutIosSafariHeightEnabledServer(),
+    portalOnly: isLayoutPortalRootEnabledServer(),
   };
 }
 
@@ -129,12 +148,11 @@ export function setLayoutFeatureFlag(
   enabled: boolean,
 ): void {
   if (typeof window === "undefined") return;
-  const key =
-    flag === "appShell"
-      ? LAYOUT_FLAG_STORAGE_KEYS.appShell
-      : LAYOUT_FLAG_STORAGE_KEYS.iosSafariHeight;
   try {
-    window.localStorage.setItem(key, enabled ? "on" : "off");
+    window.localStorage.setItem(
+      LAYOUT_FLAG_STORAGE_KEYS[flag],
+      enabled ? "on" : "off",
+    );
   } catch {
     // private mode 等
   }
@@ -142,18 +160,20 @@ export function setLayoutFeatureFlag(
 
 export function clearLayoutFeatureFlagStorage(flag: LayoutFeatureFlagId): void {
   if (typeof window === "undefined") return;
-  const key =
-    flag === "appShell"
-      ? LAYOUT_FLAG_STORAGE_KEYS.appShell
-      : LAYOUT_FLAG_STORAGE_KEYS.iosSafariHeight;
   try {
-    window.localStorage.removeItem(key);
+    window.localStorage.removeItem(LAYOUT_FLAG_STORAGE_KEYS[flag]);
   } catch {
     // ignore
   }
 }
 
-/** 切り分けパネル — local / Vercel dev のみ */
+export function clearAllLayoutFeatureFlagStorage(): void {
+  (Object.keys(LAYOUT_FLAG_STORAGE_KEYS) as LayoutFeatureFlagId[]).forEach(
+    clearLayoutFeatureFlagStorage,
+  );
+}
+
+/** @deprecated isBisectFeatureFlagPanelEnabled を使用 */
 export function isLayoutFeatureFlagPanelEnabled(): boolean {
   return isNonProd;
 }

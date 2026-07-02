@@ -4,7 +4,10 @@ import {
   APP_PORTAL_ROOT_ID,
   APP_SHELL_ID,
 } from "@/lib/layout/app-portal";
-import { isLayoutAppShellEnabled } from "@/lib/layout/layout-feature-flags";
+import {
+  isLayoutAppShellEnabled,
+  isLayoutPortalRootEnabled,
+} from "@/lib/layout/layout-feature-flags";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 
@@ -23,11 +26,13 @@ function subscribeLayoutFlags(onStoreChange: () => void) {
   window.addEventListener("storage", refresh);
   window.addEventListener("popstate", refresh);
   window.addEventListener("barten-layout-flags-change", refresh);
+  window.addEventListener("barten-perf-flags-change", refresh);
 
   return () => {
     window.removeEventListener("storage", refresh);
     window.removeEventListener("popstate", refresh);
     window.removeEventListener("barten-layout-flags-change", refresh);
+    window.removeEventListener("barten-perf-flags-change", refresh);
   };
 }
 
@@ -37,6 +42,10 @@ function getClientAppShellEnabled(): boolean {
 
 function getServerAppShellSnapshot(serverEnabled: boolean): boolean {
   return serverEnabled;
+}
+
+function getClientPortalRootEnabled(): boolean {
+  return isLayoutPortalRootEnabled();
 }
 
 /** app-shell / portal-root — OFF 時は children を body 直下相当で描画 */
@@ -50,6 +59,12 @@ export function LayoutShell({
     () => getServerAppShellSnapshot(serverAppShellEnabled),
   );
 
+  const portalRootEnabled = useSyncExternalStore(
+    subscribeLayoutFlags,
+    getClientPortalRootEnabled,
+    () => true,
+  );
+
   if (!appShellEnabled) {
     return <>{children}</>;
   }
@@ -57,11 +72,13 @@ export function LayoutShell({
   return (
     <div id={APP_SHELL_ID} className="app-shell" suppressHydrationWarning>
       {children}
-      <div
-        id={APP_PORTAL_ROOT_ID}
-        className="app-portal-root"
-        aria-hidden
-      />
+      {portalRootEnabled ? (
+        <div
+          id={APP_PORTAL_ROOT_ID}
+          className="app-portal-root"
+          aria-hidden
+        />
+      ) : null}
     </div>
   );
 }

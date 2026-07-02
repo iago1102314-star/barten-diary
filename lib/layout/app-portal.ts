@@ -1,6 +1,9 @@
 /** PC 中央 shell と portal 先 — 767px 以下では viewport 基準のまま */
 
-import { isLayoutAppShellEnabled } from "@/lib/layout/layout-feature-flags";
+import {
+  isLayoutAppShellEnabled,
+  isLayoutPortalRootEnabled,
+} from "@/lib/layout/layout-feature-flags";
 
 export const APP_SHELL_ID = "app-shell";
 export const APP_PORTAL_ROOT_ID = "app-portal-root";
@@ -26,7 +29,7 @@ export function getAppPortalRoot(): HTMLElement {
   if (typeof document === "undefined") {
     throw new Error("getAppPortalRoot is only available in the browser");
   }
-  if (!isLayoutAppShellEnabled()) {
+  if (!isLayoutAppShellEnabled() || !isLayoutPortalRootEnabled()) {
     return document.body;
   }
   return document.getElementById(APP_PORTAL_ROOT_ID) ?? document.body;

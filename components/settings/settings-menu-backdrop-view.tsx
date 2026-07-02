@@ -9,6 +9,7 @@ import styles from "@/components/settings/settings-menu-backdrop-view.module.css
 import shelfStyles from "@/components/memories/memo-shelf-grid.module.css";
 import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
 import { START_LAMP_GLOWS } from "@/lib/entrance/start-lamp-glows";
+import { isPerfMenuBackdropEnabled } from "@/lib/layout/perf-feature-flags";
 import {
   START_BOKEH_LAMP_GLOWS,
   START_BOKEH_ONLY_LAMP_GLOWS,
@@ -25,6 +26,14 @@ const STEADY_KEN_BURNS = {
 /** メニュー枠内 — 各画面の背景のみ（UI なし） */
 export function SettingsMenuBackdropView() {
   const backdrop = useSettingsMenuBackdropState();
+
+  if (!isPerfMenuBackdropEnabled()) {
+    return (
+      <div className={styles.root} aria-hidden>
+        <div className={styles.black} />
+      </div>
+    );
+  }
 
   return (
     <div className={styles.root} aria-hidden>

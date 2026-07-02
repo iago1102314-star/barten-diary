@@ -4,7 +4,7 @@ import {
   shipporiMincho,
   zenOldMinchoBold,
 } from "@/lib/fonts/jp-brand-fonts";
-import { LayoutFeatureFlagPanel } from "@/components/app/layout-feature-flag-panel";
+import { BisectFeatureFlagPanel } from "@/components/app/bisect-feature-flag-panel";
 import { LayoutShell } from "@/components/app/layout-shell";
 import { IosSafariVisualHeightSync } from "@/components/app/ios-safari-visual-height-sync";
 import { buildIosSafariVisualHeightBootstrapScript } from "@/lib/layout/ios-safari-visual-height";
@@ -84,7 +84,7 @@ export default function RootLayout({
         <LayoutShell serverAppShellEnabled={serverAppShellEnabled}>
           {children}
         </LayoutShell>
-        <LayoutFeatureFlagPanel />
+        <BisectFeatureFlagPanel />
       </body>
     </html>
   );
