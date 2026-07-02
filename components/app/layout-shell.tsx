@@ -4,10 +4,7 @@ import {
   APP_PORTAL_ROOT_ID,
   APP_SHELL_ID,
 } from "@/lib/layout/app-portal";
-import {
-  isLayoutAppShellEnabled,
-  readLayoutFeatureFlagsServer,
-} from "@/lib/layout/layout-feature-flags";
+import { isLayoutAppShellEnabled } from "@/lib/layout/layout-feature-flags";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 
@@ -67,8 +64,4 @@ export function LayoutShell({
       />
     </div>
   );
-}
-
-export function readServerLayoutShellEnabled(): boolean {
-  return readLayoutFeatureFlagsServer().appShell;
 }

@@ -5,12 +5,10 @@ import {
   zenOldMinchoBold,
 } from "@/lib/fonts/jp-brand-fonts";
 import { LayoutFeatureFlagPanel } from "@/components/app/layout-feature-flag-panel";
-import {
-  LayoutShell,
-  readServerLayoutShellEnabled,
-} from "@/components/app/layout-shell";
+import { LayoutShell } from "@/components/app/layout-shell";
 import { IosSafariVisualHeightSync } from "@/components/app/ios-safari-visual-height-sync";
 import { buildIosSafariVisualHeightBootstrapScript } from "@/lib/layout/ios-safari-visual-height";
+import { isLayoutAppShellEnabledServer } from "@/lib/layout/layout-feature-flags";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -51,7 +49,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   const iosBootstrapScript = buildIosSafariVisualHeightBootstrapScript();
-  const serverAppShellEnabled = readServerLayoutShellEnabled();
+  const serverAppShellEnabled = isLayoutAppShellEnabledServer();
 
   return (
     <html
