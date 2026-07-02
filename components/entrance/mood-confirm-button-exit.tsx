@@ -7,6 +7,7 @@ import {
 import { MOOD_SELECT_EXIT_SCALED } from "@/lib/entrance/mood-select-exit-timing";
 import { MOOD_SELECT_EXIT_TUNING } from "@/lib/entrance/mood-select-exit-tuning";
 import { EASE_DECELERATE } from "@/lib/entrance/motion-presets";
+import { getAppPortalRoot, getAppStageMetrics } from "@/lib/layout/app-portal";
 import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -35,17 +36,15 @@ export function MoodConfirmButtonExit({
   const moveSec = MOOD_SELECT_EXIT_SCALED.buttonMoveToCenterSec;
   const dissolveSec = MOOD_SELECT_EXIT_SCALED.buttonDissolveSec;
   const dissolving = phase === "dissolve";
-  const centerX =
-    typeof window !== "undefined" ? window.innerWidth / 2 : anchor.centerX;
-  const centerY =
-    typeof window !== "undefined"
-      ? window.innerHeight / 2 +
-        MOOD_SELECT_EXIT_TUNING.buttonMoveCenterOffsetYpx
-      : anchor.centerY;
-  const targetWidth =
-    typeof window !== "undefined"
-      ? Math.min(window.innerWidth * 0.9 * BUTTON_WIDTH_SCALE, 384)
-      : anchor.width;
+  const stage = getAppStageMetrics(
+    MOOD_SELECT_EXIT_TUNING.buttonMoveCenterOffsetYpx,
+  );
+  const centerX = stage.centerX;
+  const centerY = stage.centerY;
+  const targetWidth = Math.min(
+    stage.stageWidth * 0.9 * BUTTON_WIDTH_SCALE,
+    384,
+  );
 
   useEffect(() => {
     if (phase !== "dissolve") return;
@@ -125,6 +124,6 @@ export function MoodConfirmButtonExit({
         </motion.div>
       </motion.div>
     </div>,
-    document.body,
+    getAppPortalRoot(),
   );
 }

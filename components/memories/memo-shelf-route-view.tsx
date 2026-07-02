@@ -8,6 +8,7 @@ import { GuestDiaryTransferToast } from "@/components/memories/guest-diary-trans
 import { GuestShelfInfoBar } from "@/components/memories/guest-shelf-info-bar";
 import { MemoShelfEmptyCounterCta } from "@/components/memories/memo-shelf-empty-counter-cta";
 import { MemoShelfSwipePager } from "@/components/memories/memo-shelf-swipe-pager";
+import { ShelfStatusMessage } from "@/components/memories/shelf-status-message";
 import styles from "@/components/memories/memo-shelf-grid.module.css";
 import { useMemoShelfListData } from "@/hooks/use-memo-shelf-list-data";
 import { useMemoShelfPageNavigation } from "@/hooks/use-memo-shelf-page-navigation";
@@ -154,6 +155,12 @@ export function MemoShelfRouteView({
 
       <div className={styles.listMiddle}>
         <div className={styles.listTopSpacer} aria-hidden />
+
+        {loading ? (
+          <div className={styles.shelfStatusOverlay}>
+            <ShelfStatusMessage variant="opening" />
+          </div>
+        ) : null}
 
         <div className={styles.listAlbumHost}>
           <div className={styles.listAlbumScroll}>

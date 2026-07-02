@@ -684,3 +684,95 @@ body.login-route {
 .recording-pipeline-diagnostic-copy-status--error {
   color: rgba(255, 180, 160, 0.92);
 }
+
+/* app-shell — スマホは透過ラッパー（transform なし → fixed は viewport 基準のまま） */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  position: static;
+  overflow: visible;
+}
+
+.app-portal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+}
+
+.app-portal-root > * {
+  pointer-events: auto;
+}
+
+/*
+ * iOS Safari 通常表示のみ — 100dvh より innerHeight を優先（PWA ではクラス未付与）
+ * まず entrance-experience-root だけ。余白・配置は変えない。
+ */
+html.ios-safari-browser-height .entrance-experience-root {
+  height: var(--app-visual-height, 100dvh);
+  max-height: var(--app-visual-height, 100dvh);
+}
+
+/* PC のみ — 中央 430px スマホ枠（767px 以下には一切影響しない） */
+@media (min-width: 768px) {
+  html {
+    background: #000;
+  }
+
+  body {
+    background: #000;
+    background-image: none;
+  }
+
+  body.entrance-experience-locked {
+    background: #000;
+    background-image: none;
+  }
+
+  body.login-route {
+    background: #000;
+    background-image: none;
+  }
+
+  .app-shell {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 50%;
+    z-index: 0;
+    box-sizing: border-box;
+    flex: none;
+    width: 430px;
+    max-width: 430px;
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    transform: translateX(-50%);
+    background: #000;
+    isolation: isolate;
+  }
+
+  .app-portal-root {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .stage-viewport {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .entrance-experience-root {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+  }
+}

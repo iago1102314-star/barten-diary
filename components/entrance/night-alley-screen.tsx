@@ -1,6 +1,7 @@
 "use client";
 
 import { AfterNightBackdrop } from "@/components/entrance/after-night-backdrop";
+import { ShelfStatusMessage } from "@/components/memories/shelf-status-message";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { Reveal } from "@/components/motion/reveal";
 import { SceneFrame } from "@/components/entrance/scene-frame";
@@ -69,24 +70,19 @@ export function NightAlleyScreen({
     <SceneFrame>
       <AfterNightBackdrop />
 
+      {outcome.kind === "composing" ? (
+        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center">
+          <ShelfStatusMessage variant="writing" />
+        </div>
+      ) : null}
+
       <div className="absolute inset-0 z-30 flex flex-col items-center justify-end px-8 pb-[22%] pt-16">
         <div className="w-full max-w-xs space-y-9 text-center">
-          {outcome.kind === "composing" && (
-            <>
-              <Reveal delay={0.6} duration={1.6}>
-                <p className={outcomeTextClass}>
-                  今夜の記録を綴っています…
-                </p>
-              </Reveal>
-              {showSlowHint ? (
-                <Reveal delay={0.2} duration={1.4}>
-                  <p className={outcomeTextClass}>
-                    少し時間がかかっています。
-                  </p>
-                </Reveal>
-              ) : null}
-            </>
-          )}
+          {outcome.kind === "composing" && showSlowHint ? (
+            <Reveal delay={0.2} duration={1.4}>
+              <p className={outcomeTextClass}>少し時間がかかっています。</p>
+            </Reveal>
+          ) : null}
 
           {outcome.kind === "saved" && (
             <>

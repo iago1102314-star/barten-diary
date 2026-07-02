@@ -9,6 +9,7 @@ import {
   isRecordingDiagnosticEnabled,
   recordingDiagnosticEnvLabel,
 } from "@/lib/env/recording-diagnostic-env";
+import { getAppPortalRoot } from "@/lib/layout/app-portal";
 import { useCallback, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
@@ -114,6 +115,6 @@ export function RecordingPipelineDiagnosticPanel() {
         </div>
       ) : null}
     </>,
-    document.body,
+    getAppPortalRoot(),
   );
 }

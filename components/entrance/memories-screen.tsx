@@ -12,6 +12,7 @@ import { MemoShelfEmptyCounterCta } from "@/components/memories/memo-shelf-empty
 import { MemoShelfRecordBottomBar } from "@/components/memories/memo-shelf-detail-bar";
 import styles from "@/components/memories/memo-shelf-grid.module.css";
 import { MemoShelfScreen } from "@/components/memories/memo-shelf-surface";
+import { ShelfStatusMessage } from "@/components/memories/shelf-status-message";
 import type { DiaryListItem } from "@/components/diaries/diary-list";
 import { useMemoShelfListData } from "@/hooks/use-memo-shelf-list-data";
 import { useMemoShelfPageNavigation } from "@/hooks/use-memo-shelf-page-navigation";
@@ -58,6 +59,7 @@ export function MemoriesScreen({
   const [deletedMemoIds, setDeletedMemoIds] = useState<Set<string>>(() => new Set());
   const [guestDeleting, setGuestDeleting] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(Boolean(initialDiaryId));
+  const [loadingMemoDetail, setLoadingMemoDetail] = useState(false);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const diaryExportRef = useRef<HTMLDivElement>(null);
   const polaroidIntroVisitIdRef = useRef(1);
@@ -98,6 +100,8 @@ export function MemoriesScreen({
 
   const loading = initialDiaryId ? loadingDetail : listLoading;
   const error = initialDiaryId ? errorDetail : listError;
+  const showReading = (loadingDetail || loadingMemoDetail) && !selectedMemo;
+  const showOpening = listLoading && !selectedMemo && !showReading;
   const diaryDelete = useDiaryDelete({
     diaryId: selectedMemo?.id ?? "",
     onDeleted: () => {
@@ -195,19 +199,25 @@ export function MemoriesScreen({
       return;
     }
 
+    setLoadingMemoDetail(true);
+
     void (async () => {
-      const res = await fetch(`/api/memories/${memo.id}`);
-      const data = (await res.json()) as {
-        diary?: DiaryListItem;
-        error?: string;
-      };
+      try {
+        const res = await fetch(`/api/memories/${memo.id}`);
+        const data = (await res.json()) as {
+          diary?: DiaryListItem;
+          error?: string;
+        };
 
-      if (res.ok && data.diary) {
-        setSelectedMemo(data.diary);
-        return;
+        if (res.ok && data.diary) {
+          setSelectedMemo(data.diary);
+          return;
+        }
+
+        setSelectedMemo(memo);
+      } finally {
+        setLoadingMemoDetail(false);
       }
-
-      setSelectedMemo(memo);
     })();
   }, [polaroidIntroSession]);
 
@@ -337,6 +347,14 @@ export function MemoriesScreen({
           )}
 
           <div className={styles.shelfContentStage}>
+            {showOpening || showReading ? (
+              <div className={styles.shelfStatusOverlay}>
+                <ShelfStatusMessage
+                  variant={showReading ? "reading" : "opening"}
+                />
+              </div>
+            ) : null}
+
             <AnimatePresence mode="wait">
               {selectedMemo ? (
                 <motion.div
@@ -369,12 +387,6 @@ export function MemoriesScreen({
 
                     <div className={styles.listAlbumHost}>
                       <div className={styles.listAlbumScroll}>
-                        {loading && (
-                          <div className={styles.listAlbumGrid}>
-                            <p className={styles.loadingText}>……</p>
-                          </div>
-                        )}
-
                         {!loading && error && (
                           <div className={styles.listAlbumGrid}>
                             <p role="alert" className={styles.errorText}>

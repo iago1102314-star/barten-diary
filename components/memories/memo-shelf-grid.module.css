@@ -7,6 +7,8 @@
   --shelf-paper-bg-deep: #e5d8bc;
   --shelf-paper-ink: #3f3629;
   --shelf-paper-ink-muted: rgba(63, 54, 41, 0.72);
+  --shelf-bar-chrome-color: rgb(34, 28, 22);
+  --shelf-bar-title-color: rgba(221, 210, 192, 0.94);
   --shelf-paper-texture-image: url("/assets/diary/paper.webp");
   --shelf-paper-texture-opacity: var(--memo-shelf-paper-texture-opacity, 0.36);
   --shelf-paper-texture-blend: multiply;
@@ -147,6 +149,9 @@
 
 /** 一覧 — Header / Middle(TopSpacer+Album+BottomSpacer) / Pagination */
 .listLayout {
+  --shelf-bar-chrome-color: rgb(34, 28, 22);
+  --shelf-bar-title-color: rgba(221, 210, 192, 0.94);
+
   display: flex;
   min-height: 0;
   flex: 1;
@@ -155,6 +160,7 @@
 }
 
 .listMiddle {
+  position: relative;
   display: flex;
   min-height: 0;
   flex: 1 1 0;
@@ -326,7 +332,7 @@
   font-weight: 500;
   letter-spacing: 0.16em;
   text-align: center;
-  color: rgba(221, 210, 192, 0.94);
+  color: var(--shelf-bar-title-color);
 }
 
 .topBarBack {
@@ -568,7 +574,7 @@
   font-size: 0.88rem;
   font-weight: 500;
   letter-spacing: var(--font-serif-jp-tracking);
-  color: rgba(221, 210, 192, 0.94);
+  color: var(--shelf-bar-title-color);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: color 0.2s ease;
@@ -608,7 +614,7 @@
   font-weight: 500;
   letter-spacing: 0.16em;
   text-align: center;
-  color: rgba(221, 210, 192, 0.94);
+  color: var(--shelf-bar-title-color);
   font-variant-numeric: tabular-nums;
 }
 
@@ -737,6 +743,29 @@
   font-size: 0.72rem;
   letter-spacing: var(--font-serif-jp-tracking);
   color: var(--shelf-paper-ink-muted);
+}
+
+.shelfStatusOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.shelfStatusMessage {
+  margin: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  text-align: center;
+  opacity: 1;
+}
+
+/** Opening / Reading — 帯（夜のメモ）と同じ暗色 */
+.shelfStatusMessageBarChrome {
+  color: var(--shelf-bar-chrome-color);
 }
 
 .errorText {

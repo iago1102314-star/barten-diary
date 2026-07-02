@@ -1,3 +1,5 @@
+import { getAppPortalRoot } from "@/lib/layout/app-portal";
+
 const OVERLAY_ID = "barten-sign-out-overlay";
 
 /** ログアウト処理中 — ゲスト UI の一瞬の表示を防ぐ全画面オーバーレイ */
@@ -15,5 +17,5 @@ export function showClientSignOutOverlay(): void {
     background: "#000",
     pointerEvents: "all",
   });
-  document.body.appendChild(overlay);
+  getAppPortalRoot().appendChild(overlay);
 }

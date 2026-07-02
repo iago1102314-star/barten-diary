@@ -54,6 +54,11 @@ export const MEMO_SHELF_TUNING = {
   /** 下帯（旧・上帯サイズ） */
   bottomBarPaddingBlockRem: 0.3,
 
+  /** 帯（夜のメモ）— 紙面上の Opening / Reading など */
+  barChromeColor: "rgb(34, 28, 22)",
+  /** 帯内タイトル（夜のメモ）の文字色 */
+  barTitleColor: "rgba(221, 210, 192, 0.94)",
+
   /**
    * 一覧1ページ目（最新4件）の傾き再抽選 — 数字を上げると角度が変わる
    * 候補は diary-drink-tape.ts の DIARY_DRINK_PHOTO_TILTS
@@ -70,6 +75,8 @@ export function memoShelfPaperStyle(): CSSProperties {
     topBarPaddingBlockRem,
     topBarPaddingInlineRem,
     bottomBarPaddingBlockRem,
+    barChromeColor,
+    barTitleColor,
   } = MEMO_SHELF_TUNING;
 
   return {
@@ -81,6 +88,8 @@ export function memoShelfPaperStyle(): CSSProperties {
     "--memo-shelf-topbar-padding-block": `${topBarPaddingBlockRem}rem`,
     "--memo-shelf-topbar-padding-inline": `${topBarPaddingInlineRem}rem`,
     "--memo-shelf-bottombar-padding-block": `${bottomBarPaddingBlockRem}rem`,
+    "--shelf-bar-chrome-color": barChromeColor,
+    "--shelf-bar-title-color": barTitleColor,
   } as CSSProperties;
 }
 
