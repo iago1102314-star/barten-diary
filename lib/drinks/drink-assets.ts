@@ -2,12 +2,17 @@ import {
   DRINK_CATEGORIES,
   type DrinkId,
 } from "@/lib/drinks/drink-catalog";
+import { GENERATED_DRINK_ASSET_MANIFEST } from "@/lib/drinks/generated-drink-asset-manifest";
+import {
+  resolveLegacyDrinkByName,
+  resolveVisualDrinkId,
+} from "@/lib/drinks/legacy-drink-map";
 
 /**
  * ドリンク画像 — `public/assets/drinks/{id}/`
  *
- * - `record.webp` … 録音カウンター（1枚）
- * - `diary/01.webp` … 日記ポラロイド（複数可、seed で安定選択）
+ * - `record.webp` … 録音カウンター（1枚。未配置時は diary/01 をフォールバック）
+ * - `diary/01.webp`〜`04.webp` … 日記ポラロイド（seed で安定選択）
  *
  * 録音背景（back-record / counter-record）は
  * `lib/entrance/asset-paths.ts` の ENTRANCE_ASSETS。
@@ -19,34 +24,22 @@ export type DrinkAssetEntry = {
   thumbnail?: string;
 };
 
-/** 画像ファイルを配置済みのドリンク ID */
+/** 画像ファイルを配置済みのドリンク ID（β版4種） */
 export const REGISTERED_DRINK_ASSET_IDS = [
   "old-fashioned",
-  "negroni",
-  "yamazaki-12",
-  "gin-tonic",
-  "espresso",
+  "koshu",
   "bellini",
-  "irish-coffee",
+  "hot-cocoa",
 ] as const;
 
 export type RegisteredDrinkId = (typeof REGISTERED_DRINK_ASSET_IDS)[number];
 
 /**
  * 日記ポラロイド画像 — 差し替え時は銘柄の ?v= を上げる（SW / ブラウザキャッシュ回避）
- * 未指定銘柄は 1
  */
 export const DRINK_DIARY_ASSET_VERSION: Partial<
   Record<RegisteredDrinkId, number>
-> = {
-  negroni: 2,
-};
-
-/**
- * 【一時】true なら全日記ポラロイドを negroni/diary/01 に統一。
- * 元に戻すときは false に。
- */
-export const TEMPORARY_USE_NEGRONI_01_FOR_ALL_DIARIES = true;
+> = {};
 
 function drinkDiaryAssetVersion(drinkId: RegisteredDrinkId): number {
   return DRINK_DIARY_ASSET_VERSION[drinkId] ?? 1;
@@ -66,23 +59,27 @@ export function buildDrinkDiaryAssetPath(
 
 function buildDrinkAssetEntry(
   drinkId: RegisteredDrinkId,
-  diaryIndices: readonly number[] = [1],
 ): DrinkAssetEntry {
+  const diaryIndices =
+    GENERATED_DRINK_ASSET_MANIFEST[drinkId]?.diaryIndices ?? [1];
+  const diary = diaryIndices.map((index) =>
+    buildDrinkDiaryAssetPath(drinkId, index),
+  );
+  const hasRecord = GENERATED_DRINK_ASSET_MANIFEST[drinkId]?.hasRecord ?? false;
+
   return {
-    record: buildDrinkRecordAssetPath(drinkId),
-    diary: diaryIndices.map((index) => buildDrinkDiaryAssetPath(drinkId, index)),
+    record: hasRecord ? buildDrinkRecordAssetPath(drinkId) : diary[0] ?? "",
+    diary,
+    thumbnail: diary[0],
   };
 }
 
 /** 画像を登録したドリンクのみ。カタログ追加 ≠ 自動表示 */
 export const DRINK_ASSETS = {
   "old-fashioned": buildDrinkAssetEntry("old-fashioned"),
-  negroni: buildDrinkAssetEntry("negroni"),
-  "yamazaki-12": buildDrinkAssetEntry("yamazaki-12"),
-  "gin-tonic": buildDrinkAssetEntry("gin-tonic"),
-  espresso: buildDrinkAssetEntry("espresso"),
+  koshu: buildDrinkAssetEntry("koshu"),
   bellini: buildDrinkAssetEntry("bellini"),
-  "irish-coffee": buildDrinkAssetEntry("irish-coffee"),
+  "hot-cocoa": buildDrinkAssetEntry("hot-cocoa"),
 } as const satisfies Record<RegisteredDrinkId, DrinkAssetEntry>;
 
 const DRINK_ID_BY_NAME = new Map<string, DrinkId>();
@@ -91,6 +88,31 @@ for (const category of DRINK_CATEGORIES) {
   for (const drink of category.drinks) {
     DRINK_ID_BY_NAME.set(drink.name, drink.id);
     DRINK_ID_BY_NAME.set(drink.name.toLowerCase(), drink.id);
+  }
+}
+
+for (const legacy of [
+  "Negroni",
+  "Yamazaki 18",
+  "甲州ワイン（KOSHU）",
+  "Gin Tonic",
+  "Chablis（シャブリ）",
+  "Espresso",
+  "Moscato d'Asti",
+  "Kir Royale",
+  "Irish Coffee",
+  "Mulled Wine",
+  "Brandy",
+  "Laphroaig 10年",
+  "Guinness",
+  "獺祭",
+  "YEBISU",
+  "Talisker 10年",
+] as const) {
+  const resolved = resolveLegacyDrinkByName(legacy);
+  if (resolved) {
+    DRINK_ID_BY_NAME.set(legacy, resolved.visualDrinkId);
+    DRINK_ID_BY_NAME.set(legacy.toLowerCase(), resolved.visualDrinkId);
   }
 }
 
@@ -106,7 +128,8 @@ function getDrinkAssetEntry(
   drinkId: DrinkId | null | undefined,
 ): DrinkAssetEntry | null {
   if (!drinkId) return null;
-  return DRINK_ASSETS[drinkId as RegisteredDrinkId] ?? null;
+  const visualId = resolveVisualDrinkId(drinkId) as RegisteredDrinkId;
+  return DRINK_ASSETS[visualId] ?? null;
 }
 
 export function resolveDrinkIdByName(
@@ -117,6 +140,7 @@ export function resolveDrinkIdByName(
   return (
     DRINK_ID_BY_NAME.get(trimmed) ??
     DRINK_ID_BY_NAME.get(trimmed.toLowerCase()) ??
+    resolveLegacyDrinkByName(trimmed)?.visualDrinkId ??
     null
   );
 }
@@ -137,7 +161,9 @@ export function drinkHasVisualAssets(drinkId: DrinkId): boolean {
 export function getDrinkRecordImagePath(
   drinkId: DrinkId | null | undefined,
 ): string | null {
-  return getDrinkAssetEntry(drinkId)?.record ?? null;
+  const entry = getDrinkAssetEntry(drinkId);
+  if (!entry) return null;
+  return entry.record ?? entry.diary[0] ?? entry.thumbnail ?? null;
 }
 
 export function getDrinkThumbnailPath(
@@ -154,8 +180,12 @@ export function getDrinkThumbnailPathByName(
   return getDrinkThumbnailPath(resolveDrinkIdByName(drinkName));
 }
 
-function temporaryDiaryImageForAll(): string {
-  return buildDrinkDiaryAssetPath("negroni", 1);
+const FALLBACK_DIARY_DRINK_ID: RegisteredDrinkId = "old-fashioned";
+
+function fallbackDiaryImage(seed: string): string {
+  const diary = DRINK_ASSETS[FALLBACK_DIARY_DRINK_ID].diary;
+  if (diary.length === 1) return diary[0]!;
+  return diary[stableSeedHash(`${seed}:diary-fallback`) % diary.length]!;
 }
 
 /** 日記紙ポラロイド — diary 配列から seed で1枚（毎回同じ）。 */
@@ -163,12 +193,11 @@ export function pickDiaryDrinkImagePath(
   drinkId: DrinkId | null | undefined,
   seed: string,
 ): string | null {
-  if (TEMPORARY_USE_NEGRONI_01_FOR_ALL_DIARIES) {
-    return temporaryDiaryImageForAll();
+  const visualId = resolveVisualDrinkId(drinkId) as RegisteredDrinkId | null;
+  const diary = visualId ? DRINK_ASSETS[visualId]?.diary : null;
+  if (!diary?.length) {
+    return fallbackDiaryImage(seed);
   }
-
-  const diary = getDrinkAssetEntry(drinkId as RegisteredDrinkId)?.diary;
-  if (!diary?.length) return null;
   if (diary.length === 1) return diary[0]!;
   return diary[stableSeedHash(`${seed}:diary-image`) % diary.length]!;
 }
@@ -177,8 +206,5 @@ export function pickDiaryDrinkImagePathByName(
   drinkName: string | null | undefined,
   seed: string,
 ): string | null {
-  if (TEMPORARY_USE_NEGRONI_01_FOR_ALL_DIARIES) {
-    return temporaryDiaryImageForAll();
-  }
   return pickDiaryDrinkImagePath(resolveDrinkIdByName(drinkName), seed);
 }

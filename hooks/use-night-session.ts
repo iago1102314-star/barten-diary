@@ -8,11 +8,10 @@ import { isDevShortcutEnabled } from "@/lib/dev/is-dev-shortcut-enabled";
 import { simulateNight } from "@/lib/dev/simulate-night";
 import type { FakeNightId } from "@/lib/dev/fake-nights";
 import {
-  getDrinkById,
-  type Drink,
-} from "@/lib/drinks/drink-catalog";
-import { fallbackDrinkFromName } from "@/lib/drinks/resolve-drink-from-bottle-tag";
-import type { DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
+  fallbackDrinkFromName,
+  resolveDrinkById,
+} from "@/lib/drinks/resolve-drink-from-bottle-tag";
+import type { Drink, DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
 import { barAudioEngine, getBarAudioDiagnostics } from "@/lib/entrance/bar-audio-engine";
 import {
   EMPTY_NIGHT_PIPELINE_TIMINGS,
@@ -810,7 +809,7 @@ export function useNightSession() {
     if (!snapshot) return null;
 
     const drink =
-      getDrinkById(snapshot.drinkId) ??
+      resolveDrinkById(snapshot.drinkId) ??
       fallbackDrinkFromName(snapshot.drinkName);
     const endedAt = new Date().toISOString();
 

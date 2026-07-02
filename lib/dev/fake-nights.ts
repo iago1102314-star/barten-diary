@@ -16,12 +16,12 @@ export const DEV_FAKE_NIGHTS: Record<FakeNightId, FakeNight> = {
   dev: {
     id: "dev",
     categoryId: "clear",
-    drinkId: "espresso",
+    drinkId: "koshu",
     transcript:
       "今日は開発の続きをしていた。機能のつなぎがまだ気になるけど、少しは前に進んだ気がする。",
     diary:
-      "カウンターに置かれたエスプレッソは、まだ湯気を残していた。\n\n画面の向こうで動かしていたものの輪郭が、少しだけはっきり見えた夜。完璧ではない。でも、手を動かしていた時間は確かにあった。",
-    drinkNote: "Espresso — 開発夜の定番。苦味で思考を整える。",
+      "グラスに注がれた甲州は、静かな香りを残していた。\n\n画面の向こうで動かしていたものの輪郭が、少しだけはっきり見えた夜。完璧ではない。でも、手を動かしていた時間は確かにあった。",
+    drinkNote: "甲州 — 開発夜の定番。静かに思考を整える。",
     masterComment: "……進んでいるなら、それでいい。",
   },
   lonely: {

@@ -6,23 +6,19 @@ export function parseGeneratedDiaryContent(
   try {
     const parsed = JSON.parse(content) as Partial<GeneratedDiaryContent>;
 
-    if (
-      typeof parsed.diary !== "string" ||
-      typeof parsed.masterComment !== "string"
-    ) {
+    if (typeof parsed.diary !== "string") {
       return null;
     }
 
     const diary = parsed.diary.trim();
-    const masterComment = parsed.masterComment.trim();
     const drinkNote =
       typeof parsed.drinkNote === "string" ? parsed.drinkNote.trim() : "";
 
-    if (!diary || !masterComment) {
+    if (!diary) {
       return null;
     }
 
-    return { diary, drinkNote, masterComment };
+    return { diary, drinkNote, masterComment: "" };
   } catch {
     return null;
   }

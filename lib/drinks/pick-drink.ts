@@ -1,5 +1,7 @@
 import {
   DRINK_CATEGORIES,
+  getBetaDrinks,
+  MASTER_DELEGATE_CATEGORY_ID,
   type Drink,
   type DrinkCategoryId,
   type DrinkId,
@@ -8,10 +10,11 @@ import { drinkHasImage } from "@/lib/entrance/drink-image-path";
 
 const DEFAULT_TIME_ZONE = "Asia/Tokyo";
 
-/** heavy + 画像あり — Old Fashioned / Yamazaki 18 を半々 */
-const HEAVY_VISUAL_DRINK_IDS = ["old-fashioned", "yamazaki-12"] as const satisfies readonly DrinkId[];
-
 function getSelectableDrinks(categoryId: DrinkCategoryId): Drink[] {
+  if (categoryId === MASTER_DELEGATE_CATEGORY_ID) {
+    return getBetaDrinks();
+  }
+
   const category = DRINK_CATEGORIES.find((c) => c.id === categoryId);
   return category?.drinks ?? [];
 }
@@ -73,6 +76,7 @@ function resolvePickDrinkArgs(
 
 /**
  * カテゴリ内から1杯を選ぶ（決定的な簡易ロジック）
+ * master は β4種から日時 seed で1杯。
  */
 export function pickDrink(
   categoryId: DrinkCategoryId,
@@ -84,7 +88,9 @@ export function pickDrink(
   let pool = getSelectableDrinks(categoryId);
 
   if (options.preferredDrinkId) {
-    const preferred = pool.find((d) => d.id === options.preferredDrinkId);
+    const preferred =
+      pool.find((d) => d.id === options.preferredDrinkId) ??
+      getBetaDrinks().find((d) => d.id === options.preferredDrinkId);
     if (preferred) return preferred;
   }
 
@@ -95,17 +101,8 @@ export function pickDrink(
     }
   }
 
-  if (options.imageOnly && categoryId === "heavy") {
-    const heavyPair = HEAVY_VISUAL_DRINK_IDS.map((id) =>
-      pool.find((d) => d.id === id),
-    ).filter((d): d is Drink => d !== undefined);
-    if (heavyPair.length === 2) {
-      return heavyPair[Math.random() < 0.5 ? 0 : 1]!;
-    }
-  }
-
   if (pool.length === 0) {
-    return { id: "night-cap", name: "Night Cap" };
+    return { id: "night-cap", name: "Night Cap", masterComments: [] };
   }
 
   const seed = buildSeed(at, categoryId, tz);

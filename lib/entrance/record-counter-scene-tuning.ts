@@ -1,4 +1,5 @@
 import type { DrinkId } from "@/lib/drinks/drink-catalog";
+import { resolveVisualDrinkId } from "@/lib/drinks/legacy-drink-map";
 
 /**
  * 録音シーン — 見た目調整（このファイルだけ触れば OK）
@@ -49,14 +50,12 @@ export type RecordSceneDrinkTuning = {
 /** @deprecated RecordSceneImageTuning を使用 */
 export type RecordSceneLayerTuning = RecordSceneImageTuning;
 
-/** 将来の酒ごと微調整用キー */
+/** 将来の酒ごと微調整用キー（β版4種） */
 export type RecordDrinkPlacementKey =
   | "old-fashioned"
-  | "negroni"
-  | "gin-tonic"
+  | "koshu"
   | "bellini"
-  | "wine"
-  | "yamazaki";
+  | "hot-cocoa";
 
 export const RECORD_COUNTER_SCENE_TUNING = {
   back: {
@@ -88,11 +87,9 @@ export const RECORD_COUNTER_SCENE_TUNING = {
 
 const DRINK_BY_KEY: Record<RecordDrinkPlacementKey, RecordSceneDrinkTuning> = {
   "old-fashioned": RECORD_COUNTER_SCENE_TUNING.drink,
-  negroni: RECORD_COUNTER_SCENE_TUNING.drink,
-  "gin-tonic": RECORD_COUNTER_SCENE_TUNING.drink,
+  koshu: RECORD_COUNTER_SCENE_TUNING.drink,
   bellini: RECORD_COUNTER_SCENE_TUNING.drink,
-  wine: RECORD_COUNTER_SCENE_TUNING.drink,
-  yamazaki: RECORD_COUNTER_SCENE_TUNING.drink,
+  "hot-cocoa": RECORD_COUNTER_SCENE_TUNING.drink,
 };
 
 export function recordSceneImageTransformStyle(
@@ -112,10 +109,19 @@ export function recordSceneImageTransformStyle(
   };
 }
 
-/** 現状は全カテゴリ old-fashoned.webp */
+/** β版4種 — 未登録 ID は old-fashioned にフォールバック */
 export function resolveRecordDrinkPlacementKey(
-  _drinkId: DrinkId | null | undefined,
+  drinkId: DrinkId | null | undefined,
 ): RecordDrinkPlacementKey {
+  const visualId = resolveVisualDrinkId(drinkId);
+  if (
+    visualId === "koshu" ||
+    visualId === "bellini" ||
+    visualId === "hot-cocoa" ||
+    visualId === "old-fashioned"
+  ) {
+    return visualId;
+  }
   return "old-fashioned";
 }
 

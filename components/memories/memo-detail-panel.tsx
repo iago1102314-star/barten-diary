@@ -183,6 +183,7 @@ function MemoDetailPanelEmbedded({
         <DiaryPaper
           data={paperData}
           className={paperStyles.paperFullscreen}
+          stretchToViewport
           bodyEdit={bodyEditProps}
         />
       </DiaryPaperExportHost>
@@ -254,6 +255,7 @@ function MemoDetailPanelScreen({
             <DiaryPaper
               data={paperData}
               className={paperStyles.paperFullscreen}
+              stretchToViewport
               bodyEdit={bodyEditProps}
             />
           </DiaryPaperExportHost>

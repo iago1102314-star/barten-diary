@@ -141,6 +141,23 @@
 
 .detailPaperExportHost {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.detailPaperExportHost > article {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+:global([data-diary-exporting="true"]) .detailPaperExportHost,
+:global([data-diary-exporting="true"]) .detailPaperExportHost > article {
+  min-height: auto !important;
+  height: auto !important;
+  flex: none !important;
 }
 
 .detailFooter {

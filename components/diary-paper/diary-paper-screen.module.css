@@ -22,6 +22,10 @@
   scroll-behavior: auto;
 }
 
+.body > * {
+  min-height: 100%;
+}
+
 .body[data-diary-editing="true"] {
   padding-bottom: var(--diary-edit-keyboard-inset, 0px);
 }

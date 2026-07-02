@@ -64,10 +64,13 @@ export function MemoriesScreen({
   const diaryExportRef = useRef<HTMLDivElement>(null);
   const polaroidIntroVisitIdRef = useRef(1);
   const polaroidIntroPlayedVisitIdRef = useRef(0);
-  const polaroidIntroSession = {
-    visitIdRef: polaroidIntroVisitIdRef,
-    playedVisitIdRef: polaroidIntroPlayedVisitIdRef,
-  };
+  const polaroidIntroSession = useMemo(
+    () => ({
+      visitIdRef: polaroidIntroVisitIdRef,
+      playedVisitIdRef: polaroidIntroPlayedVisitIdRef,
+    }),
+    [],
+  );
   const directOpen = Boolean(initialDiaryId);
 
   useShelfOutsideAmbience();

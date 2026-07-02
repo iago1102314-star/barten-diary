@@ -19,6 +19,8 @@ type DiaryPaperProps = {
   data: DiaryPaperData;
   className?: string;
   bodyEdit?: DiaryBodyEditorProps;
+  /** 詳細画面のみ — マスターコメント下まで罫線付きで画面高に伸ばす（共有画像には含めない） */
+  stretchToViewport?: boolean;
 };
 
 const paperLayoutStyle = {
@@ -39,7 +41,12 @@ function EditDimmedSection({
   return <div className={styles.editDimmedInner}>{children}</div>;
 }
 
-export function DiaryPaper({ data, className, bodyEdit }: DiaryPaperProps) {
+export function DiaryPaper({
+  data,
+  className,
+  bodyEdit,
+  stretchToViewport = false,
+}: DiaryPaperProps) {
   const bodyEditRef = useRef<HTMLDivElement>(null);
   const drinkVisuals =
     data.maskingTapeSrc != null && data.drinkPhotoTiltDeg != null
@@ -55,7 +62,13 @@ export function DiaryPaper({ data, className, bodyEdit }: DiaryPaperProps) {
 
   return (
     <article
-      className={[styles.paper, className].filter(Boolean).join(" ")}
+      className={[
+        styles.paper,
+        className,
+        stretchToViewport ? styles.paperStretchViewport : null,
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={paperLayoutStyle}
       aria-label="夜の記録"
     >
@@ -65,7 +78,7 @@ export function DiaryPaper({ data, className, bodyEdit }: DiaryPaperProps) {
         <span className={styles.cornerBR} />
         <span className={styles.cornerBL} />
       </div>
-      <div className={zenKurenaido.className}>
+      <div className={`${zenKurenaido.className} ${styles.paperContent}`}>
         <div className={`${styles.mainRuledSection} ${styles.ruledBlock}`}>
           <EditDimmedSection dimmed={Boolean(bodyEdit)}>
             <DiaryHeader
@@ -98,6 +111,7 @@ export function DiaryPaper({ data, className, bodyEdit }: DiaryPaperProps) {
               signature={data.characterSignature}
             />
           </EditDimmedSection>
+          <div className={styles.screenRuledFill} aria-hidden />
         </div>
       </div>
     </article>

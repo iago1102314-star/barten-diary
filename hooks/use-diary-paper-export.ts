@@ -64,6 +64,9 @@ export function useDiaryPaperExport({
     try {
       await waitForCaptureReady(node);
       node.setAttribute("data-diary-exporting", "true");
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
 
       const captureWidth = Math.ceil(node.getBoundingClientRect().width);
       const blob = await domToBlob(node, {

@@ -111,8 +111,7 @@ async function requestGeneration(
   if (
     "bottleTag" in data &&
     "diary" in data &&
-    "drinkNote" in data &&
-    "masterComment" in data
+    "drinkNote" in data
   ) {
     return data;
   }

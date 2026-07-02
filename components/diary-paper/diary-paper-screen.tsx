@@ -34,6 +34,7 @@ export function DiaryPaperScreen({
         <DiaryPaper
           data={data}
           className={paperStyles.paperFullscreen}
+          stretchToViewport
         />
 
         {variant === "lab" ? (

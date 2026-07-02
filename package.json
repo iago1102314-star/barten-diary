@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prepare:drink-assets": "node scripts/generate-drink-asset-manifest.mjs",
+    "predev": "npm run prepare:drink-assets",
+    "prebuild": "npm run prepare:drink-assets",
     "dev": "next dev",
     "dev:lan": "next dev -H 0.0.0.0",
     "dev:tunnel": "npx --yes cloudflared tunnel --url http://127.0.0.1:3000",

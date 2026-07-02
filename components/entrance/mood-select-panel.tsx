@@ -14,7 +14,7 @@ import {
 import { buildMoodPickerOptions } from "@/lib/entrance/mood-picker-options";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
-import { getDrinkById } from "@/lib/drinks/drink-catalog";
+import { resolveDrinkById } from "@/lib/drinks/resolve-drink-from-bottle-tag";
 import { pickDrink } from "@/lib/drinks/pick-drink";
 import { useCallback, useMemo, useRef } from "react";
 
@@ -55,7 +55,7 @@ export function MoodSelectPanel({
   const handleResolveOption = useCallback((option: MoodOption) => {
     const resolved = resolveMoodOptionDrink(option);
     pendingDrinkRef.current =
-      getDrinkById(resolved.resultDrinkId ?? "") ?? null;
+      resolveDrinkById(resolved.resultDrinkId ?? "") ?? null;
     return resolved;
   }, []);
 
@@ -65,7 +65,7 @@ export function MoodSelectPanel({
       const drink =
         pendingDrinkRef.current ??
         (option.resultDrinkId
-          ? getDrinkById(option.resultDrinkId)
+          ? resolveDrinkById(option.resultDrinkId)
           : undefined) ??
         pickDrink(categoryId, new Date(), {
           imageOnly: true,

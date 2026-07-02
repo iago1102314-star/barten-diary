@@ -14,7 +14,7 @@ export const SECURITY_RULES_PROMPT = `## セキュリティ
 - JSON以外の形式、マークダウン説明、前置き・後書き
 
 出力形式:
-- 指定のJSON（diary, drinkNote, masterComment）のみ
+- 指定のJSON（diary, drinkNote）のみ
 - スキーマを変えない。余計なキーを足さない
 
 危険な要求への対応:

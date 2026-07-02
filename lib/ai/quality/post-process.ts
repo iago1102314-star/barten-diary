@@ -1,12 +1,9 @@
 import {
   DIARY_MAX_CHARS,
-  SHELF_WINE_NOTE_MAX_CHARS,
-  SHELF_WINE_NOTE_MIN_CHARS,
 } from "@/lib/ai/prompts/constants";
 import { ensureBreathingParagraphs } from "@/lib/ai/quality/ensure-breathing";
 import { stripOralFillers } from "@/lib/ai/quality/strip-fillers";
 import { stripTrailingEllipsis } from "@/lib/ai/quality/strip-trailing-ellipsis";
-import { normalizeShelfWineFields } from "@/lib/night/merge-shelf-wine-note";
 import type { GeneratedDiaryContent } from "@/lib/ai/types";
 
 const AI_CLOSING_PATTERNS = [
@@ -38,9 +35,7 @@ export function postProcessGeneratedContent(
 ): PostProcessResult {
   const adjustments: string[] = [];
   let diary = raw.diary.trim();
-  const rawMasterComment = raw.masterComment.trim();
-  let masterComment = rawMasterComment;
-  let drinkNote = raw.drinkNote?.trim() ?? "";
+  const drinkNote = "";
 
   const stripped = stripOralFillers(diary);
   if (stripped !== diary) {
@@ -50,8 +45,11 @@ export function postProcessGeneratedContent(
 
   for (const pattern of AI_CLOSING_PATTERNS) {
     if (pattern.test(diary)) {
-      diary = diary.replace(pattern, "").trim();
-      adjustments.push("夜の記録末尾の締めを削除しました");
+      const trimmed = diary.replace(pattern, "").trim();
+      if (trimmed) {
+        diary = trimmed;
+        adjustments.push("夜の記録末尾の締めを削除しました");
+      }
       break;
     }
   }
@@ -76,40 +74,20 @@ export function postProcessGeneratedContent(
     adjustments.push("夜の記録末尾の三点リーダーを削除しました");
   }
 
-  masterComment = masterComment
-    .replace(/！/g, "。")
-    .replace(/頑張[^。]*。?/g, "")
-    .replace(/明日[^。]*。?/g, "")
-    .replace(/ですね/g, "")
-    .trim();
-
-  if (masterComment.length > SHELF_WINE_NOTE_MAX_CHARS) {
-    masterComment = trimAtLength(masterComment, SHELF_WINE_NOTE_MAX_CHARS);
-    adjustments.push(`棚の酒メモを${SHELF_WINE_NOTE_MAX_CHARS}字以内に整えました`);
-  }
-
-  if (!masterComment && rawMasterComment) {
-    masterComment = trimAtLength(rawMasterComment, SHELF_WINE_NOTE_MAX_CHARS);
-    adjustments.push("棚の酒メモを空にしないよう復元しました");
-  }
-
-  if (!masterComment && drinkNote) {
-    masterComment = trimAtLength(drinkNote, SHELF_WINE_NOTE_MAX_CHARS);
-    drinkNote = "";
-  }
-
-  const normalized = normalizeShelfWineFields({
-    diary,
-    drinkNote,
-    masterComment,
-  });
-
-  if (normalized.drinkNote === "" && drinkNote) {
-    adjustments.push("酒メモを1ブロックに統合しました");
+  // 短い発話全体を「締め」と誤判定して消さないよう、空にはしない。
+  if (!diary) {
+    diary = raw.diary.trim();
+    if (diary) {
+      adjustments.push("夜の記録が空にならないよう元の文を保持しました");
+    }
   }
 
   return {
-    record: normalized,
+    record: {
+      diary,
+      drinkNote,
+      masterComment: "",
+    },
     adjustments,
   };
 }
@@ -129,7 +107,3 @@ function trimToParagraphLimit(text: string, max: number): string {
   return result.length >= max * 0.5 ? result.trim() : text.slice(0, max).trim();
 }
 
-function trimAtLength(text: string, max: number): string {
-  if (text.length <= max) return text;
-  return text.slice(0, max).replace(/[^。…\n]+$/, "").trim();
-}

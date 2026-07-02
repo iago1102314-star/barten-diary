@@ -7,7 +7,6 @@ export function buildDiaryGenerationUserPrompt(
   const speech = transcript.trim();
 
   return `今夜の棚の酒: ${drinkContext.selectedDrinkName}
-（棚の酒メモは masterComment に1つだけ。drinkNote は空 ""）
 
 あなたは編集者。ライターでも共同執筆者でもない。
 順番を整え、意味を持たないフィラーだけ取り、読みやすくする。話した内容はできるだけ残す。

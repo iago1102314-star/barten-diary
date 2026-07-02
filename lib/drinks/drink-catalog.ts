@@ -1,5 +1,5 @@
 /**
- * 酒カテゴリ・銘柄マスタ（MLP 酒ラインナップ）
+ * 酒カテゴリ・銘柄マスタ（β版 — 4種 + 本日の1杯）
  */
 
 export type DrinkId = string;
@@ -8,7 +8,9 @@ export type DrinkCategoryId = string;
 export type Drink = {
   id: DrinkId;
   name: string;
+  displayNameJa?: string;
   note?: string;
+  masterComments: string[];
 };
 
 export type DrinkCategory = {
@@ -20,26 +22,35 @@ export type DrinkCategory = {
 
 export const MASTER_DELEGATE_CATEGORY_ID = "master" as const;
 
+/** β版で新規生成に使う4銘柄 */
+export const BETA_DRINK_IDS = [
+  "old-fashioned",
+  "koshu",
+  "bellini",
+  "hot-cocoa",
+] as const satisfies readonly DrinkId[];
+
+export type BetaDrinkId = (typeof BETA_DRINK_IDS)[number];
+
 export const DRINK_CATEGORIES: DrinkCategory[] = [
   {
     id: "heavy",
     label: "少し濃いめで",
-    description: "疲れ, 愚痴",
+    description: "疲れ、愚痴",
     drinks: [
       {
         id: "old-fashioned",
         name: "Old Fashioned",
-        note: "クラシック。「静かな苦味」担当。",
-      },
-      {
-        id: "negroni",
-        name: "Negroni",
-        note: "苦くて赤い。かなり夜っぽい。",
-      },
-      {
-        id: "yamazaki-12",
-        name: "Yamazaki 18",
-        note: "日本ウイスキー枠。「ちゃんとした夜」感が強い。",
+        displayNameJa: "オールドファッションド",
+        note: "苦味と甘みがゆっくり重なる、昔から愛されるクラシックな一杯。",
+        masterComments: [
+          "苦味の残る酒ほど、不思議とまた飲みたくなる。",
+          "苦味まで味わうと、少し変わって見える。",
+          "氷が少し溶けるたび、表情も少しずつ変わるもんだ。",
+          "派手さはない。\nでも長く愛される酒には、その理由がある。",
+          "最初より、最後の一口。\nそれが好きな人も多いんだ。",
+          "昔からある酒は、無理に自分を飾らない。",
+        ],
       },
     ],
   },
@@ -50,23 +61,15 @@ export const DRINK_CATEGORIES: DrinkCategory[] = [
     drinks: [
       {
         id: "koshu",
-        name: "甲州ワイン（KOSHU）",
-        note: "静か・繊細・日本の夜と相性がよい本命枠。",
-      },
-      {
-        id: "gin-tonic",
-        name: "Gin Tonic",
-        note: "「考え事」感が強い。",
-      },
-      {
-        id: "chablis",
-        name: "Chablis（シャブリ）",
-        note: "白ワイン枠。知名度と上品さのバランス。",
-      },
-      {
-        id: "espresso",
-        name: "Espresso",
-        note: "酒じゃない夜を拾う。開発夜と相性が強い。",
+        name: "甲州",
+        displayNameJa: "甲州ワイン",
+        note: "穏やかな香りと軽やかな飲み口。静かに考えを整理したい夜に。",
+        masterComments: [
+          "甲州は派手じゃない。\nでも、そういう夜にちょうどいい。",
+          "飲み疲れない酒、っていうのは案外少ない。",
+          "香りは控えめ。\nでもその静かさが好きな人も多い。",
+          "長く付き合える一本。\n案外そういうお酒こそ目立たないもんだ。",
+        ],
       },
     ],
   },
@@ -78,44 +81,33 @@ export const DRINK_CATEGORIES: DrinkCategory[] = [
       {
         id: "bellini",
         name: "Bellini",
-        note: "桃のスパークリング。かなりおしゃれ。",
-      },
-      {
-        id: "moscato-dasti",
-        name: "Moscato d'Asti",
-        note: "軽い幸福感。名前も綺麗。",
-      },
-      {
-        id: "kir-royale",
-        name: "Kir Royale",
-        note: "「余韻」感がかなり強い。",
+        displayNameJa: "ベリーニ",
+        note: "桃のやさしい甘さと泡が広がる、少しだけ華やかなカクテル。",
+        masterComments: [
+          "甘い一杯。\nそういう味こそ、忘れてしまうものだ。",
+          "桃の甘い香りは、夜を少しだけ軽くしてくれる。",
+          "今日は少しだけ、明るい色の一杯だ。",
+          "乾杯にも似合うし、一人で飲んでも悪くない。\nそんな一杯だ。",
+        ],
       },
     ],
   },
   {
     id: "sleepless",
     label: "眠れなくて",
-    description: "孤独, 不安",
+    description: "眠れない、不安、落ち着きたい",
     drinks: [
       {
-        id: "irish-coffee",
-        name: "Irish Coffee",
-        note: "バーテン日記と相性がよい必須級。",
-      },
-      {
-        id: "mulled-wine",
-        name: "Mulled Wine",
-        note: "ホットワイン。冬イベントとも相性がよい。",
-      },
-      {
-        id: "brandy",
-        name: "Brandy",
-        note: "静かな明け方感。",
-      },
-      {
-        id: "laphroaig-10",
-        name: "Laphroaig 10年",
-        note: "癖強担当。「孤独」感がかなり出る。",
+        id: "hot-cocoa",
+        name: "ホットココア",
+        displayNameJa: "ホットココア",
+        note: "甘さと温もりをゆっくり味わう、お酒じゃない夜のための一杯。",
+        masterComments: [
+          "酔うより、温まって帰る夜も悪くない。",
+          "考えすぎた日は、少し体を温めるといい。",
+          "冷えた夜ほど、湯気がきれいに見えるもんだ。",
+          "少しずつ冷めていく。\nその時間まで含めて、この一杯なんだ。",
+        ],
       },
     ],
   },
@@ -123,30 +115,16 @@ export const DRINK_CATEGORIES: DrinkCategory[] = [
     id: MASTER_DELEGATE_CATEGORY_ID,
     label: "本日の1杯",
     description: "マスターおすすめ",
-    drinks: [
-      {
-        id: "guinness",
-        name: "Guinness",
-        note: "黒ビール枠。かなり夜感がある。",
-      },
-      {
-        id: "dassai",
-        name: "獺祭",
-        note: "日本酒枠。かなり強い。",
-      },
-      {
-        id: "yebisu",
-        name: "YEBISU",
-        note: "「ちゃんとしたビール」。",
-      },
-      {
-        id: "talisker-10",
-        name: "Talisker 10年",
-        note: "雨と海感が強い。バーテン日記向き。",
-      },
-    ],
+    drinks: [],
   },
 ];
+
+/** heavy / clear / glow / sleepless の4銘柄（master は含まない） */
+export function getBetaDrinks(): Drink[] {
+  return DRINK_CATEGORIES.filter(
+    (category) => category.id !== MASTER_DELEGATE_CATEGORY_ID,
+  ).flatMap((category) => category.drinks);
+}
 
 export function getDrinkCategoryById(
   id: DrinkCategoryId,
@@ -164,4 +142,21 @@ export function getDrinkById(id: DrinkId): Drink | undefined {
     if (drink) return drink;
   }
   return undefined;
+}
+
+function stableSeedHash(input: string): number {
+  let hash = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    hash = (hash * 31 + input.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+export function pickDrinkMasterComment(
+  drink: Pick<Drink, "id" | "masterComments">,
+  seed: string,
+): string {
+  if (drink.masterComments.length === 0) return "";
+  const index = stableSeedHash(`${drink.id}:${seed}:master-comment`) % drink.masterComments.length;
+  return drink.masterComments[index] ?? "";
 }

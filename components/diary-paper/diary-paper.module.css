@@ -58,6 +58,7 @@
   color: var(--diary-paper-ink);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  display: block;
 }
 
 .paperFullscreen {
@@ -108,6 +109,10 @@
 .paper > *:not(.paperCorners) {
   position: relative;
   z-index: 1;
+}
+
+.paperContent {
+  width: 100%;
 }
 
 .paperCorners {
@@ -269,6 +274,54 @@
 .mainRuledSection {
   box-sizing: border-box;
   width: 100%;
+}
+
+.paperStretchViewport {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 100%;
+}
+
+.paperStretchViewport .paperContent {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.paperStretchViewport .mainRuledSection {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.screenRuledFill {
+  display: none;
+}
+
+.paperStretchViewport .screenRuledFill {
+  display: block;
+  flex: 1 1 auto;
+  min-height: calc(var(--diary-line-stride) * 2);
+}
+
+:global([data-diary-exporting="true"]) .paperStretchViewport,
+:global([data-diary-exporting="true"]) .paperFullscreen {
+  min-height: auto !important;
+  height: auto !important;
+  flex: none !important;
+}
+
+:global([data-diary-exporting="true"]) .paperStretchViewport .paperContent,
+:global([data-diary-exporting="true"]) .paperStretchViewport .mainRuledSection {
+  flex: none !important;
+  min-height: auto !important;
+}
+
+:global([data-diary-exporting="true"]) .screenRuledFill {
+  display: none !important;
 }
 
 .drinkBlockZone {

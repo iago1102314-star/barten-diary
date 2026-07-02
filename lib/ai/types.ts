@@ -1,10 +1,11 @@
 export type GeneratedDiaryContent = {
   diary: string;
   drinkNote: string;
-  masterComment: string;
+  masterComment?: string;
 };
 
-export type GeneratedDiary = GeneratedDiaryContent & {
+export type GeneratedDiary = Omit<GeneratedDiaryContent, "masterComment"> & {
+  masterComment: string;
   bottleTag: string;
 };
 
