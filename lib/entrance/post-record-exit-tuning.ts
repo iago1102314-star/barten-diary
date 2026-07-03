@@ -20,5 +20,5 @@ export const POST_RECORD_EXIT_TUNING = {
   afterDoorHoldMs: 420,
   /** 退店後 outside のフェードイン */
   outsideFadeInMs: 2800,
-  masterThanksLines: ["話してくれてありがとう。", "気をつけて帰れよ"],
+  masterThanksLines: ["話してくれてありがとう。", "気をつけて帰れよ。"],
 } as const;

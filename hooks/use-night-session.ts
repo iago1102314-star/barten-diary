@@ -65,7 +65,12 @@ export type DevSkipToPostRecordResult =
   | { ok: true; drink: Drink; usedFallback: boolean }
   | { ok: false; error: string };
 
-export function useNightSession() {
+type UseNightSessionOptions = {
+  /** 最大録音時間到達 — MediaRecorder.stop() の直前 */
+  onMaxDurationReached?: () => void;
+};
+
+export function useNightSession(options: UseNightSessionOptions = {}) {
   const router = useRouter();
   const [phase, setPhase] = useState<NightPhase>("idle");
   const phaseRef = useRef(phase);
@@ -109,10 +114,15 @@ export function useNightSession() {
   const registerListenFailureRef = useRef<
     (options?: { advanceCount?: boolean; reason?: string }) => void
   >(() => {});
+  const onMaxDurationReachedRef = useRef(options.onMaxDurationReached);
+  onMaxDurationReachedRef.current = options.onMaxDurationReached;
 
   const recorder = useRecorder({
     onRecordingStarted: () => {
       barAudioEngine.pauseJazzForRecording();
+    },
+    onMaxDurationReached: () => {
+      onMaxDurationReachedRef.current?.();
     },
     onFatalError: ({ hadRecordingAttempt, message }) => {
       if (

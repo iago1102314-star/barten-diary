@@ -61,6 +61,8 @@ type UseRecorderOptions = {
   }) => void;
   /** MediaRecorder.start() と同一ターンで呼ぶ — BGM 停止等 */
   onRecordingStarted?: () => void;
+  /** 最大録音時間に達した直前 — stop() の前に呼ぶ */
+  onMaxDurationReached?: () => void;
 };
 
 export function useRecorder(options: UseRecorderOptions = {}) {
@@ -68,6 +70,8 @@ export function useRecorder(options: UseRecorderOptions = {}) {
   onFatalErrorRef.current = options.onFatalError;
   const onRecordingStartedRef = useRef(options.onRecordingStarted);
   onRecordingStartedRef.current = options.onRecordingStarted;
+  const onMaxDurationReachedRef = useRef(options.onMaxDurationReached);
+  onMaxDurationReachedRef.current = options.onMaxDurationReached;
   const sessionGenerationRef = useRef(0);
 
   const notifyFatalError = useCallback(
@@ -158,6 +162,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
           // resume failure is handled by stop attempt below
         }
       }
+      onMaxDurationReachedRef.current?.();
       stopRecordingRef.current();
     }, remainingMaxDurationMsRef.current);
   }, [clearMaxDurationTimer]);

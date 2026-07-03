@@ -1,0 +1,31 @@
+.toast {
+  position: fixed;
+  left: var(--ebt-left, 50%);
+  bottom: calc(
+    max(var(--ebt-bottom-min, 1.15rem), env(safe-area-inset-bottom, 0px)) +
+      var(--ebt-bottom-extra, 0.55rem)
+  );
+  z-index: var(--ebt-z, 2147483001);
+  box-sizing: border-box;
+  width: var(--ebt-width, auto);
+  min-width: var(--ebt-min-width, 0);
+  height: auto;
+  max-width: min(
+    var(--ebt-max-width, 17.5rem),
+    calc(100% - var(--ebt-viewport-inset, 2rem))
+  );
+  transform: translateX(var(--ebt-translate-x, -50%));
+  padding: var(--ebt-padding-y, 0.48rem) var(--ebt-padding-x, 0.9rem);
+  border-radius: var(--ebt-radius, 999px);
+  font-family: var(--font-serif-jp), serif;
+  font-size: var(--ebt-font-size, 0.7rem);
+  font-weight: var(--ebt-font-weight, 400);
+  line-height: var(--ebt-line-height, 1.55);
+  letter-spacing: var(--ebt-tracking, 0.06em);
+  text-align: center;
+  color: var(--ebt-text-color, rgba(236, 228, 210, 0.96));
+  background: var(--ebt-bg, rgba(34, 28, 22, 0.94));
+  box-shadow: var(--ebt-shadow, 0 6px 20px rgba(0, 0, 0, 0.32));
+  pointer-events: none;
+  white-space: var(--ebt-white-space, normal);
+}

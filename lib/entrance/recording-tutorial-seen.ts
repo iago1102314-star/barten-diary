@@ -2,7 +2,7 @@
  * 調整用 — true の間は毎回チュートリアルを表示する。
  * 本番仕様（初回のみ）に戻すときは false にする。
  */
-export const RECORDING_TUTORIAL_ALWAYS_SHOW = true;
+export const RECORDING_TUTORIAL_ALWAYS_SHOW = false;
 
 const STORAGE_KEY = "bartenderDiary.recordingTutorialSeen";
 

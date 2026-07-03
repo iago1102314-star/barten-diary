@@ -11,7 +11,7 @@ import {
   PAST_BOTTLE_LINK_TUNING,
 } from "@/lib/entrance/past-bottle-link-tuning";
 import { motion } from "motion/react";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type PastBottleLinkProps = {
   onClick: () => void;
@@ -52,7 +52,6 @@ export function PastBottleLink({
     ease: hover.ease,
   };
   const iconDisplayPx = icon.sizePx * icon.displayScale;
-  // 封蝋・装飾線・文字の各遅延に entranceDelaySec を加算
   const iconEntranceDelay = entranceDelaySec;
   const textEntranceDelay =
     entranceDelaySec + t(entrance.divider.delaySec) + t(entrance.text.delayAfterDividerSec);
@@ -65,6 +64,9 @@ export function PastBottleLink({
   const textBrightenPeakAt =
     t(entrance.text.durationSec + entrance.text.brightenDurationSec * 0.45) /
     textEntranceTotalSec;
+  const hitWidthPx =
+    iconDisplayPx + icon.gapPx + hit.paddingXpx * 2;
+  const hitHeightPadPx = hit.paddingYpx * 2;
 
   useEffect(() => {
     if (!playEntrance) {
@@ -93,11 +95,6 @@ export function PastBottleLink({
     [],
   );
 
-  const handleIconPointerDown = () => {
-    if (!interactive) return;
-    setIsHovered(true);
-  };
-
   const handleActivate = () => {
     if (!interactive || navigatingRef.current) return;
 
@@ -111,21 +108,6 @@ export function PastBottleLink({
       onClick();
     }, navigate.delaySec * 1000);
   };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
-    if (!interactive) return;
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      handleActivate();
-    }
-  };
-
-  const hitProps = interactive
-    ? {
-        onClick: handleActivate,
-        onMouseEnter: () => setIsHovered(true),
-      }
-    : undefined;
 
   return (
     <div
@@ -152,7 +134,7 @@ export function PastBottleLink({
         style={{ gap: icon.gapPx }}
       >
         <span
-          className="relative shrink-0"
+          className="pointer-events-none relative shrink-0"
           style={{
             width: iconDisplayPx,
             height: iconDisplayPx,
@@ -162,7 +144,7 @@ export function PastBottleLink({
           aria-hidden
         >
           <motion.span
-            className="pointer-events-none absolute inset-0 block"
+            className="absolute inset-0 block"
             initial={
               playEntrance
                 ? {
@@ -232,86 +214,86 @@ export function PastBottleLink({
               />
             </motion.span>
           </motion.span>
-
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-hidden
-            disabled={disabled}
-            className="absolute border-0 bg-transparent p-0 select-none disabled:cursor-not-allowed"
-            style={{
-              width: hit.icon.widthPx,
-              height: hit.icon.heightPx,
-              left: hit.icon.offsetXpx,
-              top: hit.icon.offsetYpx,
-            }}
-            {...hitProps}
-            onPointerDown={handleIconPointerDown}
-          />
         </span>
 
         <span
           className="flex min-w-0 flex-col items-stretch"
           style={{ zIndex: 0 }}
         >
-          <motion.button
-            type="button"
-            aria-disabled={locked}
-            tabIndex={locked ? -1 : 0}
-            aria-label="過去のボトルから"
-            onKeyDown={handleKeyDown}
-            onFocus={() => interactive && setIsHovered(true)}
-            onBlur={() => setIsHovered(false)}
-            className="mx-0 block border-0 bg-transparent p-0 font-serif-jp select-none whitespace-nowrap outline-none [-webkit-tap-highlight-color:transparent]"
-            style={{
-              ...moodLinkTextStyle(text),
-              padding: `${hit.text.paddingYpx}px 0`,
-            }}
-            initial={
-              playEntrance
-                ? {
-                    opacity: 0,
-                    x: text.labelOffsetXpx,
-                    y: entrance.text.initialTranslateYPx,
-                    filter: `blur(${entrance.text.initialBlurPx}px) brightness(1)`,
-                  }
-                : undefined
-            }
-            animate={
-              playEntrance
-                ? {
-                    opacity: [0, 1, 1, 1],
-                    x: text.labelOffsetXpx,
-                    y: [entrance.text.initialTranslateYPx, 0, 0, 0],
-                    filter: [
-                      `blur(${entrance.text.initialBlurPx}px) brightness(1)`,
-                      "blur(0px) brightness(1)",
-                      `blur(0px) brightness(${entrance.text.brightenPeak})`,
-                      "blur(0px) brightness(1)",
-                    ],
-                  }
-                : {
-                    opacity: 1,
-                    x: text.labelOffsetXpx,
-                    y: 0,
-                    filter: "blur(0px) brightness(1)",
-                  }
-            }
-            transition={
-              playEntrance
-                ? {
-                    duration: textEntranceTotalSec,
-                    delay: textEntranceDelay,
-                    ease: entrance.text.ease,
-                    times: [0, textBrightenAt, textBrightenPeakAt, 1],
-                  }
-                : { duration: 0 }
-            }
-            {...hitProps}
-          >
-            過去のボトルから
-          </motion.button>
+          <div className="relative">
+            {interactive ? (
+              <button
+                type="button"
+                aria-label="過去のボトルから"
+                onClick={handleActivate}
+                onMouseEnter={() => setIsHovered(true)}
+                onFocus={() => setIsHovered(true)}
+                onBlur={() => setIsHovered(false)}
+                onPointerDown={() => setIsHovered(true)}
+                className="absolute z-10 border-0 bg-transparent p-0 select-none outline-none [-webkit-tap-highlight-color:transparent]"
+                style={{
+                  left: -(iconDisplayPx + icon.gapPx + hit.paddingXpx),
+                  top: -hit.paddingYpx,
+                  width: `calc(100% + ${hitWidthPx}px)`,
+                  height: `calc(100% + ${hitHeightPadPx}px)`,
+                  cursor: "pointer",
+                }}
+              />
+            ) : null}
+
+            <motion.span
+              className="pointer-events-none mx-0 block select-none whitespace-nowrap"
+              style={{
+                ...moodLinkTextStyle(text),
+                padding: `${hit.paddingYpx}px 0`,
+              }}
+              initial={
+                playEntrance
+                  ? {
+                      opacity: 0,
+                      x: text.labelOffsetXpx,
+                      y: entrance.text.initialTranslateYPx,
+                      filter: `blur(${entrance.text.initialBlurPx}px) brightness(1)`,
+                    }
+                  : undefined
+              }
+              animate={
+                playEntrance
+                  ? {
+                      opacity: [0, 1, 1, 1],
+                      x: text.labelOffsetXpx,
+                      y: [entrance.text.initialTranslateYPx, 0, 0, 0],
+                      filter: [
+                        `blur(${entrance.text.initialBlurPx}px) brightness(1)`,
+                        "blur(0px) brightness(1)",
+                        `blur(0px) brightness(${entrance.text.brightenPeak})`,
+                        "blur(0px) brightness(1)",
+                      ],
+                    }
+                  : {
+                      opacity: 1,
+                      x: text.labelOffsetXpx,
+                      y: 0,
+                      filter: "blur(0px) brightness(1)",
+                    }
+              }
+              transition={
+                playEntrance
+                  ? {
+                      duration: textEntranceTotalSec,
+                      delay: textEntranceDelay,
+                      ease: entrance.text.ease,
+                      times: [0, textBrightenAt, textBrightenPeakAt, 1],
+                    }
+                  : { duration: 0 }
+              }
+            >
+              過去のボトルから
+            </motion.span>
+          </div>
+
           <div
+            className="pointer-events-none"
             style={{
               marginTop: divider.marginTopPx,
               transform: `translate(${divider.offsetXpx}px, ${divider.offsetYpx}px)`,

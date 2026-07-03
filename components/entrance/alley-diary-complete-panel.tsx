@@ -143,7 +143,7 @@ export function AlleyDiaryCompletePanel({
           delay: T.messageDelaySec,
         }}
       >
-        今夜を記録に残しました
+        今夜を記録に残しました。
       </motion.p>
 
       <motion.div

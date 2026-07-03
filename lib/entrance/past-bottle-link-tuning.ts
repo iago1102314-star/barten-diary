@@ -14,9 +14,9 @@ export const PAST_BOTTLE_LINK_TUNING = {
     color: "#B78A5A",
     /** リンク全体（アイコン＋文字）の位置調整（px） */
     offsetXpx: -76,
-    offsetYpx: -40,
+    offsetYpx: -35,
     /** 「過去のボトルから」文字のみ — アイコン・装飾線は動かさない */
-    labelOffsetXpx: 50,
+    labelOffsetXpx: 64,
     /** 感情選択ラベルよりやや細め */
     fontWeight: 480,
   },
@@ -60,19 +60,12 @@ export const PAST_BOTTLE_LINK_TUNING = {
   },
 
   /**
-   * ホバー・タップ判定 — 見た目より小さく切る。
-   * icon は表示枠 (sizePx × displayScale) 内の座標。
+   * タップ判定 — アイコン＋文字を1ボタンに統合。
+   * padding* — 見た目の周囲に少しだけ余白を足す（負の margin でレイアウトは維持）
    */
   hit: {
-    icon: {
-      widthPx: 50,
-      heightPx: 50,
-      offsetXpx: 25,
-      offsetYpx: 22,
-    },
-    text: {
-      paddingYpx: 1,
-    },
+    paddingXpx: 6,
+    paddingYpx: 8,
   },
 
   /** 文字下の装飾ライン — 色は text.color。線の形状は mood-ornamental-divider-tuning.ts の pastBottle */
@@ -114,6 +107,9 @@ export const PAST_BOTTLE_LINK_TUNING = {
       brightenDurationSec: 0.15,
     },
   },
+
+  /** β版 — タップ時トースト（過去ボトル選択は未開放） */
+  betaUnavailableNoticeText: "この機能は正式版でご利用いただけます。",
 } as const;
 
 /** 過去のボトルから / また今度にする — 共通テキストスタイル */

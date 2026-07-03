@@ -31,6 +31,8 @@ import { PastBottlePanel } from "@/components/entrance/past-bottle-panel";
 import { PastBottleLink } from "@/components/entrance/past-bottle-link";
 import { RecordingPanel } from "@/components/entrance/recording-panel";
 import { RecordingTutorialCard } from "@/components/entrance/recording-tutorial-card";
+import { RecordingLimitNoticeCard } from "@/components/entrance/recording-limit-notice-card";
+import { EntranceBottomToast } from "@/components/entrance/entrance-bottom-toast";
 import { SceneFrame } from "@/components/entrance/scene-frame";
 import { prepareBarAudioOnUserGesture, syncBarAudioUnlockFromClient, useBarAudio } from "@/hooks/use-bar-audio";
 import {
@@ -213,11 +215,23 @@ type EntranceFlowProps = {
 };
 
 export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
-  const session = useNightSession();
   const router = useRouter();
   const audio = useBarAudio();
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [entranceState, setEntranceState] = useState<EntranceState>("entry");
+  const [recordingLimitNoticeActive, setRecordingLimitNoticeActive] =
+    useState(false);
+  const onRecordingMaxDurationRef = useRef<() => void>(() => {});
+
+  const session = useNightSession({
+    onMaxDurationReached: () => onRecordingMaxDurationRef.current(),
+  });
+
+  onRecordingMaxDurationRef.current = () => {
+    setRecordingLimitNoticeActive(true);
+    setEntranceState("postRecordBlackout");
+    session.stopSpeaking();
+  };
   const [pickedDrink, setPickedDrink] = useState<Drink | null>(null);
   const [pastMasterLine, setPastMasterLine] = useState<string | null>(null);
   const [alleyOutcome, setAlleyOutcome] = useState<NightAlleyOutcome | null>(
@@ -251,6 +265,9 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const [showRecordingTutorial, setShowRecordingTutorial] = useState<
     boolean | null
   >(null);
+  const [pastBottleBetaNotice, setPastBottleBetaNotice] = useState<string | null>(
+    null,
+  );
   const moodSelectVisitedRef = useRef(false);
   const moodThinkPlayedRef = useRef(false);
   const moodGrassPlayedRef = useRef(false);
@@ -553,6 +570,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
     session.prepareRetryFromSip();
     retryReturningToSipRef.current = true;
+    setRecordingLimitNoticeActive(false);
 
     audio.stopOutside();
     audio.startJazz(
@@ -563,6 +581,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   }, [alleyOutcome, session, audio]);
 
   const handleRetrySpeaking = useCallback(() => {
+    setRecordingLimitNoticeActive(false);
     session.prepareRetryFromSip();
     retryReturningToSipRef.current = true;
     setEntranceState("postRecordBlackout");
@@ -733,6 +752,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   useEffect(() => {
     if (session.isDevSimulated) return;
     if (entranceState !== "postRecordBlackout") return;
+    if (recordingLimitNoticeActive) return;
     if (session.phase !== "ending" && session.phase !== "revealed") return;
 
     saveExpectedRef.current = true;
@@ -742,11 +762,22 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       BAR_AUDIO_LEVELS.jazz.counter,
       BAR_AUDIO_TIMING.jazzEntryFadeMs,
     );
-  }, [entranceState, session.phase, session.isDevSimulated, audio]);
+  }, [
+    entranceState,
+    session.phase,
+    session.isDevSimulated,
+    audio,
+    recordingLimitNoticeActive,
+  ]);
+
+  const handleRecordingLimitNoticeDismiss = useCallback(() => {
+    setRecordingLimitNoticeActive(false);
+  }, []);
 
   useEffect(() => {
     if (entranceState !== "postRecordBlackout") return;
     if (session.phase !== "recording" || !session.listenFailureVisible) return;
+    setRecordingLimitNoticeActive(false);
     setEntranceState("recording");
   }, [entranceState, session.phase, session.listenFailureVisible]);
 
@@ -1076,10 +1107,13 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     });
   };
 
-  const handlePastBottleOpen = () => {
-    moodSelectVisitedRef.current = true;
-    setEntranceState("pastBottleSelect");
-  };
+  const handlePastBottleOpen = useCallback(() => {
+    setPastBottleBetaNotice(PAST_BOTTLE_LINK_TUNING.betaUnavailableNoticeText);
+  }, []);
+
+  const dismissPastBottleBetaNotice = useCallback(() => {
+    setPastBottleBetaNotice(null);
+  }, []);
 
   const handlePastBottleSelect = (bottle: BottleTagItem) => {
     const resolved = resolveDrinkFromBottleTag(bottle.bottleTag);
@@ -1618,6 +1652,13 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
                 onDismiss={handleRecordingTutorialDismiss}
               />
             ) : null}
+
+            {recordingLimitNoticeActive &&
+            entranceState === "postRecordBlackout" ? (
+              <RecordingLimitNoticeCard
+                onDismiss={handleRecordingLimitNoticeDismiss}
+              />
+            ) : null}
             </div>
 
             {lampGlowHomeEditing && LAMP_GLOW_SHAPE_EDIT_ON_HOME && (
@@ -1835,6 +1876,10 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
           )
         )}
       </motion.div>
+      <EntranceBottomToast
+        text={pastBottleBetaNotice}
+        onDismiss={dismissPastBottleBetaNotice}
+      />
     </AnimatePresence>
   );
 }
