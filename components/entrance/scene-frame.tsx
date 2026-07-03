@@ -6,6 +6,8 @@ type SceneFrameProps = {
   className?: string;
   /** ヴィネット・グレイン等の空気感レイヤーを重ねる（既定: true） */
   atmosphere?: boolean;
+  /** false で grain のみ停止（vignette は atmosphere に従う） */
+  grain?: boolean;
   onPointerDown?: React.ComponentProps<"div">["onPointerDown"];
 };
 
@@ -16,10 +18,16 @@ export function SceneFrame({
   children,
   className = "",
   atmosphere = true,
+  grain,
   onPointerDown,
 }: SceneFrameProps) {
-  const atmosphereLayers =
-    atmosphere && isPerfGrainEnabled() ? "grain vignette" : atmosphere ? "vignette" : "";
+  const grainOn = grain !== false && atmosphere && isPerfGrainEnabled();
+  const atmosphereLayers = [
+    grainOn ? "grain" : "",
+    atmosphere ? "vignette" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div

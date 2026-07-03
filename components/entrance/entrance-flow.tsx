@@ -1493,9 +1493,10 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     entranceState === "decliningNight" || entranceState === "unheldNight";
 
   const showRecordCounterScene =
-    entranceState === "drinkServed" ||
-    entranceState === "recording" ||
-    entranceState === "postRecordBlackout";
+    entranceState === "drinkServed" || entranceState === "recording";
+
+  const suppressSceneGrain =
+    entranceState === "recording" || entranceState === "postRecordBlackout";
 
   const drinkRevealTimelineOrigin =
     drinkIntroFromGrass && !drinkRevealSkipped ? "reveal-start" : "reveal-complete";
@@ -1549,7 +1550,10 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
   const moodExitCloseSec = MOOD_SELECT_EXIT_SCALED.vignetteCloseDurationSec;
 
-  const showLegacyCounterScene = showCounter && !showRecordCounterScene;
+  const showLegacyCounterScene =
+    showCounter &&
+    !showRecordCounterScene &&
+    entranceState !== "postRecordBlackout";
 
   return (
     <AnimatePresence mode="wait">
@@ -1560,7 +1564,10 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
               {null}
             </SceneFrame>
           ) : (
-          <SceneFrame atmosphere={!reduceCounterGpuLoad && !lampGlowHomeEditing}>
+          <SceneFrame
+            atmosphere={!reduceCounterGpuLoad && !lampGlowHomeEditing}
+            grain={suppressSceneGrain ? false : undefined}
+          >
             <div
               className="absolute inset-0"
               style={{
@@ -1599,7 +1606,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
             {showRecordDrinkTitle && pickedDrink && (
               <DrinkNameReveal
                 drink={pickedDrink}
-                exiting={entranceState === "postRecordBlackout"}
                 timelineOrigin={drinkRevealTimelineOrigin}
                 skipped={drinkRevealSkipped}
               />
