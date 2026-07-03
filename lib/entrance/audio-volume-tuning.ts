@@ -11,6 +11,12 @@ import { ENTRANCE_SOUNDS } from "@/lib/entrance/asset-paths";
  * 実機で即試す: 開発パネル (?audioTune=1) かコンソール
  *   window.__bartenAudioVol.set({ bgm: { jazzCounter: 0.008 } })
  *   window.__bartenAudioVol.apply()
+ *
+ * パネルで決まったら:
+ *   1. 「適用」→「コピー」で mix 値を取得
+ *   2. このファイルの AUDIO_VOLUME_TUNING.*.mix を書き換え
+ *   3. パネルで「リセット」（localStorage オーバーライドを消す）
+ *   4. dev にコミット
  */
 export const AUDIO_VOLUME_TUNING = {
   bgm: {
@@ -24,9 +30,9 @@ export const AUDIO_VOLUME_TUNING = {
       mix: 0.15,
       asset: ENTRANCE_SOUNDS.outside,
     },
-    /** カウンター店内 — ジャズ（jazz.mp3 ループ）※ 0.018（1.8%）であり 0.18 ではない */
+    /** カウンター店内 — ジャズ（jazz.mp3 ループ） */
     jazzCounter: {
-      mix: 0.0,
+      mix: 0.042,
       asset: ENTRANCE_SOUNDS.jazz,
       /**
        * 店内ジャズの呼吸・ループ継ぎ目（体感の明滅に影響）
@@ -45,7 +51,7 @@ export const AUDIO_VOLUME_TUNING = {
   se: {
     /** 扉を開ける — 入店・退店（door.mp4） */
     door: {
-      mix: 0.15,
+      mix: 0.14,
       peakDbfs: 0,
       asset: ENTRANCE_SOUNDS.door,
       sceneScale: {
@@ -55,7 +61,7 @@ export const AUDIO_VOLUME_TUNING = {
     },
     /** グラスをカウンター手前へスライド（grass.mp4） */
     glassSlide: {
-      mix: 0.48,
+      mix: 0.53,
       peakDbfs: -0.2,
       asset: ENTRANCE_SOUNDS.glassSlide,
     },
@@ -67,7 +73,7 @@ export const AUDIO_VOLUME_TUNING = {
     },
     /** 吹き出し・UI タップ全般（click.mp4）— メニュー項目タップ等 */
     click: {
-      mix: 0.3,
+      mix: 0.18,
       peakDbfs: -5.9,
       asset: ENTRANCE_SOUNDS.click,
     },
@@ -154,6 +160,126 @@ export function getSeMix(kind: BarSfxKind): number {
   return AUDIO_VOLUME_TUNING.se[kind].mix;
 }
 
+/** スライダー下書き or localStorage を含めた mix（保存前のプレビュー用） */
+export function resolveBgmMix(
+  key: BgmMixKey,
+  draft?: AudioVolumeOverrides,
+): number {
+  const fromDraft = draft?.bgm?.[key];
+  if (typeof fromDraft === "number" && Number.isFinite(fromDraft)) {
+    return clampMix(fromDraft);
+  }
+  return getBgmMix(key);
+}
+
+export function resolveSeMix(
+  kind: BarSfxKind,
+  draft?: AudioVolumeOverrides,
+): number {
+  const fromDraft = draft?.se?.[kind];
+  if (typeof fromDraft === "number" && Number.isFinite(fromDraft)) {
+    return clampMix(fromDraft);
+  }
+  return getSeMix(kind);
+}
+
+const ALL_BGM_MIX_KEYS = [
+  "outsideAlley",
+  "outsideLeaving",
+  "jazzCounter",
+] as const satisfies readonly BgmMixKey[];
+
+const ALL_SE_MIX_KEYS = [
+  "door",
+  "glassSlide",
+  "send",
+  "click",
+  "menuOpen",
+  "menuClick",
+  "page",
+  "think",
+] as const satisfies readonly BarSfxKind[];
+
+/** パネル／コンソール向け — 現在の mix 一覧 */
+export function getEffectiveMixSnapshot(draft?: AudioVolumeOverrides) {
+  const bgm = Object.fromEntries(
+    ALL_BGM_MIX_KEYS.map((key) => [key, resolveBgmMix(key, draft)]),
+  ) as Record<BgmMixKey, number>;
+  const se = Object.fromEntries(
+    ALL_SE_MIX_KEYS.map((key) => [key, resolveSeMix(key, draft)]),
+  ) as Record<BarSfxKind, number>;
+  return { bgm, se };
+}
+
+function formatMixNumber(value: number): string {
+  const rounded = Math.round(value * 10000) / 10000;
+  return String(rounded);
+}
+
+/**
+ * audio-volume-tuning.ts へ貼る用の mix 一覧。
+ * パネルで「コピー」した値を各 mix: に反映する。
+ */
+export function formatAudioVolumeTuningSnippet(
+  draft?: AudioVolumeOverrides,
+): string {
+  const { bgm, se } = getEffectiveMixSnapshot(draft);
+  const lines = [
+    "lib/entrance/audio-volume-tuning.ts の mix を以下に更新:",
+    "",
+    "// BGM",
+    `outsideAlley.mix: ${formatMixNumber(bgm.outsideAlley)},`,
+    `outsideLeaving.mix: ${formatMixNumber(bgm.outsideLeaving)},`,
+    `jazzCounter.mix: ${formatMixNumber(bgm.jazzCounter)},`,
+    "",
+    "// SE",
+    `door.mix: ${formatMixNumber(se.door)},`,
+    `glassSlide.mix: ${formatMixNumber(se.glassSlide)},`,
+    `send.mix: ${formatMixNumber(se.send)},`,
+    `click.mix: ${formatMixNumber(se.click)},`,
+    `menuOpen.mix: ${formatMixNumber(se.menuOpen)},`,
+    `menuClick.mix: ${formatMixNumber(se.menuClick)},`,
+    `page.mix: ${formatMixNumber(se.page)},`,
+    `think.mix: ${formatMixNumber(se.think)},`,
+    "",
+    "反映後: パネル「リセット」→ localStorage オーバーライド削除 → dev コミット",
+  ];
+  return lines.join("\n");
+}
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // fall through
+    }
+  }
+
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/** パネル／コンソール — 貼り付け用スニペットをクリップボードへ */
+export async function copyAudioVolumeTuningSnippet(
+  draft?: AudioVolumeOverrides,
+): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  return copyTextToClipboard(formatAudioVolumeTuningSnippet(draft));
+}
+
 /** bar-audio-engine 向け — 実行時にオーバーライドを反映 */
 export function readBarAudioLevels() {
   return {
@@ -233,11 +359,15 @@ type AudioVolumeDevApi = {
     tuning: typeof AUDIO_VOLUME_TUNING;
     overrides: AudioVolumeOverrides;
     effective: ReturnType<typeof readBarAudioLevels>;
+    snapshot: ReturnType<typeof getEffectiveMixSnapshot>;
+    snippet: string;
   };
   set: (patch: AudioVolumeOverrides) => void;
   clear: () => void;
   apply: () => void;
   log: () => void;
+  snippet: () => string;
+  copy: () => Promise<boolean>;
 };
 
 /** 開発コンソール — window.__bartenAudioVol */
@@ -250,6 +380,8 @@ export function installAudioVolumeDevApi(applyTuning: () => void): void {
         tuning: AUDIO_VOLUME_TUNING,
         overrides: readAudioVolumeOverrides(),
         effective: readBarAudioLevels(),
+        snapshot: getEffectiveMixSnapshot(),
+        snippet: formatAudioVolumeTuningSnippet(),
       };
     },
     set(patch) {
@@ -266,7 +398,14 @@ export function installAudioVolumeDevApi(applyTuning: () => void): void {
       applyTuning();
     },
     log() {
-      console.table(api.get().effective);
+      console.table(api.get().snapshot);
+      console.log(api.snippet());
+    },
+    snippet() {
+      return formatAudioVolumeTuningSnippet();
+    },
+    copy() {
+      return copyAudioVolumeTuningSnippet();
     },
   };
 
