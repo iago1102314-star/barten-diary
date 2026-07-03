@@ -22,6 +22,7 @@ type FeedbackInsertRow = {
   user_agent: string;
   app_version: string;
   platform: FeedbackPlatform;
+  is_admin: boolean;
 };
 
 function buildFeedbackInsertRow(
@@ -43,6 +44,7 @@ function buildFeedbackInsertRow(
     user_agent: userAgent,
     app_version: APP_VERSION,
     platform: input.platform,
+    is_admin: input.isAdmin === true,
   };
 }
 

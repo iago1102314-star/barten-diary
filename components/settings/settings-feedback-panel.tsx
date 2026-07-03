@@ -2,6 +2,7 @@
 
 import styles from "@/components/settings/app-settings-menu.module.css";
 import { submitFeedback } from "@/app/feedback/actions";
+import { resolveIsAdmin } from "@/lib/analytics/behavior-log";
 import {
   FEEDBACK_BODY_MAX,
   FEEDBACK_CATEGORY_LABELS,
@@ -73,6 +74,7 @@ export function SettingsFeedbackPanel({ onSuccess }: SettingsFeedbackPanelProps)
     playMenuTapSound();
 
     try {
+      const isAdmin = await resolveIsAdmin();
       const result = await submitFeedback({
         type,
         rating: type === "review" ? rating : null,
@@ -80,6 +82,7 @@ export function SettingsFeedbackPanel({ onSuccess }: SettingsFeedbackPanelProps)
         pagePath: window.location.pathname,
         userAgent: navigator.userAgent,
         platform: detectAppPlatform(),
+        isAdmin,
       });
 
       if (result.success) {

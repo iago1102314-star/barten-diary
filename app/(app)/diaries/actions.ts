@@ -63,6 +63,7 @@ export type SaveAiDiaryInput = {
   continuedFromDiaryId?: string | null;
   continuedFromBottleTag?: string | null;
   createdAt?: string;
+  isAdmin?: boolean;
 };
 
 export type SaveAiDiaryResult = {
@@ -118,6 +119,7 @@ export async function saveAiDiary(
     drink_note: drinkNote || null,
     master_comment: masterForDb,
     transcript,
+    is_admin: input.isAdmin === true,
     ...(isValidCreatedAt(input.createdAt)
       ? { created_at: input.createdAt }
       : {}),

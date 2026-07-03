@@ -1,6 +1,7 @@
 "use client";
 
 import { saveAiDiary } from "@/app/(app)/diaries/actions";
+import { resolveIsAdmin } from "@/lib/analytics/behavior-log";
 import { isSaveAiDiaryNeedsLogin } from "@/lib/auth/save-ai-diary-auth";
 import type { NightSavePayload } from "@/lib/night/night-pipeline-types";
 import {
@@ -20,7 +21,8 @@ export async function runNightSave(
   const startedAt = performance.now();
 
   try {
-    const result = await saveAiDiary(payload);
+    const isAdmin = await resolveIsAdmin();
+    const result = await saveAiDiary({ ...payload, isAdmin });
     const saveMs = Math.round(performance.now() - startedAt);
 
     if (result.needsLogin || isSaveAiDiaryNeedsLogin(result.error)) {

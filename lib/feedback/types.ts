@@ -31,6 +31,7 @@ export type SubmitFeedbackInput = {
   pagePath: string;
   userAgent: string;
   platform: FeedbackPlatform;
+  isAdmin?: boolean;
 };
 
 export type SubmitFeedbackResult = {

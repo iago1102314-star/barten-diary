@@ -149,7 +149,7 @@ async function resolveRegisteredAdminUser(
   }
 }
 
-async function resolveIsAdmin(): Promise<boolean> {
+export async function resolveIsAdmin(): Promise<boolean> {
   if (isStoredBehaviorAdminFlag()) {
     return true;
   }

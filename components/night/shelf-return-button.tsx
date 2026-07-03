@@ -1,6 +1,7 @@
 "use client";
 
 import { saveAiDiary } from "@/app/(app)/diaries/actions";
+import { resolveIsAdmin } from "@/lib/analytics/behavior-log";
 import { isSaveAiDiaryNeedsLogin } from "@/lib/auth/save-ai-diary-auth";
 import type { GeneratedDiary } from "@/lib/ai/types";
 import { useRouter } from "next/navigation";
@@ -34,7 +35,8 @@ export function ShelfReturnButton({
     setMessage(null);
 
     startTransition(async () => {
-      const result = await saveAiDiary(payload);
+      const isAdmin = await resolveIsAdmin();
+      const result = await saveAiDiary({ ...payload, isAdmin });
 
       if (result.needsLogin || isSaveAiDiaryNeedsLogin(result.error)) {
         setMessage("記録を残すにはログインが必要です。");

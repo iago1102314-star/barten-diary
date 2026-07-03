@@ -1,6 +1,7 @@
 "use client";
 
 import { saveAiDiary } from "@/app/(app)/diaries/actions";
+import { resolveIsAdmin } from "@/lib/analytics/behavior-log";
 import { isSaveAiDiaryNeedsLogin } from "@/lib/auth/save-ai-diary-auth";
 import type { GeneratedDiary } from "@/lib/ai/types";
 import { useRouter } from "next/navigation";
@@ -31,12 +32,14 @@ export function SaveAiDiaryButton({
     setMessage(null);
 
     startTransition(async () => {
+      const isAdmin = await resolveIsAdmin();
       const result = await saveAiDiary({
         bottleTag: diary.bottleTag,
         diary: diary.diary,
         drinkNote: diary.drinkNote,
         masterComment: diary.masterComment,
         transcript,
+        isAdmin,
       });
 
       if (result.needsLogin || isSaveAiDiaryNeedsLogin(result.error)) {
