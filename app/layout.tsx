@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import {
   shipporiMincho,
   zenOldMinchoBold,
@@ -84,6 +85,7 @@ export default function RootLayout({
         <LayoutShell serverAppShellEnabled={serverAppShellEnabled}>
           {children}
         </LayoutShell>
+        <Analytics />
         <BisectFeatureFlagPanel />
       </body>
     </html>
