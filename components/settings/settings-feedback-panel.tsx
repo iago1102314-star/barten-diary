@@ -9,6 +9,7 @@ import {
   FEEDBACK_TYPES,
   type FeedbackType,
 } from "@/lib/feedback/types";
+import { logBehaviorEvent } from "@/lib/analytics/behavior-log";
 import { detectAppPlatform } from "@/lib/app-platform";
 import { validateFeedbackInput } from "@/lib/feedback/validate-feedback";
 import { playMenuTapSound } from "@/lib/settings/play-menu-sound";
@@ -82,6 +83,7 @@ export function SettingsFeedbackPanel({ onSuccess }: SettingsFeedbackPanelProps)
       });
 
       if (result.success) {
+        void logBehaviorEvent("feedback_submit", { type });
         onSuccess();
         return;
       }

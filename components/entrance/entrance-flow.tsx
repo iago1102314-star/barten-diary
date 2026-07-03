@@ -102,6 +102,7 @@ import type { LoadingGateSnapshot } from "@/lib/entrance/loading-gate-init";
 import {
   markReturningVisitor,
 } from "@/lib/entrance/visit-state";
+import { logBehaviorEvent } from "@/lib/analytics/behavior-log";
 import {
   hasSeenRecordingTutorial,
   markRecordingTutorialSeen,
@@ -409,6 +410,14 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         : BAR_AUDIO_TIMING.entryOutsideFadeMs,
     );
   }, [entranceState, entryTransition, skipEntryEntrance, audio, primeBarAudioUnlock]);
+
+  const homeOpenLoggedRef = useRef(false);
+  useEffect(() => {
+    if (entranceState !== "entry" || entryTransition !== "idle") return;
+    if (homeOpenLoggedRef.current) return;
+    homeOpenLoggedRef.current = true;
+    void logBehaviorEvent("home_open");
+  }, [entranceState, entryTransition]);
 
   const handleBackgroundTapForOutside = useCallback(() => {
     startEntryOutsideAmbience();
@@ -1107,6 +1116,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const beginCounterReveal = useCallback(async () => {
     await waitForSceneRevealPreload(counterEntryPreloadRef.current);
     setEntranceState("counterReveal");
+    void logBehaviorEvent("counter_enter");
   }, []);
 
   const handleMasterGreetingComplete = () => {
@@ -1153,6 +1163,10 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleMoodSelect = (categoryId: DrinkCategoryId, drink: Drink) => {
+    void logBehaviorEvent("drink_selected", {
+      categoryId,
+      drinkId: drink.id,
+    });
     setMoodAwaitingGrass(false);
     setPastMasterLine(null);
     session.selectCategory(categoryId, drink.id);

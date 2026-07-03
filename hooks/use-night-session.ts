@@ -1,5 +1,6 @@
 "use client";
 
+import { logBehaviorEvent } from "@/lib/analytics/behavior-log";
 import { checkGenerationReadiness } from "@/lib/ai/check-generation-readiness";
 import { useGenerateDiary } from "@/hooks/use-generate-diary";
 import { useRecorder } from "@/hooks/use-recorder";
@@ -314,11 +315,16 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
     if (!started) {
       return false;
     }
+    void logBehaviorEvent("record_start", {
+      categoryId: selectedCategoryId,
+      drinkId: selectedDrinkId,
+    });
     return true;
   }, [
     recorder,
     generation,
     selectedCategoryId,
+    selectedDrinkId,
     resetListenFailure,
     registerListenFailure,
     resetPipelineTimings,
@@ -327,6 +333,10 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
   const stopSpeaking = useCallback(() => {
     if (recorder.status === "recording" || recorder.status === "paused") {
       setRecordedAt(new Date().toISOString());
+      void logBehaviorEvent("record_finish", {
+        categoryId: selectedCategoryId,
+        drinkId: selectedDrinkId,
+      });
       recorder.stop();
       return;
     }
@@ -340,7 +350,7 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
       advanceCount: true,
       reason: "stopSpeaking called while recorder was not active",
     });
-  }, [recorder, registerListenFailure]);
+  }, [recorder, registerListenFailure, selectedCategoryId, selectedDrinkId]);
 
   const retrySpeaking = useCallback(async (): Promise<boolean> => {
     setListenFailureVisible(false);
@@ -457,6 +467,7 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
     }
     setSavedDiaryId(result.diaryId);
     setSaveStatus("saved");
+    void logBehaviorEvent("save_diary", { diaryId: result.diaryId });
     applyPipelineTimings((prev) => {
       const next = {
         ...prev,
@@ -547,6 +558,11 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
       phaseRef.current = "revealed";
       setPhase("revealed");
       pipelineLock.current = false;
+
+      void logBehaviorEvent("generate_success", {
+        categoryId: selectedCategoryId,
+        drinkId: selectedDrinkId,
+      });
 
       logRecordingPipeline("night pipeline: complete", {
         timings: pipelineTimingsRef.current,
@@ -686,6 +702,11 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
 
     phaseRef.current = "revealed";
     setPhase("revealed");
+    void logBehaviorEvent("generate_success", {
+      categoryId: selectedCategoryId,
+      drinkId: selectedDrinkId,
+      retry: true,
+    });
     logRecordingPipeline("night pipeline: retry generation complete", {
       diaryGenerationMs,
     });

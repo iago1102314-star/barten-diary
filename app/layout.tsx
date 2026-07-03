@@ -5,6 +5,7 @@ import {
   shipporiMincho,
   zenOldMinchoBold,
 } from "@/lib/fonts/jp-brand-fonts";
+import { BehaviorLogInit } from "@/components/app/behavior-log-init";
 import { BisectFeatureFlagPanel } from "@/components/app/bisect-feature-flag-panel";
 import { LayoutShell } from "@/components/app/layout-shell";
 import { IosSafariVisualHeightSync } from "@/components/app/ios-safari-visual-height-sync";
@@ -82,6 +83,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-stone-950 text-stone-200">
         <IosSafariVisualHeightSync />
+        <BehaviorLogInit />
         <LayoutShell serverAppShellEnabled={serverAppShellEnabled}>
           {children}
         </LayoutShell>
