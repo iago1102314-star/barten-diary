@@ -1,6 +1,7 @@
 "use client";
 
 import { logBehaviorEvent } from "@/lib/analytics/behavior-log";
+import { buildBehaviorEventMetadata } from "@/lib/analytics/behavior-event-metadata";
 import { checkGenerationReadiness } from "@/lib/ai/check-generation-readiness";
 import { useGenerateDiary } from "@/hooks/use-generate-diary";
 import { useRecorder } from "@/hooks/use-recorder";
@@ -226,6 +227,21 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
     });
   }, []);
 
+  const logGenerateFailed = useCallback(
+    (error: string, retry?: boolean) => {
+      void logBehaviorEvent(
+        "generate_failed",
+        buildBehaviorEventMetadata({
+          categoryId: selectedCategoryId,
+          drinkId: selectedDrinkId,
+          error,
+          retry,
+        }),
+      );
+    },
+    [selectedCategoryId, selectedDrinkId],
+  );
+
   const resetListenFailure = useCallback(() => {
     setListenFailureCount(0);
     setListenFailureVisible(false);
@@ -315,10 +331,13 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
     if (!started) {
       return false;
     }
-    void logBehaviorEvent("record_start", {
-      categoryId: selectedCategoryId,
-      drinkId: selectedDrinkId,
-    });
+    void logBehaviorEvent(
+      "record_start",
+      buildBehaviorEventMetadata({
+        categoryId: selectedCategoryId,
+        drinkId: selectedDrinkId,
+      }),
+    );
     return true;
   }, [
     recorder,
@@ -333,10 +352,15 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
   const stopSpeaking = useCallback(() => {
     if (recorder.status === "recording" || recorder.status === "paused") {
       setRecordedAt(new Date().toISOString());
-      void logBehaviorEvent("record_finish", {
-        categoryId: selectedCategoryId,
-        drinkId: selectedDrinkId,
-      });
+      const durationSec = Math.round(recorder.elapsedMs / 1000);
+      void logBehaviorEvent(
+        "record_finish",
+        buildBehaviorEventMetadata({
+          categoryId: selectedCategoryId,
+          drinkId: selectedDrinkId,
+          duration: durationSec,
+        }),
+      );
       recorder.stop();
       return;
     }
@@ -467,7 +491,14 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
     }
     setSavedDiaryId(result.diaryId);
     setSaveStatus("saved");
-    void logBehaviorEvent("save_diary", { diaryId: result.diaryId });
+    void logBehaviorEvent(
+      "save_diary",
+      buildBehaviorEventMetadata({
+        categoryId: selectedCategoryId,
+        drinkId: selectedDrinkId,
+        diaryId: result.diaryId,
+      }),
+    );
     applyPipelineTimings((prev) => {
       const next = {
         ...prev,
@@ -485,6 +516,8 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
     deferSaveForLogin,
     applyPipelineTimings,
     router,
+    selectedCategoryId,
+    selectedDrinkId,
   ]);
 
   const runBackgroundGeneration = useCallback(
@@ -536,8 +569,10 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
 
       if (!result.ok) {
         if (result.dailyLimitReached) {
+          logGenerateFailed(result.reason);
           registerDailyGenerationLimit();
         } else {
+          logGenerateFailed(result.reason);
           registerPipelineFailure(result.reason, result.phase);
         }
         pipelineLock.current = false;
@@ -559,10 +594,13 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
       setPhase("revealed");
       pipelineLock.current = false;
 
-      void logBehaviorEvent("generate_success", {
-        categoryId: selectedCategoryId,
-        drinkId: selectedDrinkId,
-      });
+      void logBehaviorEvent(
+        "generate_success",
+        buildBehaviorEventMetadata({
+          categoryId: selectedCategoryId,
+          drinkId: selectedDrinkId,
+        }),
+      );
 
       logRecordingPipeline("night pipeline: complete", {
         timings: pipelineTimingsRef.current,
@@ -575,6 +613,7 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
       registerPipelineFailure,
       registerDailyGenerationLimit,
       clearListenFailureUi,
+      logGenerateFailed,
     ],
   );
 
@@ -659,6 +698,7 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
         elapsedMs: readinessMs,
         error: readiness.error,
       });
+      logGenerateFailed(readiness.error, true);
       updateRecordingPipelineDiagnostic({ pipelineError: readiness.error });
       setGenerationFailed(true);
       setPipelineFailurePhase("readiness");
@@ -688,8 +728,10 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
 
     if (!outcome.ok) {
       if (outcome.dailyLimitReached) {
+        logGenerateFailed("daily generation limit reached", true);
         registerDailyGenerationLimit();
       } else {
+        logGenerateFailed(outcome.ambient.lines.join("\n"), true);
         setGenerationFailed(true);
         setPipelineFailurePhase("generation");
         updateRecordingPipelineDiagnostic({
@@ -702,16 +744,19 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
 
     phaseRef.current = "revealed";
     setPhase("revealed");
-    void logBehaviorEvent("generate_success", {
-      categoryId: selectedCategoryId,
-      drinkId: selectedDrinkId,
-      retry: true,
-    });
+    void logBehaviorEvent(
+      "generate_success",
+      buildBehaviorEventMetadata({
+        categoryId: selectedCategoryId,
+        drinkId: selectedDrinkId,
+        retry: true,
+      }),
+    );
     logRecordingPipeline("night pipeline: retry generation complete", {
       diaryGenerationMs,
     });
     return true;
-  }, [transcript, selectedCategoryId, selectedDrinkId, recordedAt, generation, applyPipelineTimings, registerDailyGenerationLimit]);
+  }, [transcript, selectedCategoryId, selectedDrinkId, recordedAt, generation, applyPipelineTimings, registerDailyGenerationLimit, logGenerateFailed]);
 
   const restartRecordingAfterPipelineFailure =
     useCallback(async (): Promise<boolean> => {

@@ -103,6 +103,7 @@ import {
   markReturningVisitor,
 } from "@/lib/entrance/visit-state";
 import { logBehaviorEvent } from "@/lib/analytics/behavior-log";
+import { buildBehaviorEventMetadata } from "@/lib/analytics/behavior-event-metadata";
 import {
   hasSeenRecordingTutorial,
   markRecordingTutorialSeen,
@@ -1163,10 +1164,13 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleMoodSelect = (categoryId: DrinkCategoryId, drink: Drink) => {
-    void logBehaviorEvent("drink_selected", {
-      categoryId,
-      drinkId: drink.id,
-    });
+    void logBehaviorEvent(
+      "drink_selected",
+      buildBehaviorEventMetadata({
+        categoryId,
+        drinkId: drink.id,
+      }),
+    );
     setMoodAwaitingGrass(false);
     setPastMasterLine(null);
     session.selectCategory(categoryId, drink.id);

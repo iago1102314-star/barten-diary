@@ -12,6 +12,7 @@ export const BEHAVIOR_EVENTS = [
   "record_start",
   "record_finish",
   "generate_success",
+  "generate_failed",
   "login_success",
   "save_diary",
   "feedback_submit",
