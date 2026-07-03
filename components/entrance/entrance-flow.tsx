@@ -1284,7 +1284,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         >
           <NightEntryScreen
             onEnterCounter={handleEnterCounter}
-            onEnterCounterPointerDown={primeCounterEntryAudio}
             onOpenMemories={handleOpenMemories}
             onOpenDiaryPaperMock={handleOpenDiaryPaperMock}
             onBackgroundTap={handleBackgroundTapForOutside}

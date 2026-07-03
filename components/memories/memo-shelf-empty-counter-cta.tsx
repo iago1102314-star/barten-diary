@@ -61,10 +61,6 @@ export function MemoShelfEmptyCounterCta({
         <button
           type="button"
           className={styles.emptyShelfLaunchButton}
-          onPointerDown={() => {
-            if (fading || checking) return;
-            prepareCounterEntryAudioOnUserGesture();
-          }}
           onClick={handleLaunch}
           disabled={fading || checking}
         >

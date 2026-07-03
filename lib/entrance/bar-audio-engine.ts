@@ -158,14 +158,13 @@ export function unlockBarAudioForUserGesture(): void {
     prefetchLoopingSource(ENTRANCE_SOUNDS.jazz);
     prefetchLoopingSource(ENTRANCE_SOUNDS.outside);
     beginOutsideAlleyPreload();
+    ensureSfxPool();
+    primeBarAudioUnlockOnFirstGesture();
+    void warmUpBarAudio();
   }
 
-  ensureSfxPool();
-  primeSfxPoolOnUserGesture();
-  void ensureBarAudioContext();
-
-  if (firstUnlock) {
-    void warmUpBarAudio();
+  if (shouldRouteLoopTrackThroughWebAudio()) {
+    void ensureBarAudioContext();
   }
 }
 
@@ -328,6 +327,7 @@ async function ensureTrackWebAudio(
   audio: HTMLAudioElement,
   track: LoopingTrackState,
 ): Promise<GainNode | null> {
+  if (!shouldRouteLoopTrackThroughWebAudio()) return null;
   if (track.webAudio) return track.webAudio.gain;
 
   const ctx = await ensureBarAudioContext();
@@ -619,6 +619,18 @@ let jazzBaseVolume: number = BAR_AUDIO_LEVELS.jazz.counter;
 let outsideBaseVolume: number = BAR_AUDIO_LEVELS.outside.alley;
 let jazzPreparePromise: Promise<void> | null = null;
 let outsidePreparePromise: Promise<void> | null = null;
+/** iOS — 1 要素だけ無音 play 済みなら SE プール全体を触らない */
+let barAudioElementUnlockDone = false;
+
+function isIosAudioSession(): boolean {
+  if (typeof window === "undefined") return false;
+  return /iPhone|iPod|iPad/.test(window.navigator.userAgent);
+}
+
+/** iOS — Web Audio 経路は無音化しやすいため BGM は要素音量を使う */
+function shouldRouteLoopTrackThroughWebAudio(): boolean {
+  return !isIosAudioSession();
+}
 
 function scaleBgmVolume(volume: number): number {
   return clampVolume(volume * getBgmVolumeMultiplier());
@@ -652,8 +664,9 @@ function primeOutsidePlayOnUserGesture() {
   if (!audio) return;
 
   primeLoopAudioSilence(audio, outsideTrack);
-  void ensureBarAudioContext();
-  primeMediaElementPlayOnUserGesture(audio);
+  if (shouldRouteLoopTrackThroughWebAudio()) {
+    void ensureBarAudioContext();
+  }
   void audio.play().catch(() => {});
 }
 
@@ -803,48 +816,44 @@ function ensureSfxPool() {
 }
 
 /**
- * iOS Safari — ユーザー操作の同期コンテキスト内で無音 play→pause し、
- * 後からの SE 再生を許可する（warmUp の decode 待ちだけでは不十分な場合がある）。
+ * iOS Safari — 初回ジェスチャーで click 1 本だけ無音 play→pause（プール全件は重すぎる）。
  */
-function primeMediaElementPlayOnUserGesture(audio: HTMLAudioElement): void {
-  const previousVolume = audio.volume;
-  const previousMuted = audio.muted;
+function primeBarAudioUnlockOnFirstGesture(): void {
+  if (barAudioElementUnlockDone) return;
 
-  audio.volume = 0;
-  audio.muted = true;
+  ensureSfxPool();
+  const unlockSlot = sfxPool.get(ENTRANCE_SOUNDS.click)?.[0];
+  if (!unlockSlot) return;
+
+  const previousVolume = unlockSlot.volume;
+  const previousMuted = unlockSlot.muted;
+  unlockSlot.volume = 0;
+  unlockSlot.muted = true;
 
   try {
-    const playPromise = audio.play();
+    const playPromise = unlockSlot.play();
     if (!playPromise) return;
 
     void playPromise
       .then(() => {
-        audio.pause();
+        unlockSlot.pause();
         try {
-          audio.currentTime = 0;
+          unlockSlot.currentTime = 0;
         } catch {
           // ignore
         }
+        barAudioElementUnlockDone = true;
       })
       .catch(() => {
         // ignore — 未ロード等
       })
       .finally(() => {
-        audio.muted = previousMuted;
-        audio.volume = previousVolume;
+        unlockSlot.muted = previousMuted;
+        unlockSlot.volume = previousVolume;
       });
   } catch {
-    audio.muted = previousMuted;
-    audio.volume = previousVolume;
-  }
-}
-
-function primeSfxPoolOnUserGesture(): void {
-  ensureSfxPool();
-  for (const slots of sfxPool.values()) {
-    for (const audio of slots) {
-      primeMediaElementPlayOnUserGesture(audio);
-    }
+    unlockSlot.muted = previousMuted;
+    unlockSlot.volume = previousVolume;
   }
 }
 
@@ -870,9 +879,35 @@ function primeJazzPlayOnUserGesture(): void {
   const audio = jazzTrack.audio;
   if (!audio) return;
 
-  void ensureBarAudioContext();
   primeLoopAudioSilence(audio, jazzTrack);
-  primeMediaElementPlayOnUserGesture(audio);
+
+  const previousVolume = audio.volume;
+  const previousMuted = audio.muted;
+  audio.volume = 0;
+  audio.muted = true;
+
+  try {
+    const playPromise = audio.play();
+    if (!playPromise) return;
+
+    void playPromise
+      .then(() => {
+        audio.pause();
+        primeLoopAudioSilence(audio, jazzTrack);
+      })
+      .catch(() => {
+        // ignore
+      })
+      .finally(() => {
+        if (audio.paused) {
+          audio.muted = previousMuted;
+          audio.volume = previousVolume;
+        }
+      });
+  } catch {
+    audio.muted = previousMuted;
+    audio.volume = previousVolume;
+  }
 }
 
 /**
@@ -880,29 +915,12 @@ function primeJazzPlayOnUserGesture(): void {
  * await より前に必ず実行すること（iOS Safari の再生制限）。
  */
 export function primeCounterEntryAudioOnUserGesture(): void {
-  markBarAudioUserInteraction();
-
-  const firstUnlock = !barAudioUserGestureUnlocked;
-  if (firstUnlock) {
-    barAudioUserGestureUnlocked = true;
-    prefetchLoopingSource(ENTRANCE_SOUNDS.jazz);
-    prefetchLoopingSource(ENTRANCE_SOUNDS.outside);
-    beginOutsideAlleyPreload();
-  }
-
-  ensureSfxPool();
-  primeSfxPoolOnUserGesture();
+  unlockBarAudioForUserGesture();
   primeJazzPlayOnUserGesture();
-  void ensureBarAudioContext();
-
-  if (firstUnlock) {
-    void warmUpBarAudio();
-  }
-
   void prepareJazzForCounterEntry();
 }
 
-/** SE プール生成 + decode 待ち（silent play は行わない） */
+/** SE プール生成 + decode 待ち */
 export function warmUpBarAudio(): Promise<void> {
   if (!isBarAudioUnlocked()) {
     return Promise.resolve();
@@ -987,6 +1005,10 @@ async function startLooping(
   enableAmbientModulation = false,
 ) {
   if (!isBarAudioUnlocked() || shouldBlockBackgroundBgmPlayback()) return;
+
+  if (shouldRouteLoopTrackThroughWebAudio()) {
+    await ensureBarAudioContext();
+  }
 
   if (src === ENTRANCE_SOUNDS.jazz && jazzPreparePromise) {
     await jazzPreparePromise;
@@ -1337,7 +1359,9 @@ export const barAudioEngine = {
     fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   ) {
     markBarAudioUserInteraction();
-    void ensureBarAudioContext();
+    if (shouldRouteLoopTrackThroughWebAudio()) {
+      void ensureBarAudioContext();
+    }
     void startLooping(
       ENTRANCE_SOUNDS.jazz,
       volume,
@@ -1453,6 +1477,7 @@ export const barAudioEngine = {
   dispose() {
     bgmPausedForRecording = false;
     appBackgroundSuspended = false;
+    barAudioElementUnlockDone = false;
     stopLooping(outsideTrack, true);
     stopLooping(jazzTrack, true);
 
