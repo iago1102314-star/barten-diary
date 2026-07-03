@@ -10,8 +10,6 @@ export const POST_RECORD_EXIT_TUNING = {
   storeExitDurationSec: 2.2,
   storeExitOrigin: "50% 50%",
   storeExitPullBackScale: 0.94,
-  /** 入店時 door 音量の倍率 */
-  doorVolumeScale: 0.5,
   /** 別れセリフ後 — 店内 jazz を下げ切るまで */
   jazzFadeOutMs: 600,
   /** 引き演出完了から扉 SE まで（ms） */

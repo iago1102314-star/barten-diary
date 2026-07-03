@@ -151,13 +151,22 @@ function shouldBlockBackgroundBgmPlayback(): boolean {
 /** 扉を開ける / メモを見る等 — 最初の明確なユーザー操作後にのみ呼ぶ */
 export function unlockBarAudioForUserGesture(): void {
   markBarAudioUserInteraction();
-  if (barAudioUserGestureUnlocked) return;
-  barAudioUserGestureUnlocked = true;
-  prefetchLoopingSource(ENTRANCE_SOUNDS.jazz);
-  prefetchLoopingSource(ENTRANCE_SOUNDS.outside);
-  beginOutsideAlleyPreload();
+
+  const firstUnlock = !barAudioUserGestureUnlocked;
+  if (firstUnlock) {
+    barAudioUserGestureUnlocked = true;
+    prefetchLoopingSource(ENTRANCE_SOUNDS.jazz);
+    prefetchLoopingSource(ENTRANCE_SOUNDS.outside);
+    beginOutsideAlleyPreload();
+  }
+
+  ensureSfxPool();
+  primeSfxPoolOnUserGesture();
   void ensureBarAudioContext();
-  void warmUpBarAudio();
+
+  if (firstUnlock) {
+    void warmUpBarAudio();
+  }
 }
 
 function isBarAudioUnlocked(): boolean {
@@ -208,6 +217,23 @@ async function safePlay(audio: HTMLAudioElement): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Web Audio 経路で play 拒否されたとき — 要素直結にフォールバック */
+async function safePlayLoopTrack(
+  audio: HTMLAudioElement,
+  track: LoopingTrackState,
+): Promise<boolean> {
+  if (await safePlay(audio)) return true;
+
+  if (track.webAudio) {
+    disconnectTrackWebAudio(track);
+    audio.muted = false;
+    audio.volume = 0;
+    return safePlay(audio);
+  }
+
+  return false;
 }
 
 function waitForCanPlay(audio: HTMLAudioElement): Promise<void> {
@@ -627,6 +653,7 @@ function primeOutsidePlayOnUserGesture() {
 
   primeLoopAudioSilence(audio, outsideTrack);
   void ensureBarAudioContext();
+  primeMediaElementPlayOnUserGesture(audio);
   void audio.play().catch(() => {});
 }
 
@@ -665,7 +692,7 @@ async function prepareOutsideForEntry(
     primeLoopAudioSilence(audio, outsideTrack);
 
     if (audio.paused) {
-      if (!(await safePlay(audio))) {
+      if (!(await safePlayLoopTrack(audio, outsideTrack))) {
         clearTrackAudio(outsideTrack, audio);
         return;
       }
@@ -698,28 +725,37 @@ async function prepareOutsideForEntry(
 async function prepareJazzForCounterEntry(): Promise<void> {
   markBarAudioUserInteraction();
   if (!isBarAudioUnlocked() || shouldBlockBackgroundBgmPlayback()) return;
-  if (jazzTrack.started && jazzTrack.audio) return;
   if (jazzPreparePromise) {
     await jazzPreparePromise;
     return;
   }
 
   jazzPreparePromise = (async () => {
-    const audio = createAudio(ENTRANCE_SOUNDS.jazz, "auto");
-    if (!audio) return;
+    const syncPrimed = jazzTrack.started && jazzTrack.audio;
+    let audio = jazzTrack.audio;
 
-    jazzTrack.generation += 1;
-    jazzTrack.targetVolume = BAR_AUDIO_LEVELS.jazz.counter;
-    audio.loop = true;
-    audio.volume = 0;
-    jazzTrack.audio = audio;
-    jazzTrack.started = true;
-    audio.load();
+    if (!syncPrimed) {
+      audio = createAudio(ENTRANCE_SOUNDS.jazz, "auto");
+      if (!audio) return;
+
+      jazzTrack.generation += 1;
+      jazzTrack.targetVolume = BAR_AUDIO_LEVELS.jazz.counter;
+      audio.loop = true;
+      audio.volume = 0;
+      jazzTrack.audio = audio;
+      jazzTrack.started = true;
+      audio.load();
+    }
+
+    if (!audio || jazzTrack.audio !== audio) return;
 
     await waitForMetadata(audio);
     if (jazzTrack.audio !== audio) return;
 
-    audio.currentTime = pickRandomStartTime(audio.duration);
+    if (Number.isFinite(audio.duration) && audio.duration > 1) {
+      audio.currentTime = pickRandomStartTime(audio.duration);
+    }
+
     disposeAmbientController(jazzTrack);
     jazzTrack.ambient = createJazzAmbientModulation(audio, jazzTrack);
     jazzTrack.ambient.pause();
@@ -727,14 +763,16 @@ async function prepareJazzForCounterEntry(): Promise<void> {
     await ensureTrackWebAudio(audio, jazzTrack);
     primeLoopAudioSilence(audio, jazzTrack);
 
-    if (!(await safePlay(audio))) {
-      clearTrackAudio(jazzTrack, audio);
-      return;
-    }
+    if (!syncPrimed) {
+      if (!(await safePlayLoopTrack(audio, jazzTrack))) {
+        clearTrackAudio(jazzTrack, audio);
+        return;
+      }
 
-    primeLoopAudioSilence(audio, jazzTrack);
-    audio.pause();
-    primeLoopAudioSilence(audio, jazzTrack);
+      primeLoopAudioSilence(audio, jazzTrack);
+      audio.pause();
+      primeLoopAudioSilence(audio, jazzTrack);
+    }
   })();
 
   try {
@@ -762,6 +800,106 @@ function ensureSfxPool() {
   }
 
   sfxPoolInitialized = true;
+}
+
+/**
+ * iOS Safari — ユーザー操作の同期コンテキスト内で無音 play→pause し、
+ * 後からの SE 再生を許可する（warmUp の decode 待ちだけでは不十分な場合がある）。
+ */
+function primeMediaElementPlayOnUserGesture(audio: HTMLAudioElement): void {
+  const previousVolume = audio.volume;
+  const previousMuted = audio.muted;
+
+  audio.volume = 0;
+  audio.muted = true;
+
+  try {
+    const playPromise = audio.play();
+    if (!playPromise) return;
+
+    void playPromise
+      .then(() => {
+        audio.pause();
+        try {
+          audio.currentTime = 0;
+        } catch {
+          // ignore
+        }
+      })
+      .catch(() => {
+        // ignore — 未ロード等
+      })
+      .finally(() => {
+        audio.muted = previousMuted;
+        audio.volume = previousVolume;
+      });
+  } catch {
+    audio.muted = previousMuted;
+    audio.volume = previousVolume;
+  }
+}
+
+function primeSfxPoolOnUserGesture(): void {
+  ensureSfxPool();
+  for (const slots of sfxPool.values()) {
+    for (const audio of slots) {
+      primeMediaElementPlayOnUserGesture(audio);
+    }
+  }
+}
+
+/** カウンター入店 — jazz を同期コンテキストで無音 play→pause（await 後の resume 用） */
+function primeJazzPlayOnUserGesture(): void {
+  markBarAudioUserInteraction();
+  if (!isBarAudioUnlocked() || isDocumentHidden()) return;
+
+  if (!jazzTrack.started || !jazzTrack.audio) {
+    const audio = createAudio(ENTRANCE_SOUNDS.jazz, "auto");
+    if (!audio) return;
+
+    jazzTrack.generation += 1;
+    jazzTrack.targetVolume = BAR_AUDIO_LEVELS.jazz.counter;
+    audio.loop = true;
+    audio.volume = 0;
+    audio.muted = true;
+    jazzTrack.audio = audio;
+    jazzTrack.started = true;
+    audio.load();
+  }
+
+  const audio = jazzTrack.audio;
+  if (!audio) return;
+
+  void ensureBarAudioContext();
+  primeLoopAudioSilence(audio, jazzTrack);
+  primeMediaElementPlayOnUserGesture(audio);
+}
+
+/**
+ * 扉を開ける / カウンターへ — ユーザー操作の同期コンテキスト内で呼ぶ。
+ * await より前に必ず実行すること（iOS Safari の再生制限）。
+ */
+export function primeCounterEntryAudioOnUserGesture(): void {
+  markBarAudioUserInteraction();
+
+  const firstUnlock = !barAudioUserGestureUnlocked;
+  if (firstUnlock) {
+    barAudioUserGestureUnlocked = true;
+    prefetchLoopingSource(ENTRANCE_SOUNDS.jazz);
+    prefetchLoopingSource(ENTRANCE_SOUNDS.outside);
+    beginOutsideAlleyPreload();
+  }
+
+  ensureSfxPool();
+  primeSfxPoolOnUserGesture();
+  primeJazzPlayOnUserGesture();
+  void ensureBarAudioContext();
+
+  if (firstUnlock) {
+    void warmUpBarAudio();
+  }
+
+  void prepareJazzForCounterEntry();
 }
 
 /** SE プール生成 + decode 待ち（silent play は行わない） */
@@ -889,7 +1027,7 @@ async function startLooping(
       audio.currentTime = pickRandomStartTime(audio.duration);
       await ensureTrackWebAudio(audio, track);
       primeLoopAudioSilence(audio, track);
-      if (!(await safePlay(audio))) {
+      if (!(await safePlayLoopTrack(audio, track))) {
         return;
       }
       if (!isTrackAudioCurrent(track, token, audio)) {
@@ -939,7 +1077,7 @@ async function startLooping(
     await ensureTrackWebAudio(audio, track);
     primeLoopAudioSilence(audio, track);
 
-    if (!(await safePlay(audio))) {
+    if (!(await safePlayLoopTrack(audio, track))) {
       if (track.audio === audio) {
         clearTrackAudio(track, audio);
       } else {
@@ -1087,7 +1225,7 @@ async function resumePausedLoopTrack(
     if (audio.paused) {
       await ensureTrackWebAudio(audio, track);
       primeLoopAudioSilence(audio, track);
-      if (!(await safePlay(audio))) {
+      if (!(await safePlayLoopTrack(audio, track))) {
         logRecordingPipeline("resumePausedLoopTrack: play failed", {
           error: "play rejected",
         });
@@ -1142,7 +1280,11 @@ export const barAudioEngine = {
   /** メニュー SE — unlock とプール生成を同期で済ませる */
   primeMenuSfxForUserGesture() {
     unlockBarAudioForUserGesture();
-    ensureSfxPool();
+  },
+
+  /** カウンター入店 — await 前に必ず呼ぶ（iOS Safari） */
+  primeCounterEntryOnUserGesture() {
+    primeCounterEntryAudioOnUserGesture();
   },
 
   isOutsidePlaying() {
@@ -1194,6 +1336,8 @@ export const barAudioEngine = {
     volume: number = BAR_AUDIO_LEVELS.jazz.counter,
     fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   ) {
+    markBarAudioUserInteraction();
+    void ensureBarAudioContext();
     void startLooping(
       ENTRANCE_SOUNDS.jazz,
       volume,

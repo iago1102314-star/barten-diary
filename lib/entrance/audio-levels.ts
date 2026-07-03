@@ -1,63 +1,20 @@
 /**
- * バー音声の音量・タイミング調整用パラメータ。
- * 0.0〜1.0 — BGM はそのまま。SE sfx.* はミックス（getSfxPlayVolume でピーク補正）
+ * バー音声のタイミング調整用パラメータ（音量は audio-volume-tuning.ts）
  */
+import { JAZZ_BGM_AMBIENT_TUNING } from "@/lib/entrance/audio-volume-tuning";
 import {
   DOOR_EXIT_DURATION_SEC,
   START_ENTRY_OUTSIDE_FADE_MS,
 } from "@/lib/entrance/start-entry-timing";
 
-export const BAR_AUDIO_LEVELS = {
-  /** 路地・帰り道の環境音（ループ） */
-  outside: {
-    /** entry / memories */
-    alley: 0.27,
-    /** 退店後の路地 */
-    leaving: 0.15,
-  },
-  /** 店内ジャズ（ループ） */
-  jazz: {
-    counter: 0.018,
-  },
-  /** 一度きりの効果音 — ミックス（0–1）。同じ SE 内なら 2 倍で約 2 倍の音量 */
-  sfx: {
-    door: 0.15,
-    glassSlide: 0.48,
-    send: 0.35,
-    click: 0.3,
-    menuOpen: 0.32,
-    menuClick: 0.28,
-    page: 0.4,
-    think: 0.6,
-  },
-} as const;
-
-export type BarSfxKind = keyof typeof BAR_AUDIO_LEVELS.sfx;
-
-/**
- * 音源 max_volume dBFS（ffmpeg volumedetect）。
- * door.mp4 は 0 dB ピークのため mix だけでは効きが弱い — ここで補正する。
- */
-const SFX_PEAK_DBFS: Record<BarSfxKind, number> = {
-  door: 0,
-  glassSlide: -0.2,
-  send: -6,
-  click: -5.9,
-  menuOpen: -5.9,
-  menuClick: -5.9,
-  page: -6,
-  think: -15.5,
-};
-
-/** mix 1.0 ≒ 同程度のラウドネス（-6 dBFS 基準） */
-const SFX_REFERENCE_PEAK_LINEAR = 10 ** (-6 / 20);
-
-/** 再生直前に呼ぶ — BAR_AUDIO_LEVELS.sfx[kind] をピーク補正して 0–1 に変換 */
-export function getSfxPlayVolume(kind: BarSfxKind): number {
-  const mix = BAR_AUDIO_LEVELS.sfx[kind];
-  const peakLinear = 10 ** (SFX_PEAK_DBFS[kind] / 20);
-  return Math.max(0, Math.min(1, mix * (SFX_REFERENCE_PEAK_LINEAR / peakLinear)));
-}
+export {
+  AUDIO_VOLUME_TUNING,
+  BAR_AUDIO_LEVELS,
+  getSfxPlayVolume,
+  getSfxSceneVolumeScale,
+  JAZZ_BGM_AMBIENT_TUNING,
+  type BarSfxKind,
+} from "@/lib/entrance/audio-volume-tuning";
 
 export const BAR_AUDIO_TIMING = {
   /** BGM フェードイン・アウト（通常） */
@@ -87,20 +44,6 @@ export const BAR_AUDIO_TIMING = {
   counterRevealFadeDelayMs: 100,
   /** 明転完了から「今日はどうしようか？」まで（ms） */
   moodPromptDelayAfterRevealMs: 0,
-  /**
-   * 店内ジャズ — 弱い呼吸（A）+ ループ継ぎ目フェード（B）
-   * multiplier は targetVolume に掛ける係数（0〜1）
-   */
-  jazzAmbient: {
-    /** 1ループあたりの呼吸回数 */
-    breathCyclesPerLoop: 3,
-    /** 呼吸の深さ（0.35 = 通常の65%まで下がる） */
-    breathDepth: 0.35,
-    /** ループ直前フェードアウト（秒） */
-    loopFadeOutSec: 1.2,
-    /** ループ直後フェードイン（秒） */
-    loopFadeInSec: 2,
-    /** ループ継ぎ目の最低音量（通常比） */
-    loopFloorRatio: 0.3,
-  },
+  /** 店内ジャズ — 弱い呼吸（A）+ ループ継ぎ目フェード（B） */
+  jazzAmbient: JAZZ_BGM_AMBIENT_TUNING,
 } as const;

@@ -2,7 +2,7 @@
 
 import styles from "@/components/memories/memo-shelf-grid.module.css";
 import { ShebronIcon } from "@/components/ui/shebron-icon";
-import { prepareBarAudioOnUserGesture } from "@/hooks/use-bar-audio";
+import { prepareCounterEntryAudioOnUserGesture } from "@/hooks/use-bar-audio";
 import { markCounterLaunchFromShelf } from "@/lib/entrance/counter-launch-from-shelf";
 import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
 import { MEMORIES_EXIT_FADE_SEC } from "@/lib/entrance/start-entry-timing";
@@ -28,7 +28,7 @@ export function MemoShelfEmptyCounterCta({
 
   const handleLaunch = () => {
     if (fading || checking) return;
-    prepareBarAudioOnUserGesture();
+    prepareCounterEntryAudioOnUserGesture();
     void (async () => {
       if (onValidateLaunch) {
         setChecking(true);
@@ -61,6 +61,10 @@ export function MemoShelfEmptyCounterCta({
         <button
           type="button"
           className={styles.emptyShelfLaunchButton}
+          onPointerDown={() => {
+            if (fading || checking) return;
+            prepareCounterEntryAudioOnUserGesture();
+          }}
           onClick={handleLaunch}
           disabled={fading || checking}
         >

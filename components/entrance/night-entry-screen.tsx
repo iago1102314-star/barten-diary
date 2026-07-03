@@ -66,6 +66,8 @@ type NightEntryScreenProps = {
   /** カウンター入店前の1日上限チェック中 — 二重タップ防止 */
   counterEntryChecking?: boolean;
   onEnterCounter: () => void;
+  /** iOS Safari — タップ開始時に音声を先行解放 */
+  onEnterCounterPointerDown?: () => void;
   onOpenMemories: () => void;
   /** 日記詳細デザインモック（本番以外） */
   onOpenDiaryPaperMock?: () => void;
@@ -99,6 +101,7 @@ export function NightEntryScreen({
   onOpenDiaryPaperMock,
   onBackgroundTap,
   counterEntryChecking = false,
+  onEnterCounterPointerDown,
   skipImageEntrance = false,
   steadyFadeIn = false,
   onSteadyFadeInComplete,
@@ -351,6 +354,11 @@ export function NightEntryScreen({
           >
             <HomeEntryButton
               onClick={interactionLocked ? undefined : onEnterCounter}
+              onPointerDown={
+                interactionLocked || counterEntryChecking
+                  ? undefined
+                  : onEnterCounterPointerDown
+              }
               disabled={interactionLocked || counterEntryChecking}
             >
               カウンターへ

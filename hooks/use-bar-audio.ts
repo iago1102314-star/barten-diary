@@ -4,6 +4,7 @@ import {
   attachBarAudioAppLifecycle,
   barAudioEngine,
   isBarAudioUnlockedByClient,
+  primeCounterEntryAudioOnUserGesture,
   restoreBarAudioUnlockAfterModuleReload,
   unlockBarAudioForUserGesture,
 } from "@/lib/entrance/bar-audio-engine";
@@ -14,6 +15,11 @@ let consumerCount = 0;
 /** 扉を開ける / メモを見る — 最初の明確なユーザー操作後にのみ呼ぶ */
 export function prepareBarAudioOnUserGesture(): void {
   unlockBarAudioForUserGesture();
+}
+
+/** カウンターへ — 入店前の jazz / SE 先行解放（await より前に呼ぶ） */
+export function prepareCounterEntryAudioOnUserGesture(): void {
+  primeCounterEntryAudioOnUserGesture();
 }
 
 /** React が unlock 済みなのにモジュールだけ HMR でリセットされたとき */

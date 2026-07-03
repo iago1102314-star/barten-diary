@@ -7,6 +7,7 @@ import { HOME_ENTRY_BUTTON_TUNING } from "@/lib/entrance/home-entry-tuning";
 type HomeEntryButtonProps = {
   children: string;
   onClick?: () => void;
+  onPointerDown?: () => void;
   disabled?: boolean;
 };
 
@@ -16,12 +17,14 @@ const T = HOME_ENTRY_BUTTON_TUNING;
 export function HomeEntryButton({
   children,
   onClick,
+  onPointerDown,
   disabled = false,
 }: HomeEntryButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onPointerDown={onPointerDown}
       disabled={disabled}
       className="group relative z-10 w-full touch-manipulation font-serif-jp text-stone-300/85 transition-colors duration-350 hover:text-amber-50/95 disabled:cursor-not-allowed disabled:opacity-40"
       style={

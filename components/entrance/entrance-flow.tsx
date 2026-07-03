@@ -36,10 +36,11 @@ import { DailyGenerationLimitNoticeCard } from "@/components/entrance/daily-gene
 import { checkDailyGenerationGate } from "@/lib/night/daily-generation-limit";
 import { EntranceBottomToast } from "@/components/entrance/entrance-bottom-toast";
 import { SceneFrame } from "@/components/entrance/scene-frame";
-import { prepareBarAudioOnUserGesture, syncBarAudioUnlockFromClient, useBarAudio } from "@/hooks/use-bar-audio";
+import { prepareBarAudioOnUserGesture, prepareCounterEntryAudioOnUserGesture, syncBarAudioUnlockFromClient, useBarAudio } from "@/hooks/use-bar-audio";
 import {
   BAR_AUDIO_LEVELS,
   BAR_AUDIO_TIMING,
+  getSfxSceneVolumeScale,
 } from "@/lib/entrance/audio-levels";
 import type { CameraPose } from "@/lib/entrance/counter-camera-poses";
 import {
@@ -375,9 +376,9 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
   /** 扉を開ける — jazz を無音で先行ロード（outside とは分離） */
   const primeCounterEntryAudio = useCallback(() => {
-    primeBarAudioUnlock();
-    audio.prepareJazzForCounterEntry();
-  }, [primeBarAudioUnlock, audio]);
+    prepareCounterEntryAudioOnUserGesture();
+    setAudioUnlocked(true);
+  }, []);
 
   const entryOutsideStartedRef = useRef(false);
 
@@ -999,12 +1000,12 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
   const handleEnterCounter = () => {
     if (entryTransition !== "idle") return;
+    primeCounterEntryAudio();
     void (async () => {
       const allowed = await validateCounterEntryGate();
       if (!allowed) return;
       resetNightRefs();
       resetEntryOutsideStarted();
-      primeCounterEntryAudio();
       audio.stopOutside(false, BAR_AUDIO_TIMING.doorExitOutsideFadeMs);
       setEntryTransition("doorExit");
     })();
@@ -1223,7 +1224,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     postRecordExitTimerRef.current = setTimeout(() => {
       postRecordExitTimerRef.current = null;
       audio.playDoor({
-        volumeScale: POST_RECORD_EXIT_TUNING.doorVolumeScale,
+        volumeScale: getSfxSceneVolumeScale("door", "postRecordExit"),
       });
       audio.startOutside(
         BAR_AUDIO_LEVELS.outside.leaving,
@@ -1283,6 +1284,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         >
           <NightEntryScreen
             onEnterCounter={handleEnterCounter}
+            onEnterCounterPointerDown={primeCounterEntryAudio}
             onOpenMemories={handleOpenMemories}
             onOpenDiaryPaperMock={handleOpenDiaryPaperMock}
             onBackgroundTap={handleBackgroundTapForOutside}
