@@ -1,7 +1,7 @@
 "use client";
 
 import { useBarAudio } from "@/hooks/use-bar-audio";
-import { BAR_AUDIO_LEVELS } from "@/lib/entrance/audio-levels";
+import { getBgmMix } from "@/lib/entrance/audio-levels";
 import { useEffect } from "react";
 
 /** 日記棚 — 路地 BGM を止めず、未開始時だけ立ち上げる */
@@ -11,6 +11,6 @@ export function useShelfOutsideAmbience(enabled = true) {
   useEffect(() => {
     if (!enabled) return;
     if (audio.hasOutsideSession()) return;
-    audio.startOutside(BAR_AUDIO_LEVELS.outside.alley);
+    audio.startOutside(getBgmMix("outsideAlley"));
   }, [audio, enabled]);
 }

@@ -4,10 +4,13 @@ import {
   getSeVolumeMultiplier,
 } from "@/lib/settings/audio-preferences";
 import {
-  BAR_AUDIO_LEVELS,
   BAR_AUDIO_TIMING,
+  getBgmMix,
   getSfxPlayVolume,
+  installAudioVolumeDevApi,
+  logAudioVolumeDebug,
   type BarSfxKind,
+  type BgmMixKey,
 } from "@/lib/entrance/audio-levels";
 import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
 
@@ -352,13 +355,28 @@ function setTrackOutputLevel(
   audio: HTMLAudioElement,
   track: LoopingTrackState,
   level: number,
+  debugLabel?: string,
 ) {
   const clamped = clampVolume(level);
   if (track.webAudio) {
     track.webAudio.gain.gain.value = clamped;
+    if (debugLabel) {
+      logAudioVolumeDebug(debugLabel, {
+        path: "webAudio",
+        gain: clamped,
+        elementVolume: audio.volume,
+      });
+    }
     return;
   }
   audio.volume = clamped;
+  if (debugLabel) {
+    logAudioVolumeDebug(debugLabel, {
+      path: "element",
+      volume: clamped,
+      muted: audio.muted,
+    });
+  }
 }
 
 function getTrackOutputLevel(
@@ -613,10 +631,12 @@ function clearTrackAudio(track: LoopingTrackState, audio: HTMLAudioElement) {
   }
 }
 
-const outsideTrack = createInitialTrackState(BAR_AUDIO_LEVELS.outside.alley);
-const jazzTrack = createInitialTrackState(BAR_AUDIO_LEVELS.jazz.counter);
-let jazzBaseVolume: number = BAR_AUDIO_LEVELS.jazz.counter;
-let outsideBaseVolume: number = BAR_AUDIO_LEVELS.outside.alley;
+const outsideTrack = createInitialTrackState(getBgmMix("outsideAlley"));
+const jazzTrack = createInitialTrackState(getBgmMix("jazzCounter"));
+let jazzBaseVolume: number = getBgmMix("jazzCounter");
+let outsideBaseVolume: number = getBgmMix("outsideAlley");
+let outsideBgmMixKey: BgmMixKey = "outsideAlley";
+let audioVolumeDevApiInstalled = false;
 let jazzPreparePromise: Promise<void> | null = null;
 let outsidePreparePromise: Promise<void> | null = null;
 /** iOS — 1 要素だけ無音 play 済みなら SE プール全体を触らない */
@@ -647,7 +667,8 @@ function beginOutsideAlleyPreload() {
   audio.muted = true;
   outsideTrack.audio = audio;
   outsideTrack.started = true;
-  outsideTrack.targetVolume = BAR_AUDIO_LEVELS.outside.alley;
+  outsideBgmMixKey = "outsideAlley";
+  outsideTrack.targetVolume = getBgmMix(outsideBgmMixKey);
   audio.load();
 }
 
@@ -672,7 +693,7 @@ function primeOutsidePlayOnUserGesture() {
 
 async function prepareOutsideForEntry(
   fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
-  volume: number = BAR_AUDIO_LEVELS.outside.alley,
+  volume: number = getBgmMix("outsideAlley"),
 ): Promise<void> {
   if (!isBarAudioUnlocked() || shouldBlockBackgroundBgmPlayback()) return;
 
@@ -694,6 +715,10 @@ async function prepareOutsideForEntry(
     outsideTrack.generation += 1;
     const token = outsideTrack.generation;
     outsideBaseVolume = volume;
+    outsideBgmMixKey =
+      volume <= getBgmMix("outsideLeaving") + 0.02
+        ? "outsideLeaving"
+        : "outsideAlley";
     const scaledVolume = scaleBgmVolume(volume);
     outsideTrack.targetVolume = scaledVolume;
 
@@ -752,7 +777,7 @@ async function prepareJazzForCounterEntry(): Promise<void> {
       if (!audio) return;
 
       jazzTrack.generation += 1;
-      jazzTrack.targetVolume = BAR_AUDIO_LEVELS.jazz.counter;
+      jazzTrack.targetVolume = getBgmMix("jazzCounter");
       audio.loop = true;
       audio.volume = 0;
       jazzTrack.audio = audio;
@@ -867,7 +892,7 @@ function primeJazzPlayOnUserGesture(): void {
     if (!audio) return;
 
     jazzTrack.generation += 1;
-    jazzTrack.targetVolume = BAR_AUDIO_LEVELS.jazz.counter;
+    jazzTrack.targetVolume = getBgmMix("jazzCounter");
     audio.loop = true;
     audio.volume = 0;
     audio.muted = true;
@@ -922,6 +947,8 @@ export function primeCounterEntryAudioOnUserGesture(): void {
 
 /** SE プール生成 + decode 待ち */
 export function warmUpBarAudio(): Promise<void> {
+  ensureAudioVolumeDevApi();
+
   if (!isBarAudioUnlocked()) {
     return Promise.resolve();
   }
@@ -980,7 +1007,15 @@ function playSfxNow(
   }
 
   const audio = slots.find((slot) => slot.paused) ?? slots[0];
-  audio.volume = getSfxPlayVolume(kind) * volumeScale * getSeVolumeMultiplier();
+  const effectiveVolume =
+    getSfxPlayVolume(kind) * volumeScale * getSeVolumeMultiplier();
+  audio.volume = effectiveVolume;
+  logAudioVolumeDebug("playSfx", {
+    kind,
+    mix: effectiveVolume,
+    volumeScale,
+    seMultiplier: getSeVolumeMultiplier(),
+  });
   audio.muted = false;
   audio.currentTime = 0;
 
@@ -1026,6 +1061,10 @@ async function startLooping(
     jazzBaseVolume = volume;
   } else if (track === outsideTrack) {
     outsideBaseVolume = volume;
+    outsideBgmMixKey =
+      volume <= getBgmMix("outsideLeaving") + 0.02
+        ? "outsideLeaving"
+        : "outsideAlley";
   }
   const scaledVolume = scaleBgmVolume(volume);
   track.targetVolume = scaledVolume;
@@ -1127,6 +1166,10 @@ function setLoopingVolume(volume: number, track: LoopingTrackState) {
     jazzBaseVolume = volume;
   } else if (track === outsideTrack) {
     outsideBaseVolume = volume;
+    outsideBgmMixKey =
+      volume <= getBgmMix("outsideLeaving") + 0.02
+        ? "outsideLeaving"
+        : "outsideAlley";
   }
   const scaledVolume = scaleBgmVolume(volume);
   track.targetVolume = scaledVolume;
@@ -1175,6 +1218,10 @@ function snapshotLoopTrack(
     paused: audio?.paused ?? true,
     currentVolume: audio?.volume ?? null,
     targetVolume: track.targetVolume,
+    effectiveOutput:
+      audio != null ? getTrackOutputLevel(audio, track) : null,
+    webAudioGain: track.webAudio?.gain.gain.value ?? null,
+    usesWebAudio: track.webAudio !== null,
     currentTime: audio?.currentTime ?? null,
     duration: Number.isFinite(audio?.duration) ? audio?.duration : null,
     fadeActive: track.fade !== null,
@@ -1290,10 +1337,29 @@ export function getBarAudioDiagnostics(): Record<string, unknown> {
   return {
     bgmPausedForRecording,
     barAudioUnlocked: barAudioUserGestureUnlocked,
+    usesIosElementVolume: !shouldRouteLoopTrackThroughWebAudio(),
+    tuning: {
+      jazzCounterMix: getBgmMix("jazzCounter"),
+      outsideAlleyMix: getBgmMix("outsideAlley"),
+      outsideLeavingMix: getBgmMix("outsideLeaving"),
+    },
+    userBgmMultiplier: getBgmVolumeMultiplier(),
+    userSeMultiplier: getSeVolumeMultiplier(),
+    jazzBaseVolume,
+    outsideBaseVolume,
+    outsideBgmMixKey,
     jazz: snapshotLoopTrack(jazzTrack),
     outside: snapshotLoopTrack(outsideTrack),
     activeSfx: snapshotActiveSfx(),
   };
+}
+
+function ensureAudioVolumeDevApi() {
+  if (audioVolumeDevApiInstalled || typeof window === "undefined") return;
+  audioVolumeDevApiInstalled = true;
+  installAudioVolumeDevApi(() => {
+    barAudioEngine.reapplyTuningVolumes();
+  });
 }
 
 export const barAudioEngine = {
@@ -1331,13 +1397,13 @@ export const barAudioEngine = {
   /** メタデータ待ち + Web Audio フェード（play は primeOutsidePlayOnUserGesture 側） */
   prepareOutsideForEntry(
     fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
-    volume: number = BAR_AUDIO_LEVELS.outside.alley,
+    volume: number = getBgmMix("outsideAlley"),
   ) {
     void prepareOutsideForEntry(fadeMs, volume);
   },
 
   startOutside(
-    volume: number = BAR_AUDIO_LEVELS.outside.alley,
+    volume: number = getBgmMix("outsideAlley"),
     fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   ) {
     void prepareOutsideForEntry(fadeMs, volume);
@@ -1355,7 +1421,7 @@ export const barAudioEngine = {
   },
 
   startJazz(
-    volume: number = BAR_AUDIO_LEVELS.jazz.counter,
+    volume: number = getBgmMix("jazzCounter"),
     fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   ) {
     markBarAudioUserInteraction();
@@ -1384,6 +1450,16 @@ export const barAudioEngine = {
     }
   },
 
+  /** localStorage オーバーライドや tuning 変更後 — 再生中トラックへ即反映 */
+  reapplyTuningVolumes() {
+    if (jazzTrack.audio && jazzTrack.started) {
+      setLoopingVolume(getBgmMix("jazzCounter"), jazzTrack);
+    }
+    if (outsideTrack.audio && outsideTrack.started) {
+      setLoopingVolume(getBgmMix(outsideBgmMixKey), outsideTrack);
+    }
+  },
+
   stopJazz(fadeMs: number = BAR_AUDIO_TIMING.fadeMs) {
     bgmPausedForRecording = false;
     stopLooping(jazzTrack, false, fadeMs);
@@ -1404,7 +1480,7 @@ export const barAudioEngine = {
     });
   },
 
-  /** 録音終了後 — 保持していた jazz を通常音量（0.03）でフェードイン再開 */
+  /** 録音終了後 — 保持していた jazz を通常音量でフェードイン再開 */
   resumeJazzAfterRecording() {
     if (!bgmPausedForRecording) return;
     if (shouldBlockBackgroundBgmPlayback()) return;
@@ -1414,12 +1490,12 @@ export const barAudioEngine = {
 
     if (!jazzTrack.started || !jazzTrack.audio) {
       logRecordingPipeline("resumeJazzAfterRecording: restart jazz (no track)", {
-        targetVolume: BAR_AUDIO_LEVELS.jazz.counter,
+        targetVolume: getBgmMix("jazzCounter"),
         fadeMs: BAR_AUDIO_TIMING.fadeMs,
       });
       void startLooping(
         ENTRANCE_SOUNDS.jazz,
-        BAR_AUDIO_LEVELS.jazz.counter,
+        getBgmMix("jazzCounter"),
         jazzTrack,
         BAR_AUDIO_TIMING.fadeMs,
         true,

@@ -10,10 +10,22 @@ import {
 export {
   AUDIO_VOLUME_TUNING,
   BAR_AUDIO_LEVELS,
+  clearAudioVolumeOverrides,
+  getBgmMix,
+  getSeMix,
   getSfxPlayVolume,
   getSfxSceneVolumeScale,
+  installAudioVolumeDevApi,
+  isAudioVolumeDebugEnabled,
+  isAudioVolumeTunePanelEnabled,
   JAZZ_BGM_AMBIENT_TUNING,
+  logAudioVolumeDebug,
+  readAudioVolumeOverrides,
+  readBarAudioLevels,
+  saveAudioVolumeOverrides,
+  type AudioVolumeOverrides,
   type BarSfxKind,
+  type BgmMixKey,
 } from "@/lib/entrance/audio-volume-tuning";
 
 export const BAR_AUDIO_TIMING = {

@@ -7,6 +7,10 @@ import { ENTRANCE_SOUNDS } from "@/lib/entrance/asset-paths";
  * - SE mix (0.0–1.0): ミックス目標。getSfxPlayVolume で peakDbfs 補正後に 0–1 へ変換されます。
  * - SE peakDbfs: 音源ピーク (ffmpeg volumedetect)。mix だけでは揃いにくい SE のラウドネス補正用。
  * - sceneScale: 特定シーンでの追加倍率（最終 SE 音量 = getSfxPlayVolume × sceneScale × SEスライダー）
+ *
+ * 実機で即試す: 開発パネル (?audioTune=1) かコンソール
+ *   window.__bartenAudioVol.set({ bgm: { jazzCounter: 0.008 } })
+ *   window.__bartenAudioVol.apply()
  */
 export const AUDIO_VOLUME_TUNING = {
   bgm: {
@@ -20,9 +24,9 @@ export const AUDIO_VOLUME_TUNING = {
       mix: 0.15,
       asset: ENTRANCE_SOUNDS.outside,
     },
-    /** カウンター店内 — ジャズ（jazz.mp3 ループ） */
+    /** カウンター店内 — ジャズ（jazz.mp3 ループ）※ 0.018（1.8%）であり 0.18 ではない */
     jazzCounter: {
-      mix: 0.018,
+      mix: 0.0,
       asset: ENTRANCE_SOUNDS.jazz,
       /**
        * 店内ジャズの呼吸・ループ継ぎ目（体感の明滅に影響）
@@ -95,34 +99,104 @@ export const AUDIO_VOLUME_TUNING = {
 } as const;
 
 export type BarSfxKind = keyof typeof AUDIO_VOLUME_TUNING.se;
+export type BgmMixKey = keyof typeof AUDIO_VOLUME_TUNING.bgm;
 
-/** bar-audio-engine / entrance-flow 向け — 既存 API 互換 */
+const OVERRIDE_STORAGE_KEY = "barten-audio-volume-overrides";
+
+export type AudioVolumeOverrides = {
+  bgm?: Partial<Record<BgmMixKey, number>>;
+  se?: Partial<Record<BarSfxKind, number>>;
+};
+
+function clampMix(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+/** localStorage の mix 上書き（開発・実機チューニング用） */
+export function readAudioVolumeOverrides(): AudioVolumeOverrides {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(OVERRIDE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as AudioVolumeOverrides;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveAudioVolumeOverrides(overrides: AudioVolumeOverrides): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(OVERRIDE_STORAGE_KEY, JSON.stringify(overrides));
+}
+
+export function clearAudioVolumeOverrides(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(OVERRIDE_STORAGE_KEY);
+}
+
+/** 実行時 mix — コード定数 + localStorage オーバーライド */
+export function getBgmMix(key: BgmMixKey): number {
+  const override = readAudioVolumeOverrides().bgm?.[key];
+  if (typeof override === "number" && Number.isFinite(override)) {
+    return clampMix(override);
+  }
+  return AUDIO_VOLUME_TUNING.bgm[key].mix;
+}
+
+/** 実行時 SE mix — peakDbfs 補正前の目標値 */
+export function getSeMix(kind: BarSfxKind): number {
+  const override = readAudioVolumeOverrides().se?.[kind];
+  if (typeof override === "number" && Number.isFinite(override)) {
+    return clampMix(override);
+  }
+  return AUDIO_VOLUME_TUNING.se[kind].mix;
+}
+
+/** bar-audio-engine 向け — 実行時にオーバーライドを反映 */
+export function readBarAudioLevels() {
+  return {
+    outside: {
+      alley: getBgmMix("outsideAlley"),
+      leaving: getBgmMix("outsideLeaving"),
+    },
+    jazz: {
+      counter: getBgmMix("jazzCounter"),
+    },
+    sfx: {
+      door: getSeMix("door"),
+      glassSlide: getSeMix("glassSlide"),
+      send: getSeMix("send"),
+      click: getSeMix("click"),
+      menuOpen: getSeMix("menuOpen"),
+      menuClick: getSeMix("menuClick"),
+      page: getSeMix("page"),
+      think: getSeMix("think"),
+    },
+  };
+}
+
+/** @deprecated readBarAudioLevels() / getBgmMix / getSeMix を使う */
 export const BAR_AUDIO_LEVELS = {
-  outside: {
-    alley: AUDIO_VOLUME_TUNING.bgm.outsideAlley.mix,
-    leaving: AUDIO_VOLUME_TUNING.bgm.outsideLeaving.mix,
+  get outside() {
+    return readBarAudioLevels().outside;
   },
-  jazz: {
-    counter: AUDIO_VOLUME_TUNING.bgm.jazzCounter.mix,
+  get jazz() {
+    return readBarAudioLevels().jazz;
   },
-  sfx: {
-    door: AUDIO_VOLUME_TUNING.se.door.mix,
-    glassSlide: AUDIO_VOLUME_TUNING.se.glassSlide.mix,
-    send: AUDIO_VOLUME_TUNING.se.send.mix,
-    click: AUDIO_VOLUME_TUNING.se.click.mix,
-    menuOpen: AUDIO_VOLUME_TUNING.se.menuOpen.mix,
-    menuClick: AUDIO_VOLUME_TUNING.se.menuClick.mix,
-    page: AUDIO_VOLUME_TUNING.se.page.mix,
-    think: AUDIO_VOLUME_TUNING.se.think.mix,
+  get sfx() {
+    return readBarAudioLevels().sfx;
   },
-} as const;
+};
 
 /** mix 1.0 ≒ 同程度のラウドネス（-6 dBFS 基準） */
 const SFX_REFERENCE_PEAK_LINEAR = 10 ** (-6 / 20);
 
 /** 再生直前 — mix × ピーク補正 → 0–1 */
 export function getSfxPlayVolume(kind: BarSfxKind): number {
-  const { mix, peakDbfs } = AUDIO_VOLUME_TUNING.se[kind];
+  const { peakDbfs } = AUDIO_VOLUME_TUNING.se[kind];
+  const mix = getSeMix(kind);
   const peakLinear = 10 ** (peakDbfs / 20);
   return Math.max(0, Math.min(1, mix * (SFX_REFERENCE_PEAK_LINEAR / peakLinear)));
 }
@@ -141,3 +215,69 @@ export function getSfxSceneVolumeScale(
 /** 店内ジャズの呼吸・ループ継ぎ目 — BAR_AUDIO_TIMING.jazzAmbient へ渡す */
 export const JAZZ_BGM_AMBIENT_TUNING =
   AUDIO_VOLUME_TUNING.bgm.jazzCounter.ambient;
+
+export function isAudioVolumeDebugEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_AUDIO_VOLUME_DEBUG === "true";
+}
+
+export function logAudioVolumeDebug(
+  label: string,
+  data: Record<string, unknown>,
+): void {
+  if (!isAudioVolumeDebugEnabled()) return;
+  console.info(`[audio-vol] ${label}`, data);
+}
+
+type AudioVolumeDevApi = {
+  get: () => {
+    tuning: typeof AUDIO_VOLUME_TUNING;
+    overrides: AudioVolumeOverrides;
+    effective: ReturnType<typeof readBarAudioLevels>;
+  };
+  set: (patch: AudioVolumeOverrides) => void;
+  clear: () => void;
+  apply: () => void;
+  log: () => void;
+};
+
+/** 開発コンソール — window.__bartenAudioVol */
+export function installAudioVolumeDevApi(applyTuning: () => void): void {
+  if (typeof window === "undefined") return;
+
+  const api: AudioVolumeDevApi = {
+    get() {
+      return {
+        tuning: AUDIO_VOLUME_TUNING,
+        overrides: readAudioVolumeOverrides(),
+        effective: readBarAudioLevels(),
+      };
+    },
+    set(patch) {
+      const current = readAudioVolumeOverrides();
+      saveAudioVolumeOverrides({
+        bgm: { ...current.bgm, ...patch.bgm },
+        se: { ...current.se, ...patch.se },
+      });
+    },
+    clear() {
+      clearAudioVolumeOverrides();
+    },
+    apply() {
+      applyTuning();
+    },
+    log() {
+      console.table(api.get().effective);
+    },
+  };
+
+  (window as Window & { __bartenAudioVol?: AudioVolumeDevApi }).__bartenAudioVol =
+    api;
+}
+
+export function isAudioVolumeTunePanelEnabled(): boolean {
+  if (process.env.NEXT_PUBLIC_AUDIO_VOLUME_TUNING_PANEL === "true") {
+    return true;
+  }
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).has("audioTune");
+}

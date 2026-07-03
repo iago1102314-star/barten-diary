@@ -10,6 +10,7 @@ import {
 } from "@/components/entrance/record-bottom-action";
 import { RecordCounterScene } from "@/components/entrance/record-counter-scene";
 import { DevPostRecordSkipButton } from "@/components/entrance/dev-post-record-skip-button";
+import { AudioVolumeTunePanel } from "@/components/dev/audio-volume-tune-panel";
 import { EntranceTapSkipLayer } from "@/components/entrance/entrance-tap-skip-layer";
 import { EnteringReveal } from "@/components/entrance/entering-reveal";
 import { LeavingScreen } from "@/components/entrance/leaving-screen";
@@ -38,9 +39,10 @@ import { EntranceBottomToast } from "@/components/entrance/entrance-bottom-toast
 import { SceneFrame } from "@/components/entrance/scene-frame";
 import { prepareBarAudioOnUserGesture, prepareCounterEntryAudioOnUserGesture, syncBarAudioUnlockFromClient, useBarAudio } from "@/hooks/use-bar-audio";
 import {
-  BAR_AUDIO_LEVELS,
   BAR_AUDIO_TIMING,
+  getBgmMix,
   getSfxSceneVolumeScale,
+  isAudioVolumeTunePanelEnabled,
 } from "@/lib/entrance/audio-levels";
 import type { CameraPose } from "@/lib/entrance/counter-camera-poses";
 import {
@@ -221,6 +223,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const router = useRouter();
   const audio = useBarAudio();
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [showAudioVolumeTunePanel, setShowAudioVolumeTunePanel] = useState(false);
   const [entranceState, setEntranceState] = useState<EntranceState>("entry");
   const [recordingLimitNoticeActive, setRecordingLimitNoticeActive] =
     useState(false);
@@ -473,6 +476,10 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     startBokehLampGlowHomeEditing || startBokehOnlyShapeEditing;
 
   useEffect(() => {
+    setShowAudioVolumeTunePanel(isAudioVolumeTunePanelEnabled());
+  }, []);
+
+  useEffect(() => {
     if (!lampGlowHomeEditing) return;
     saveLampGlowOverrides(lampGlows);
   }, [lampGlowHomeEditing, lampGlows]);
@@ -581,7 +588,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
     audio.stopOutside();
     audio.startJazz(
-      BAR_AUDIO_LEVELS.jazz.counter,
+      getBgmMix("jazzCounter"),
       BAR_AUDIO_TIMING.jazzEntryFadeMs,
     );
     setEntranceState("postRecordBlackout");
@@ -769,7 +776,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     farewellStartedRef.current = true;
     setEntranceState("postRecordThanks");
     audio.startJazz(
-      BAR_AUDIO_LEVELS.jazz.counter,
+      getBgmMix("jazzCounter"),
       BAR_AUDIO_TIMING.jazzEntryFadeMs,
     );
   }, [
@@ -947,7 +954,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       unlockBarAudio();
       setEntranceState("postRecordThanks");
       audio.startJazz(
-        BAR_AUDIO_LEVELS.jazz.counter,
+        getBgmMix("jazzCounter"),
         BAR_AUDIO_TIMING.jazzEntryFadeMs,
       );
     } finally {
@@ -1085,7 +1092,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const handleMasterGreetingComplete = () => {
     unlockBarAudio();
     audio.startJazz(
-      BAR_AUDIO_LEVELS.jazz.counter,
+      getBgmMix("jazzCounter"),
       BAR_AUDIO_TIMING.jazzEntryFadeMs,
     );
     setEntranceState("counterReveal");
@@ -1227,7 +1234,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         volumeScale: getSfxSceneVolumeScale("door", "postRecordExit"),
       });
       audio.startOutside(
-        BAR_AUDIO_LEVELS.outside.leaving,
+        getBgmMix("outsideLeaving"),
         POST_RECORD_EXIT_TUNING.outsideFadeInMs,
       );
     }, POST_RECORD_EXIT_TUNING.doorDelayAfterStoreExitMs);
@@ -1250,7 +1257,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       leaveAnimationDoneRef.current = false;
       audio.playDoor();
       audio.stopJazz();
-      audio.startOutside(BAR_AUDIO_LEVELS.outside.leaving);
+      audio.startOutside(getBgmMix("outsideLeaving"));
       setEntranceState("leaving");
     }, DECLINE_NIGHT_TUNING.fadeMs);
   };
@@ -1960,6 +1967,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         text={pastBottleBetaNotice}
         onDismiss={dismissPastBottleBetaNotice}
       />
+      {showAudioVolumeTunePanel && <AudioVolumeTunePanel />}
     </AnimatePresence>
   );
 }
