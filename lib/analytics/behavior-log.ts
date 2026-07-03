@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/client";
 
 const SESSION_ID_KEY = "barten-behavior-session-id";
 const REF_KEY = "barten-behavior-ref";
+const IS_ADMIN_KEY = "barten-is-admin";
 const ACCESS_LOGGED_KEY = "barten-behavior-access-logged";
 
 export const BEHAVIOR_EVENTS = [
@@ -52,13 +53,43 @@ export function getOrCreateBehaviorSessionId(): string {
   return next;
 }
 
+function setStoredBehaviorAdminFlag(): void {
+  if (!isBrowser()) return;
+  localStorage.setItem(IS_ADMIN_KEY, "true");
+}
+
+function clearStoredBehaviorAdminFlag(): void {
+  if (!isBrowser()) return;
+  localStorage.removeItem(IS_ADMIN_KEY);
+}
+
+function isStoredBehaviorAdminFlag(): boolean {
+  if (!isBrowser()) return false;
+  return localStorage.getItem(IS_ADMIN_KEY) === "true";
+}
+
 export function captureBehaviorRefFromUrl(search?: string): void {
   if (!isBrowser()) return;
 
   const params = new URLSearchParams(
     search ?? window.location.search,
   );
+  const adminParam = params.get("admin")?.trim().toLowerCase();
   const ref = params.get("ref")?.trim();
+
+  if (adminParam === "off" || ref === "clear-admin") {
+    clearStoredBehaviorAdminFlag();
+    if (ref === "clear-admin") {
+      return;
+    }
+  }
+
+  if (ref === "admin") {
+    setStoredBehaviorAdminFlag();
+    localStorage.setItem(REF_KEY, ref);
+    return;
+  }
+
   if (ref) {
     localStorage.setItem(REF_KEY, ref);
   }
@@ -119,6 +150,10 @@ async function resolveRegisteredAdminUser(
 }
 
 async function resolveIsAdmin(): Promise<boolean> {
+  if (isStoredBehaviorAdminFlag()) {
+    return true;
+  }
+
   if (isAdminBehaviorRef(getStoredBehaviorRef())) {
     return true;
   }
