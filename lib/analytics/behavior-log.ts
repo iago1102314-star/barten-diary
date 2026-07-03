@@ -18,6 +18,18 @@ export const BEHAVIOR_EVENTS = [
 
 export type BehaviorEventName = (typeof BEHAVIOR_EVENTS)[number];
 
+type AuthUserSnapshot = {
+  id: string;
+  email: string | null;
+};
+
+type AdminUserCache = {
+  userKey: string;
+  isAdmin: boolean;
+};
+
+let adminUserCache: AdminUserCache | null = null;
+
 function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
@@ -52,6 +64,10 @@ export function captureBehaviorRefFromUrl(search?: string): void {
   }
 }
 
+export function clearBehaviorAdminCache(): void {
+  adminUserCache = null;
+}
+
 function getStoredBehaviorRef(): string | null {
   if (!isBrowser()) return null;
   return localStorage.getItem(REF_KEY);
@@ -61,21 +77,67 @@ function isAdminBehaviorRef(ref: string | null): boolean {
   return ref === "admin";
 }
 
-function readBehaviorLogContext(): { ref: string | null; is_admin: boolean } {
-  const ref = getStoredBehaviorRef();
-  return { ref, is_admin: isAdminBehaviorRef(ref) };
-}
-
-async function resolveUserId(): Promise<string | null> {
+async function resolveAuthUser(): Promise<AuthUserSnapshot | null> {
   try {
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    return user?.id ?? null;
+    if (!user) return null;
+    return { id: user.id, email: user.email ?? null };
   } catch {
     return null;
   }
+}
+
+async function resolveRegisteredAdminUser(
+  authUser: AuthUserSnapshot,
+): Promise<boolean> {
+  if (adminUserCache?.userKey === authUser.id) {
+    return adminUserCache.isAdmin;
+  }
+
+  try {
+    const supabase = createClient();
+    const filters = [`user_id.eq.${authUser.id}`];
+    if (authUser.email) {
+      filters.push(`email.eq.${authUser.email}`);
+    }
+
+    const { data, error } = await supabase
+      .from("admin_users")
+      .select("id")
+      .or(filters.join(","))
+      .maybeSingle();
+
+    const isAdmin = !error && data !== null;
+    adminUserCache = { userKey: authUser.id, isAdmin };
+    return isAdmin;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveIsAdmin(): Promise<boolean> {
+  if (isAdminBehaviorRef(getStoredBehaviorRef())) {
+    return true;
+  }
+
+  const authUser = await resolveAuthUser();
+  if (!authUser) {
+    return false;
+  }
+
+  return resolveRegisteredAdminUser(authUser);
+}
+
+async function resolveBehaviorLogContext(): Promise<{
+  ref: string | null;
+  is_admin: boolean;
+}> {
+  const ref = getStoredBehaviorRef();
+  const is_admin = await resolveIsAdmin();
+  return { ref, is_admin };
 }
 
 function readScreenSize(): { width: number | null; height: number | null } {
@@ -96,15 +158,15 @@ export async function logBehaviorAccessOnce(): Promise<void> {
   const sessionId = getOrCreateBehaviorSessionId();
   if (!sessionId) return;
 
-  const userId = await resolveUserId();
+  const authUser = await resolveAuthUser();
   const { width, height } = readScreenSize();
-  const { ref, is_admin } = readBehaviorLogContext();
+  const { ref, is_admin } = await resolveBehaviorLogContext();
 
   try {
     const supabase = createClient();
     const { error } = await supabase.from("access_logs").insert({
       session_id: sessionId,
-      user_id: userId,
+      user_id: authUser?.id ?? null,
       ref,
       is_admin,
       path: window.location.pathname,
@@ -130,14 +192,14 @@ export async function logBehaviorEvent(
   const sessionId = getOrCreateBehaviorSessionId();
   if (!sessionId) return;
 
-  const userId = await resolveUserId();
-  const { ref, is_admin } = readBehaviorLogContext();
+  const authUser = await resolveAuthUser();
+  const { ref, is_admin } = await resolveBehaviorLogContext();
 
   try {
     const supabase = createClient();
     await supabase.from("event_logs").insert({
       session_id: sessionId,
-      user_id: userId,
+      user_id: authUser?.id ?? null,
       event_name: eventName,
       ref,
       is_admin,

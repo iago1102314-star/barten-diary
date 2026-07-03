@@ -2,6 +2,7 @@
 
 import {
   captureBehaviorRefFromUrl,
+  clearBehaviorAdminCache,
   logBehaviorAccessOnce,
   logBehaviorEvent,
 } from "@/lib/analytics/behavior-log";
@@ -19,7 +20,11 @@ export function BehaviorLogInit() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN") {
+        clearBehaviorAdminCache();
         void logBehaviorEvent("login_success");
+      }
+      if (event === "SIGNED_OUT") {
+        clearBehaviorAdminCache();
       }
     });
 
