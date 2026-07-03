@@ -136,6 +136,12 @@ import { POST_RECORD_EXIT_TUNING } from "@/lib/entrance/post-record-exit-tuning"
 import { RECORD_COUNTER_BOTTOM_TUNING } from "@/lib/entrance/drink-name-reveal-tuning";
 import { RECORD_COUNTER_SHOW_DRINK } from "@/lib/entrance/record-counter-scene-tuning";
 import {
+  resolveMoodOptionDrinkId,
+  startCounterEntryScenePreload,
+  startRecordCounterScenePreload,
+  waitForSceneRevealPreload,
+} from "@/lib/entrance/scene-reveal-preload";
+import {
   DEFAULT_MEMORIES_LAUNCH,
   type MemoriesLaunch,
 } from "@/lib/entrance/memories-launch";
@@ -264,6 +270,8 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const [moodPromptSkippedFromReveal, setMoodPromptSkippedFromReveal] =
     useState(false);
   const moodExitSkipRef = useRef<(() => void) | null>(null);
+  const counterEntryPreloadRef = useRef<Promise<void> | null>(null);
+  const recordCounterPreloadRef = useRef<Promise<void> | null>(null);
   const [drinkEnteringReveal, setDrinkEnteringReveal] = useState(false);
   const [drinkRevealSkipped, setDrinkRevealSkipped] = useState(false);
   const [drinkIntroSkipToSip, setDrinkIntroSkipToSip] = useState(false);
@@ -480,6 +488,11 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   }, []);
 
   useEffect(() => {
+    if (entranceState !== "masterOnBlack") return;
+    counterEntryPreloadRef.current = startCounterEntryScenePreload();
+  }, [entranceState]);
+
+  useEffect(() => {
     if (!lampGlowHomeEditing) return;
     saveLampGlowOverrides(lampGlows);
   }, [lampGlowHomeEditing, lampGlows]);
@@ -526,6 +539,8 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     setMoodAwaitingGrass(false);
     setMoodPromptSkippedFromReveal(false);
     moodExitSkipRef.current = null;
+    counterEntryPreloadRef.current = null;
+    recordCounterPreloadRef.current = null;
     setMoodCameraPose("neutral");
     setAlleyOutcome(null);
   }, []);
@@ -1089,13 +1104,18 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     startEntryOutsideAmbience();
   };
 
+  const beginCounterReveal = useCallback(async () => {
+    await waitForSceneRevealPreload(counterEntryPreloadRef.current);
+    setEntranceState("counterReveal");
+  }, []);
+
   const handleMasterGreetingComplete = () => {
     unlockBarAudio();
     audio.startJazz(
       getBgmMix("jazzCounter"),
       BAR_AUDIO_TIMING.jazzEntryFadeMs,
     );
-    setEntranceState("counterReveal");
+    void beginCounterReveal();
   };
 
   const handleCounterRevealComplete = () => {
@@ -1138,7 +1158,8 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     session.selectCategory(categoryId, drink.id);
     setPickedDrink(drink);
 
-    const finishToDrinkServed = () => {
+    const finishToDrinkServed = async () => {
+      await waitForSceneRevealPreload(recordCounterPreloadRef.current);
       setMoodSelectExitActive(false);
       setMoodCameraPose("neutral");
       moodGrassPlayedRef.current = true;
@@ -1148,14 +1169,16 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     };
 
     const fallbackMs = MOOD_SELECT_EXIT_SCALED.grassFallbackDurationSec * 1000;
-    const fallbackTimer = window.setTimeout(finishToDrinkServed, fallbackMs);
+    const fallbackTimer = window.setTimeout(() => {
+      void finishToDrinkServed();
+    }, fallbackMs);
 
     let finished = false;
     const finishOnce = () => {
       if (finished) return;
       finished = true;
       window.clearTimeout(fallbackTimer);
-      finishToDrinkServed();
+      void finishToDrinkServed();
     };
 
     audio.playGlassSlide({
@@ -1883,9 +1906,12 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
               >
                 <MoodSelectScene
                   skipPastBottleEntrance={moodSelectVisitedRef.current}
-                  onSelectionStart={() => {
+                  onSelectionStart={(option) => {
                     setMoodSelectExitActive(true);
                     setMoodAwaitingGrass(true);
+                    recordCounterPreloadRef.current = startRecordCounterScenePreload(
+                      resolveMoodOptionDrinkId(option),
+                    );
                   }}
                   onRegisterExitSkip={registerMoodExitSkip}
                   onSelect={handleMoodSelect}
