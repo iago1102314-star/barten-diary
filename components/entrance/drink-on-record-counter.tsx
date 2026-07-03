@@ -1,8 +1,6 @@
 "use client";
 
 import type { RecordSceneDrinkTuning } from "@/lib/entrance/record-counter-scene-tuning";
-import { EASE_SOFT } from "@/lib/entrance/motion-presets";
-import { motion } from "motion/react";
 import Image from "next/image";
 
 type DrinkOnRecordCounterProps = {
@@ -10,7 +8,7 @@ type DrinkOnRecordCounterProps = {
   placement: RecordSceneDrinkTuning;
 };
 
-/** カウンター layer 内 — x/y % で配置（画面基準ではない） */
+/** カウンター layer 内 — 定位置・定常表示（スライドなし） */
 export function DrinkOnRecordCounter({
   src,
   placement,
@@ -19,28 +17,16 @@ export function DrinkOnRecordCounter({
     placement;
 
   return (
-    <motion.div
-      key={`drink-${xPercent}-${yPercent}-${zoom}-${opacity}`}
+    <div
       className="pointer-events-none absolute z-[2]"
       style={{
         left: `${xPercent}%`,
         top: `${yPercent}%`,
         width: `${sizePercent}%`,
         maxWidth: maxWidthPx,
-      }}
-      initial={{
-        opacity: 0,
-        x: "-50%",
-        y: "-50%",
-        scale: zoom * 0.92,
-      }}
-      animate={{
         opacity,
-        x: "-50%",
-        y: "-50%",
-        scale: zoom,
+        transform: `translate(-50%, -50%) scale(${zoom})`,
       }}
-      transition={{ duration: 1.1, ease: EASE_SOFT, delay: 0.15 }}
     >
       <div className="relative w-full" style={{ aspectRatio }}>
         <Image
@@ -57,6 +43,6 @@ export function DrinkOnRecordCounter({
           unoptimized
         />
       </div>
-    </motion.div>
+    </div>
   );
 }

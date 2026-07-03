@@ -61,6 +61,10 @@ function generationKey(transcript: string, recordedAt: string | null): string {
   return `${transcript}::${recordedAt ?? ""}`;
 }
 
+export type DevSkipToPostRecordResult =
+  | { ok: true; drink: Drink; usedFallback: boolean }
+  | { ok: false; error: string };
+
 export function useNightSession() {
   const router = useRouter();
   const [phase, setPhase] = useState<NightPhase>("idle");
@@ -311,14 +315,6 @@ export function useNightSession() {
       reason: "stopSpeaking called while recorder was not active",
     });
   }, [recorder, registerListenFailure]);
-
-  const pauseSpeaking = useCallback((): boolean => {
-    return recorder.pause();
-  }, [recorder]);
-
-  const resumeSpeaking = useCallback((): boolean => {
-    return recorder.resume();
-  }, [recorder]);
 
   const retrySpeaking = useCallback(async (): Promise<boolean> => {
     setListenFailureVisible(false);
@@ -802,40 +798,6 @@ export function useNightSession() {
     deferSaveForLogin,
   ]);
 
-  const prepareDevSkipFromLatestDiary = useCallback(async (): Promise<Drink | null> => {
-    if (!isDevShortcutEnabled()) return null;
-
-    const snapshot = await fetchLatestDiaryForDev();
-    if (!snapshot) return null;
-
-    const drink =
-      resolveDrinkById(snapshot.drinkId) ??
-      fallbackDrinkFromName(snapshot.drinkName);
-    const endedAt = new Date().toISOString();
-
-    phaseRef.current = "revealed";
-    setPhase("revealed");
-    pipelineLock.current = false;
-    barAudioEngine.resumeJazzAfterRecording();
-    recorder.reset();
-    generation.reset();
-    resetListenFailure();
-    generation.injectDevResult(snapshot.record);
-    inflightGenerationKeyRef.current = generationKey(
-      snapshot.transcript,
-      endedAt,
-    );
-    setSelectedCategoryId(snapshot.categoryId);
-    setSelectedDrinkId(snapshot.drinkId);
-    setContinuedFrom(null);
-    setTranscript(snapshot.transcript);
-    setRecordedAt(endedAt);
-    setIsDevSimulated(false);
-    setGenerationFailed(false);
-
-    return drink;
-  }, [recorder, generation, resetListenFailure]);
-
   const simulateDevNight = useCallback(
     (patternId?: FakeNightId): Drink | null => {
       if (!isDevShortcutEnabled()) return null;
@@ -857,6 +819,11 @@ export function useNightSession() {
       setTranscript(simulated.transcript);
       setRecordedAt(simulated.recordedAt);
       setIsDevSimulated(true);
+      setGenerationFailed(false);
+      setPipelineFailurePhase(null);
+      setSaveStatus("idle");
+      setSavedDiaryId(null);
+      lastSavedTranscriptRef.current = null;
       phaseRef.current = "revealed";
       setPhase("revealed");
 
@@ -864,6 +831,60 @@ export function useNightSession() {
     },
     [recorder, generation, resetListenFailure],
   );
+
+  const prepareDevSkipFromLatestDiary =
+    useCallback(async (): Promise<DevSkipToPostRecordResult> => {
+      if (!isDevShortcutEnabled()) {
+        return { ok: false, error: "開発用ショートカットが無効です。" };
+      }
+
+      const applySimulatedNight = (): DevSkipToPostRecordResult => {
+        const drink = simulateDevNight("dev");
+        if (!drink) {
+          return { ok: false, error: "開発用の仮データを読み込めませんでした。" };
+        }
+        return { ok: true, drink, usedFallback: true };
+      };
+
+      const latest = await fetchLatestDiaryForDev();
+      if (!latest.ok) {
+        const fallback = applySimulatedNight();
+        if (fallback.ok) return fallback;
+        return { ok: false, error: latest.error };
+      }
+
+      const snapshot = latest.snapshot;
+      const drink =
+        resolveDrinkById(snapshot.drinkId) ??
+        fallbackDrinkFromName(snapshot.drinkName);
+      const endedAt = new Date().toISOString();
+
+      phaseRef.current = "revealed";
+      setPhase("revealed");
+      pipelineLock.current = false;
+      barAudioEngine.resumeJazzAfterRecording();
+      recorder.reset();
+      generation.reset();
+      resetListenFailure();
+      generation.injectDevResult(snapshot.record);
+      inflightGenerationKeyRef.current = generationKey(
+        snapshot.transcript,
+        endedAt,
+      );
+      setSelectedCategoryId(snapshot.categoryId);
+      setSelectedDrinkId(snapshot.drinkId);
+      setContinuedFrom(null);
+      setTranscript(snapshot.transcript);
+      setRecordedAt(endedAt);
+      setIsDevSimulated(false);
+      setGenerationFailed(false);
+      setPipelineFailurePhase(null);
+      setSaveStatus("saved");
+      setSavedDiaryId(snapshot.diaryId);
+      lastSavedTranscriptRef.current = snapshot.transcript;
+
+      return { ok: true, drink, usedFallback: false };
+    }, [recorder, generation, resetListenFailure, simulateDevNight]);
 
   useEffect(() => {
     if (phase !== "recording") return;
@@ -917,8 +938,6 @@ export function useNightSession() {
     reset,
     startSpeaking,
     stopSpeaking,
-    pauseSpeaking,
-    resumeSpeaking,
     retrySpeaking,
     prepareRetryFromSip,
     retryGeneration,
@@ -930,5 +949,6 @@ export function useNightSession() {
     prepareDevSkipFromLatestDiary,
     elapsedMs: recorder.elapsedMs,
     recorderStatus: recorder.status,
+    recordedAt,
   };
 }

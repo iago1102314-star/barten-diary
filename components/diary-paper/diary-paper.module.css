@@ -449,6 +449,67 @@
   white-space: pre-line;
 }
 
+/** ゲスト — 本文のみマスク（1行＝くっきり / 2行＝少し薄い / 3行＝もっと薄い） */
+.bodyGuestPreview {
+  position: relative;
+  width: 100%;
+  max-height: calc(
+    var(--diary-line-stride) * var(--guest-body-visible-lines, 3)
+  );
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 var(--guest-body-mask-line1-end, 33.33%),
+    rgba(0, 0, 0, var(--guest-body-mask-line2-mid-opacity, 0.48))
+      var(--guest-body-mask-line2-mid, 48%),
+    rgba(0, 0, 0, var(--guest-body-mask-line2-opacity, 0.28))
+      var(--guest-body-mask-line2-end, 66.66%),
+    rgba(0, 0, 0, var(--guest-body-mask-line3-mid-opacity, 0.07))
+      var(--guest-body-mask-line3-mid, 82%),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 var(--guest-body-mask-line1-end, 33.33%),
+    rgba(0, 0, 0, var(--guest-body-mask-line2-mid-opacity, 0.48))
+      var(--guest-body-mask-line2-mid, 48%),
+    rgba(0, 0, 0, var(--guest-body-mask-line2-opacity, 0.28))
+      var(--guest-body-mask-line2-end, 66.66%),
+    rgba(0, 0, 0, var(--guest-body-mask-line3-mid-opacity, 0.07))
+      var(--guest-body-mask-line3-mid, 82%),
+    transparent 100%
+  );
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+/** ゲスト — フェード直後の空白（紙）領域 */
+.guestBlankZone {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  width: 100%;
+  padding-top: var(--guest-fade-to-login-gap, 0.2rem);
+  min-height: calc(
+    var(--diary-line-stride) * var(--guest-blank-zone-min-rows, 5)
+  );
+}
+
+.paperStretchViewport .guestBlankZone {
+  min-height: calc(var(--diary-line-stride) * 2);
+}
+
+:global([data-diary-exporting="true"]) .guestBlankZone {
+  display: none !important;
+}
+
 .ruledBlock {
   box-sizing: border-box;
   width: 100%;

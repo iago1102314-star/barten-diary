@@ -27,15 +27,6 @@ export function SceneFrame({
       onPointerDown={onPointerDown}
     >
       {children}
-
-      {atmosphere && (
-        <div
-          className="pointer-events-none absolute inset-0 z-[25]"
-          aria-hidden
-        >
-          <div className="absolute inset-0 scene-amber-air" />
-        </div>
-      )}
     </div>
   );
 }

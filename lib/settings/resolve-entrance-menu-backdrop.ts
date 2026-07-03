@@ -17,7 +17,6 @@ type EntranceState =
   | "recording"
   | "postRecordBlackout"
   | "postRecordThanks"
-  | "postRecordExitBlack"
   | "leaving"
   | "alley";
 
@@ -72,7 +71,6 @@ export function resolveEntranceMenuBackdrop(
   if (
     entranceState === "masterOnBlack" ||
     entranceState === "declineFarewellOnBlack" ||
-    entranceState === "postRecordExitBlack" ||
     (entranceState === "decliningNight" && declineBlackoutReady)
   ) {
     return { kind: "black" };
@@ -105,11 +103,14 @@ export function resolveEntranceMenuBackdrop(
         entranceState === "pastBottleSelect" ||
         isDeclineFading) &&
       !moodSelectExitActive;
+    const counterUsesMoodCameraPose =
+      showMoodParallaxCamera ||
+      (moodSelectExitActive && entranceState === "moodSelect");
 
     return {
       kind: "counter",
       moodCategoryId,
-      cameraPose: showMoodParallaxCamera ? moodCameraPose : "neutral",
+      cameraPose: counterUsesMoodCameraPose ? moodCameraPose : "neutral",
     };
   }
 

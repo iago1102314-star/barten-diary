@@ -2,7 +2,7 @@
 
 import { LampGlow } from "@/components/entrance/atmosphere";
 import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
-import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
+import { AFTER_NIGHT_BACKDROP_TUNING as T } from "@/lib/entrance/after-night-backdrop-tuning";
 import { motion, type MotionProps } from "motion/react";
 import Image from "next/image";
 
@@ -15,12 +15,12 @@ export function AfterNightBackdrop({ motionProps }: AfterNightBackdropProps) {
   return (
     <motion.div
       className="absolute inset-0"
-      initial={motionProps?.initial ?? { opacity: 0, scale: 1.06 }}
-      animate={motionProps?.animate ?? { opacity: 1, scale: 1.02 }}
+      initial={motionProps?.initial ?? { opacity: T.initialOpacity, scale: T.initialScale }}
+      animate={motionProps?.animate ?? { opacity: T.animateOpacity, scale: T.animateScale }}
       transition={
         motionProps?.transition ?? {
-          opacity: { duration: 3, ease: EASE_DRIFT },
-          scale: { duration: 30, ease: EASE_DRIFT },
+          opacity: { duration: T.opacityDurationSec, ease: T.ease },
+          scale: { duration: T.scaleDurationSec, ease: T.ease },
         }
       }
     >

@@ -42,7 +42,7 @@ export const DRINK_CATEGORIES: DrinkCategory[] = [
         id: "old-fashioned",
         name: "Old Fashioned",
         displayNameJa: "オールドファッションド",
-        note: "苦味と甘みがゆっくり重なる、昔から愛されるクラシックな一杯。",
+        note: "苦味と甘みがゆっくり重なる、\n昔から愛される一杯。",
         masterComments: [
           "苦味の残る酒ほど、不思議とまた飲みたくなる。",
           "苦味まで味わうと、少し変わって見える。",
@@ -61,9 +61,9 @@ export const DRINK_CATEGORIES: DrinkCategory[] = [
     drinks: [
       {
         id: "koshu",
-        name: "甲州",
+        name: "Koshu",
         displayNameJa: "甲州ワイン",
-        note: "穏やかな香りと軽やかな飲み口。静かに考えを整理したい夜に。",
+        note: "穏やかな香りと軽やかな飲み口。\n静かに考えごとをしたい夜に。",
         masterComments: [
           "甲州は派手じゃない。\nでも、そういう夜にちょうどいい。",
           "飲み疲れない酒、っていうのは案外少ない。",
@@ -82,7 +82,7 @@ export const DRINK_CATEGORIES: DrinkCategory[] = [
         id: "bellini",
         name: "Bellini",
         displayNameJa: "ベリーニ",
-        note: "桃のやさしい甘さと泡が広がる、少しだけ華やかなカクテル。",
+        note: "桃のやさしい甘さと泡が広がる、\n少しだけ華やかなカクテル。",
         masterComments: [
           "甘い一杯。\nそういう味こそ、忘れてしまうものだ。",
           "桃の甘い香りは、夜を少しだけ軽くしてくれる。",
@@ -95,13 +95,13 @@ export const DRINK_CATEGORIES: DrinkCategory[] = [
   {
     id: "sleepless",
     label: "眠れなくて",
-    description: "眠れない、不安、落ち着きたい",
+    description: "眠い、不安",
     drinks: [
       {
         id: "hot-cocoa",
-        name: "ホットココア",
+        name: "Hot Cocoa",
         displayNameJa: "ホットココア",
-        note: "甘さと温もりをゆっくり味わう、お酒じゃない夜のための一杯。",
+        note: "甘さと温もりをゆっくり味わう、\nお酒じゃない夜の一杯。",
         masterComments: [
           "酔うより、温まって帰る夜も悪くない。",
           "考えすぎた日は、少し体を温めるといい。",

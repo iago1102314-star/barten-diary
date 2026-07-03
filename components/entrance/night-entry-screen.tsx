@@ -3,6 +3,7 @@
 import { SceneFrame } from "@/components/entrance/scene-frame";
 import { HomeEntryButton } from "@/components/entrance/home-entry-button";
 import { HomeAuthButton } from "@/components/entrance/home-auth-button";
+import { HomeBetaLabel } from "@/components/entrance/home-beta-label";
 import { LoadingGateMessage } from "@/components/entrance/loading-gate-message";
 import {
   StartEntryAlleyLayer,
@@ -367,6 +368,12 @@ export function NightEntryScreen({
             )}
           </div>
         </motion.div>
+
+        <HomeBetaLabel
+          visible={showUi}
+          isSteadyReturn={isSteadyReturn}
+          interactionLocked={interactionLocked}
+        />
       </motion.div>
 
       {SHOW_LOADING_GATE_MESSAGE_ON_HOME && <LoadingGateMessage />}

@@ -8,9 +8,9 @@ export function moodSelectExitScaledSec(baseSec: number): number {
 }
 
 export const MOOD_SELECT_EXIT_SCALED = {
+  /** 入場ビネットと同秒数（× scale）— uiReverse より遅く侵食が見える */
   vignetteCloseDurationSec: moodSelectExitScaledSec(
-    MOOD_SELECT_EXIT_TUNING.vignetteCloseDurationSec /
-      MOOD_SELECT_EXIT_TUNING.uiReverseSpeedFactor,
+    MOOD_SELECT_EXIT_TUNING.vignetteCloseDurationSec,
   ),
   buttonMoveToCenterSec: moodSelectExitScaledSec(
     MOOD_SELECT_EXIT_TUNING.buttonMoveToCenterSec,

@@ -9,6 +9,7 @@ import {
 } from "@/lib/drinks/resolve-drink-from-bottle-tag";
 
 export type DevLatestDiarySnapshot = {
+  diaryId: string;
   transcript: string;
   bottleTag: string;
   categoryId: DrinkCategoryId;
@@ -34,6 +35,7 @@ export function mapLatestDiaryForDevSkip(
     ("clear" as DrinkCategoryId);
 
   return {
+    diaryId: diary.id,
     transcript,
     bottleTag,
     categoryId,

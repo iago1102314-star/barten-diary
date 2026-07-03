@@ -19,6 +19,7 @@ import { useMemoShelfPageNavigation } from "@/hooks/use-memo-shelf-page-navigati
 import { useShelfOutsideAmbience } from "@/hooks/use-shelf-outside-ambience";
 import { useDiaryDelete } from "@/hooks/use-diary-delete";
 import { useDiaryPaperExport } from "@/hooks/use-diary-paper-export";
+import { useAuthUser } from "@/hooks/use-auth-user";
 import { skipMemoShelfPolaroidIntro } from "@/lib/memories/memo-shelf-polaroid-intro";
 import {
   findGuestDiaryDraftByListId,
@@ -320,6 +321,9 @@ export function MemoriesScreen({
     ? isGuestDiaryListId(selectedMemo.id)
     : false;
 
+  const { isLoggedIn, isLoading: authLoading } = useAuthUser();
+  const guestBodyPreview = authLoading ? true : !isLoggedIn;
+
   const recordBackLabel = selectedMemo
     ? directOpen
       ? backFromScreenLabel
@@ -446,7 +450,7 @@ export function MemoriesScreen({
             onBack={handleRecordBack}
             backLabel={recordBackLabel}
             detailActions={
-              selectedMemo && !detailEditing
+              selectedMemo && !detailEditing && !guestBodyPreview
                 ? selectedMemoIsGuest
                   ? {
                       onEdit: () => setDetailEditing(true),

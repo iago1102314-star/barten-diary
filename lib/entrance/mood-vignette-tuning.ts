@@ -23,6 +23,11 @@ export const MOOD_VIGNETTE_TUNING = {
   drinkPostGrassSkipZIndex: 45,
   /** entrance-flow —「過去のボトルから」リンク */
   pastBottleLinkZIndex: 45,
+  /**
+   * 確定感情ボタン — 中央移動・溶解（portal）
+   * ビネット閉じ・暗幕・UI shell より上
+   */
+  moodConfirmExitZIndex: 50,
 
   /** 影レイヤー内部 z-index */
   layerZIndex: 2,

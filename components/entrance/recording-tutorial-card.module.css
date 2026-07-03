@@ -1,0 +1,96 @@
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 43;
+  pointer-events: none;
+  background: rgb(4 3 2 / var(--rt-scrim-opacity, 0.38));
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  z-index: 44;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 0.75rem;
+  padding-block: max(1rem, env(safe-area-inset-top, 0px))
+    max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem));
+}
+
+.cardWrap {
+  pointer-events: auto;
+  width: 100%;
+  max-width: var(--rt-card-max-width, 22.5rem);
+  transform-origin: 50% 42%;
+}
+
+.card {
+  width: 100%;
+  max-width: none;
+  margin-inline: auto;
+  padding: var(--rt-card-padding-y, 1.4rem)
+    var(--rt-card-padding-x, 1.45rem) !important;
+  filter: brightness(var(--rt-card-brightness, 0.82)) saturate(0.9);
+  box-shadow:
+    0 2px 4px rgba(8, 6, 4, 0.12),
+    0 10px 28px rgba(8, 6, 4, 0.18);
+}
+
+.title {
+  margin: 0 0 0.75rem;
+  text-align: center;
+  font-family: var(--font-serif-jp), serif;
+  font-size: var(--rt-title-size, 0.92rem);
+  font-weight: normal;
+  letter-spacing: var(--rt-title-tracking, 0.12em);
+  color: var(--diary-paper-ink-muted, #5c4f3d);
+}
+
+.ruledBody {
+  width: 100%;
+}
+
+.ruledBody .paragraph {
+  text-align: center;
+  letter-spacing: var(--rt-body-tracking, 0.05em);
+}
+
+.closeSection {
+  margin-top: var(--rt-close-divider-mt, 1.05rem);
+}
+
+.closeDivider {
+  height: 1px;
+  margin-bottom: var(--rt-close-divider-mb, 0.55rem);
+  background: rgb(90 67 51 / var(--rt-close-divider-opacity, 0.3));
+}
+
+.closeLink {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.15rem 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: center;
+  font-family: var(--font-serif-jp), serif;
+  font-size: var(--rt-close-size, 0.8125rem);
+  font-weight: normal;
+  letter-spacing: var(--rt-close-tracking, 0.14em);
+  color: rgb(90 67 51 / var(--rt-close-opacity, 0.62));
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.closeLink:hover {
+  color: rgb(90 67 51 / calc(var(--rt-close-opacity, 0.62) + 0.18));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .closeLink {
+    transition: none;
+  }
+}

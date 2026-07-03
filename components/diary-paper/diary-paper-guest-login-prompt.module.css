@@ -1,0 +1,70 @@
+.wrap {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  padding-inline: 0;
+}
+
+.divider {
+  flex-shrink: 0;
+  height: 1px;
+  border: 0;
+  margin-inline: auto;
+  background: rgb(90 67 51);
+}
+
+.hint {
+  margin: 0;
+  text-align: center;
+  font-weight: normal;
+}
+
+.login {
+  width: 100%;
+}
+
+.paperLoginButton {
+  position: relative;
+  z-index: 110;
+  margin-inline: auto;
+  display: flex;
+  height: var(--guest-login-btn-height, 40px);
+  min-height: var(--guest-login-btn-height, 40px);
+  width: 100%;
+  max-width: 20rem;
+  touch-action: manipulation;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  border-radius: 9999px;
+  border: 1px solid
+    rgb(90 67 51 / var(--guest-login-btn-border-opacity, 0.26));
+  background: rgb(90 67 51 / var(--guest-login-btn-bg-opacity, 0.1));
+  padding-inline: 1.75rem;
+  font-size: 0.8125rem;
+  color: rgb(90 67 51 / var(--guest-login-btn-text-opacity, 0.8));
+  box-shadow: 0 1px 3px
+    rgb(40 28 18 / var(--guest-login-btn-shadow-opacity, 0.045));
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.paperLoginButton:hover:not(:disabled) {
+  border-color: rgb(90 67 51 / calc(var(--guest-login-btn-border-opacity, 0.26) + 0.08));
+  color: rgb(90 67 51 / calc(var(--guest-login-btn-text-opacity, 0.8) + 0.1));
+  background: rgb(90 67 51 / calc(var(--guest-login-btn-bg-opacity, 0.1) + 0.04));
+  box-shadow: 0 1px 2px
+    rgb(40 28 18 / calc(var(--guest-login-btn-shadow-opacity, 0.045) + 0.02));
+}
+
+.paperLoginButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

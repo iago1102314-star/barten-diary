@@ -47,7 +47,7 @@ export function DiaryPaperScreen({
       <MemoShelfRecordBottomBar
         backHref={backHref}
         backLabel={backLabel}
-        title={variant === "lab" ? "日記紙面" : "夜のメモ"}
+        title={variant === "lab" ? "日記紙面" : "夜の記録"}
       />
     </div>
   );

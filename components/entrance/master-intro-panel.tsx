@@ -5,7 +5,10 @@ import type { MasterDialogueBodyHandle } from "@/components/entrance/master-dial
 import { barAudioEngine, unlockBarAudioForUserGesture } from "@/lib/entrance/bar-audio-engine";
 import { useDialogueAdvance } from "@/hooks/use-dialogue-advance";
 import { useRapidTapSkip } from "@/hooks/use-rapid-tap-skip";
-import { MASTER_DIALOGUE_TYPOGRAPHY } from "@/lib/entrance/master-dialogue-typography";
+import {
+  masterDialoguePanelWrapperStyle,
+  resolveMasterDialogueTypewriterSpeedMs,
+} from "@/lib/entrance/master-dialogue-typography";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MASTER_GREETINGS_FIRST,
@@ -121,12 +124,12 @@ export function MasterIntroPanel({
       className="flex h-full w-full flex-col items-stretch justify-end text-left [-webkit-tap-highlight-color:transparent]"
     >
       {bubbleVisible && (
-        <div className="w-full self-stretch pb-12">
+        <div className="w-full self-stretch" style={masterDialoguePanelWrapperStyle()}>
           <DialogueBox
             lineKey={index}
             showAdvanceCue={done}
             text={currentLine}
-            typewriterSpeed={MASTER_DIALOGUE_TYPOGRAPHY.typewriterSpeedMs}
+            typewriterSpeed={resolveMasterDialogueTypewriterSpeedMs()}
             onTypewriterDone={() => setDone(true)}
             dialogueBodyRef={dialogueBodyRef}
           />

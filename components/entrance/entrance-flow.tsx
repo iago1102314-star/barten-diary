@@ -2,14 +2,18 @@
 
 import { CounterScene } from "@/components/entrance/counter-scene";
 import { DrinkNameReveal } from "@/components/entrance/drink-name-reveal";
-import { DrinkRecordIntroPanel } from "@/components/entrance/drink-record-intro-panel";
+import { DrinkRecordIntroPanel, type RecordDrinkIntroPhase } from "@/components/entrance/drink-record-intro-panel";
+import { DrinkRecordNote } from "@/components/entrance/drink-record-note";
+import {
+  RecordBottomAction,
+  type RecordBottomTextPhase,
+} from "@/components/entrance/record-bottom-action";
 import { RecordCounterScene } from "@/components/entrance/record-counter-scene";
 import { DevPostRecordSkipButton } from "@/components/entrance/dev-post-record-skip-button";
 import { EntranceTapSkipLayer } from "@/components/entrance/entrance-tap-skip-layer";
 import { EnteringReveal } from "@/components/entrance/entering-reveal";
 import { LeavingScreen } from "@/components/entrance/leaving-screen";
-import { PostRecordExitBlack } from "@/components/entrance/post-record-exit-black";
-import { PostRecordThanksScene } from "@/components/entrance/post-record-thanks-scene";
+import { PostRecordFarewellScene } from "@/components/entrance/post-record-farewell-scene";
 import { HomeLampGlowShapeEditor } from "@/components/entrance/home-lamp-glow-shape-editor";
 import { StartLampGlowShapeEditor } from "@/components/entrance/start-lamp-glow-shape-editor";
 import { StartBokehLampGlowShapeEditor } from "@/components/entrance/start-bokeh-lamp-glow-shape-editor";
@@ -26,6 +30,7 @@ import { NightEntryScreen, type EntryScreenPhase } from "@/components/entrance/n
 import { PastBottlePanel } from "@/components/entrance/past-bottle-panel";
 import { PastBottleLink } from "@/components/entrance/past-bottle-link";
 import { RecordingPanel } from "@/components/entrance/recording-panel";
+import { RecordingTutorialCard } from "@/components/entrance/recording-tutorial-card";
 import { SceneFrame } from "@/components/entrance/scene-frame";
 import { prepareBarAudioOnUserGesture, syncBarAudioUnlockFromClient, useBarAudio } from "@/hooks/use-bar-audio";
 import {
@@ -82,11 +87,21 @@ import {
   type CounterLampGlowConfig,
 } from "@/lib/entrance/counter-lamp-glows";
 import { useNightSession } from "@/hooks/use-night-session";
+import {
+  getMicAvailability,
+  micBlockedHintText,
+} from "@/lib/recorder/mic-availability";
 import type { LoadingGateSnapshot } from "@/lib/entrance/loading-gate-init";
 import {
   markReturningVisitor,
 } from "@/lib/entrance/visit-state";
+import {
+  hasSeenRecordingTutorial,
+  markRecordingTutorialSeen,
+} from "@/lib/entrance/recording-tutorial-seen";
 import type { NightAlleyOutcome } from "@/lib/entrance/night-outcome";
+import { buildAlleyDiaryPaper } from "@/lib/entrance/alley-diary-preview";
+import type { DiaryPaperData } from "@/lib/diary-paper/diary-paper-types";
 import { getDrinkImagePath } from "@/lib/entrance/drink-image-path";
 import { pickPastBottleMasterLine } from "@/lib/entrance/past-bottle-master-line";
 import { MoodVignetteOverlay } from "@/components/entrance/mood-vignette-overlay";
@@ -111,6 +126,8 @@ import { parseBottleTag } from "@/lib/bottle-tag/parse-bottle-tag";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
 import { POST_RECORD_EXIT_TUNING } from "@/lib/entrance/post-record-exit-tuning";
+import { RECORD_COUNTER_BOTTOM_TUNING } from "@/lib/entrance/drink-name-reveal-tuning";
+import { RECORD_COUNTER_SHOW_DRINK } from "@/lib/entrance/record-counter-scene-tuning";
 import {
   DEFAULT_MEMORIES_LAUNCH,
   type MemoriesLaunch,
@@ -141,7 +158,6 @@ type EntranceState =
   | "recording"
   | "postRecordBlackout"
   | "postRecordThanks"
-  | "postRecordExitBlack"
   | "leaving"
   | "alley";
 
@@ -221,11 +237,20 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const [moodCameraPose, setMoodCameraPose] = useState<CameraPose>("neutral");
   const [moodSelectExitActive, setMoodSelectExitActive] = useState(false);
   const [moodAwaitingGrass, setMoodAwaitingGrass] = useState(false);
+  const [moodPromptSkippedFromReveal, setMoodPromptSkippedFromReveal] =
+    useState(false);
   const moodExitSkipRef = useRef<(() => void) | null>(null);
   const [drinkEnteringReveal, setDrinkEnteringReveal] = useState(false);
   const [drinkRevealSkipped, setDrinkRevealSkipped] = useState(false);
   const [drinkIntroSkipToSip, setDrinkIntroSkipToSip] = useState(false);
   const [drinkIntroFromGrass, setDrinkIntroFromGrass] = useState(false);
+  const [recordDrinkIntroPhase, setRecordDrinkIntroPhase] =
+    useState<RecordDrinkIntroPhase>("note");
+  const [recordBottomTextPhase, setRecordBottomTextPhase] =
+    useState<RecordBottomTextPhase>("sip");
+  const [showRecordingTutorial, setShowRecordingTutorial] = useState<
+    boolean | null
+  >(null);
   const moodSelectVisitedRef = useRef(false);
   const moodThinkPlayedRef = useRef(false);
   const moodGrassPlayedRef = useRef(false);
@@ -271,6 +296,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const [alleyDiaryFadeOut, setAlleyDiaryFadeOut] = useState(false);
   const [alleyHomeFadeOut, setAlleyHomeFadeOut] = useState(false);
   const [devSkipLoading, setDevSkipLoading] = useState(false);
+  const [devSkipHint, setDevSkipHint] = useState<string | null>(null);
 
   const nightGenerationComplete =
     session.phase === "revealed" && session.generationStatus === "success";
@@ -467,6 +493,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     setDrinkIntroFromGrass(false);
     setMoodSelectExitActive(false);
     setMoodAwaitingGrass(false);
+    setMoodPromptSkippedFromReveal(false);
     moodExitSkipRef.current = null;
     setMoodCameraPose("neutral");
     setAlleyOutcome(null);
@@ -541,6 +568,24 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     setEntranceState("postRecordBlackout");
   }, [session]);
 
+  const buildSessionAlleyPaper = useCallback((): DiaryPaperData | null => {
+    const record = session.record;
+    if (!record) return null;
+    const visualSeed =
+      session.savedDiaryId ??
+      `${record.bottleTag}::${session.transcript ?? "guest"}`;
+    return buildAlleyDiaryPaper(
+      record,
+      session.recordedAt,
+      visualSeed,
+    );
+  }, [
+    session.record,
+    session.recordedAt,
+    session.savedDiaryId,
+    session.transcript,
+  ]);
+
   const attemptGoToAlley = useCallback(() => {
     if (!leaveAnimationDoneRef.current) return;
 
@@ -553,6 +598,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
     markReturningVisitor();
 
+    const paper = buildSessionAlleyPaper();
     const saveReady =
       session.saveStatus === "saved" && Boolean(session.savedDiaryId);
     const needsLogin =
@@ -561,15 +607,16 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
     if (session.isDevSimulated) {
       setAlleyOutcome({ kind: "devSaved" });
-    } else if (saveReady) {
+    } else if (saveReady && paper) {
       alleyWaitStartedRef.current = null;
       setAlleyOutcome({
         kind: "saved",
         diaryId: session.savedDiaryId!,
+        paper,
       });
-    } else if (needsLogin) {
+    } else if (needsLogin && paper) {
       alleyWaitStartedRef.current = null;
-      setAlleyOutcome({ kind: "needsLogin" });
+      setAlleyOutcome({ kind: "needsLogin", paper });
     } else if (
       session.generationFailed ||
       session.saveStatus === "failed"
@@ -584,6 +631,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
     setEntranceState("alley");
   }, [
+    buildSessionAlleyPaper,
     session.isDevSimulated,
     session.saveStatus,
     session.savedDiaryId,
@@ -628,6 +676,44 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     audio.playGlassSlide();
   }, [entranceState, audio]);
 
+  useEffect(() => {
+    if (entranceState !== "drinkServed") return;
+    setRecordDrinkIntroPhase("note");
+    setRecordBottomTextPhase("sip");
+    setShowRecordingTutorial(null);
+  }, [entranceState, pickedDrink?.id]);
+
+  useEffect(() => {
+    if (entranceState !== "drinkServed") {
+      setShowRecordingTutorial(null);
+      return;
+    }
+    if (recordDrinkIntroPhase !== "sip-button") {
+      setShowRecordingTutorial(null);
+      return;
+    }
+    setShowRecordingTutorial(!hasSeenRecordingTutorial());
+  }, [entranceState, recordDrinkIntroPhase]);
+
+  const handleRecordingTutorialDismiss = useCallback(() => {
+    markRecordingTutorialSeen();
+    setShowRecordingTutorial(false);
+  }, []);
+
+  useEffect(() => {
+    if (entranceState !== "drinkServed" || drinkEnteringReveal) return;
+    if (!drinkIntroSkipToSip) return;
+    setRecordDrinkIntroPhase("note-exit");
+  }, [drinkEnteringReveal, drinkIntroSkipToSip, entranceState]);
+
+  const handleRecordDrinkNoteExitComplete = useCallback(() => {
+    setRecordDrinkIntroPhase("sip-button");
+  }, []);
+
+  const handleRequestSipButton = useCallback(() => {
+    setRecordDrinkIntroPhase("note-exit");
+  }, []);
+
   useEffect(() => () => clearTimers(), [clearTimers]);
 
   useEffect(() => {
@@ -635,7 +721,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       if (
         entranceState === "postRecordBlackout" ||
         entranceState === "postRecordThanks" ||
-        entranceState === "postRecordExitBlack" ||
         entranceState === "leaving" ||
         entranceState === "alley"
       ) {
@@ -691,10 +776,14 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         : 0;
       session.recordWaitingInAlleyComplete(waitingInAlleyMs);
       alleyWaitStartedRef.current = null;
-      setAlleyOutcome({
-        kind: "saved",
-        diaryId: session.savedDiaryId,
-      });
+      const paper = buildSessionAlleyPaper();
+      if (paper) {
+        setAlleyOutcome({
+          kind: "saved",
+          diaryId: session.savedDiaryId,
+          paper,
+        });
+      }
       return;
     }
 
@@ -703,7 +792,10 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       session.generationStatus === "success"
     ) {
       alleyWaitStartedRef.current = null;
-      setAlleyOutcome({ kind: "needsLogin" });
+      const paper = buildSessionAlleyPaper();
+      if (paper) {
+        setAlleyOutcome({ kind: "needsLogin", paper });
+      }
       return;
     }
 
@@ -714,6 +806,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   }, [
     entranceState,
     alleyOutcome,
+    buildSessionAlleyPaper,
     session.saveStatus,
     session.savedDiaryId,
     session.generationFailed,
@@ -743,7 +836,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   ]);
 
   useEffect(() => {
-    if (entranceState !== "postRecordExitBlack") return;
+    if (entranceState !== "postRecordThanks") return;
     if (!leaveAnimationDoneRef.current) return;
     attemptGoToAlley();
   }, [entranceState, session.saveStatus, session.generationFailed, attemptGoToAlley]);
@@ -752,9 +845,18 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     if (devSkipLoading) return;
 
     setDevSkipLoading(true);
+    setDevSkipHint(null);
     try {
-      const drink = await session.prepareDevSkipFromLatestDiary();
-      if (!drink) return;
+      const result = await session.prepareDevSkipFromLatestDiary();
+      if (!result.ok) {
+        setDevSkipHint(result.error);
+        return;
+      }
+
+      const { drink, usedFallback } = result;
+      if (usedFallback) {
+        setDevSkipHint("保存済み日記なし — 仮データで別れへ");
+      }
 
       clearTimers();
       setMoodSelectExitActive(false);
@@ -909,13 +1011,15 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleCounterRevealComplete = () => {
+    setMoodPromptSkippedFromReveal(false);
     setEntranceState("moodPrompt");
   };
 
   const handleSkipCounterReveal = () => {
     if (entranceState !== "counterReveal") return;
     unlockBarAudio();
-    handleCounterRevealComplete();
+    setMoodPromptSkippedFromReveal(true);
+    setEntranceState("moodPrompt");
   };
 
   const registerMoodExitSkip = useCallback((handler: (() => void) | null) => {
@@ -948,6 +1052,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
     const finishToDrinkServed = () => {
       setMoodSelectExitActive(false);
+      setMoodCameraPose("neutral");
       moodGrassPlayedRef.current = true;
       setDrinkIntroFromGrass(true);
       setEntranceState("drinkServed");
@@ -995,29 +1100,42 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleSip = () => {
+    setRecordBottomTextPhase("sip-exit");
     setDrinkIntroSkipToSip(false);
     unlockBarAudio();
     void session.startSpeaking().then((started) => {
       if (started) {
         setEntranceState("recording");
+        return;
       }
+      setRecordBottomTextPhase("sip");
     });
   };
+
+  const handleRecordBottomSipExitComplete = useCallback(() => {
+    setRecordBottomTextPhase("finish");
+  }, []);
 
   const handleFinishTalk = () => {
     setEntranceState("postRecordBlackout");
     session.stopSpeaking();
   };
 
-  const handlePostRecordThanksComplete = () => {
+  const handlePostRecordFarewellThanksComplete = () => {
     session.notifyStoreEndingComplete();
 
     if (postRecordExitTimerRef.current) {
       clearTimeout(postRecordExitTimerRef.current);
+      postRecordExitTimerRef.current = null;
     }
 
     audio.stopJazz(POST_RECORD_EXIT_TUNING.jazzFadeOutMs);
-    setEntranceState("postRecordExitBlack");
+  };
+
+  const handlePostRecordStoreExitDarkened = () => {
+    if (postRecordExitTimerRef.current) {
+      clearTimeout(postRecordExitTimerRef.current);
+    }
 
     postRecordExitTimerRef.current = setTimeout(() => {
       postRecordExitTimerRef.current = null;
@@ -1028,7 +1146,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         BAR_AUDIO_LEVELS.outside.leaving,
         POST_RECORD_EXIT_TUNING.outsideFadeInMs,
       );
-    }, POST_RECORD_EXIT_TUNING.doorDelayMs);
+    }, POST_RECORD_EXIT_TUNING.doorDelayAfterStoreExitMs);
   };
 
   const handlePostRecordExitComplete = () => {
@@ -1248,17 +1366,13 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     return (
       <AnimatePresence mode="wait">
         <motion.div key="postRecordThanks" {...sceneExit}>
-          <PostRecordThanksScene onComplete={handlePostRecordThanksComplete} />
+          <PostRecordFarewellScene
+            onThanksComplete={handlePostRecordFarewellThanksComplete}
+            onDarkened={handlePostRecordStoreExitDarkened}
+            onComplete={handlePostRecordExitComplete}
+          />
         </motion.div>
       </AnimatePresence>
-    );
-  }
-
-  if (entranceState === "postRecordExitBlack") {
-    return (
-      <SceneFrame className="bg-black" atmosphere={false}>
-        <PostRecordExitBlack onComplete={handlePostRecordExitComplete} />
-      </SceneFrame>
     );
   }
 
@@ -1322,6 +1436,10 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       entranceState === "pastBottleSelect" ||
       isDeclineFading) &&
     !moodSelectExitActive;
+  /** 退場暗転中 — pondering を固定（neutral へ戻さない） */
+  const counterUsesMoodCameraPose =
+    showMoodParallaxCamera ||
+    (moodSelectExitActive && entranceState === "moodSelect");
   const showMoodSelectChrome =
     (entranceState === "moodSelect" ||
       (isDeclineFading && declineOrigin === "moodSelect")) &&
@@ -1345,8 +1463,57 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     entranceState === "recording" ||
     entranceState === "postRecordBlackout";
 
+  const drinkRevealTimelineOrigin =
+    drinkIntroFromGrass && !drinkRevealSkipped ? "reveal-start" : "reveal-complete";
+
+  const showRecordDrinkTitle =
+    showRecordCounterScene &&
+    RECORD_COUNTER_SHOW_DRINK &&
+    Boolean(pickedDrink);
+
+  const showRecordDrinkNote =
+    entranceState === "drinkServed" &&
+    (recordDrinkIntroPhase === "note" || recordDrinkIntroPhase === "note-exit") &&
+    RECORD_COUNTER_SHOW_DRINK &&
+    Boolean(pickedDrink);
+
+  /** note 上の下部グラデ — 明転開始から維持 */
+  const showRecordBottomScrim =
+    showRecordCounterScene &&
+    RECORD_COUNTER_SHOW_DRINK &&
+    Boolean(pickedDrink);
+
+  const showRecordBottomAction =
+    RECORD_COUNTER_SHOW_DRINK &&
+    Boolean(pickedDrink) &&
+    ((entranceState === "drinkServed" &&
+      recordDrinkIntroPhase === "sip-button" &&
+      !drinkEnteringReveal) ||
+      (entranceState === "recording" && !session.listenFailureVisible));
+
+  const recordBottomMicBlock =
+    showRecordBottomAction &&
+    entranceState === "drinkServed" &&
+    recordBottomTextPhase === "sip"
+      ? (() => {
+          const availability = getMicAvailability();
+          return availability.available
+            ? null
+            : availability.reason ?? "unsupported";
+        })()
+      : null;
+
+  const recordingTutorialPending =
+    entranceState === "drinkServed" &&
+    recordDrinkIntroPhase === "sip-button" &&
+    showRecordingTutorial === null;
+
+  const recordingTutorialActive = showRecordingTutorial === true;
+
   const skipMoodEntranceVisual =
     moodSelectVisitedRef.current || isDeclineFading;
+
+  const moodExitCloseSec = MOOD_SELECT_EXIT_SCALED.vignetteCloseDurationSec;
 
   const showLegacyCounterScene = showCounter && !showRecordCounterScene;
 
@@ -1365,7 +1532,9 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
               style={{
                 opacity: hideCounterDuringMoodExit ? 0 : 1,
                 visibility: hideCounterDuringMoodExit ? "hidden" : "visible",
-                transition: `opacity ${MOOD_SELECT_EXIT_SCALED.vignetteCloseDurationSec}s ease-in`,
+                transition: hideCounterDuringMoodExit
+                  ? `opacity ${moodExitCloseSec}s ease-in, visibility 0s linear ${moodExitCloseSec}s`
+                  : `opacity ${moodExitCloseSec}s ease-in, visibility 0s linear 0s`,
               }}
             >
             {showLegacyCounterScene && (
@@ -1380,18 +1549,75 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
               reduceGpuLoad={reduceCounterGpuLoad}
               lampGlows={lampGlowHomeEditing ? lampGlows : undefined}
               showLampGlowLight
-              cameraPose={showMoodParallaxCamera ? moodCameraPose : "neutral"}
+              cameraPose={counterUsesMoodCameraPose ? moodCameraPose : "neutral"}
               masterMode="idle"
             />
             )}
 
             {showRecordCounterScene && (
-              <RecordCounterScene drinkId={pickedDrink?.id ?? null} />
+              <RecordCounterScene
+                drinkId={pickedDrink?.id ?? null}
+                showDrink={RECORD_COUNTER_SHOW_DRINK}
+                showNoteScrim={showRecordBottomScrim}
+              />
             )}
 
-            {showRecordCounterScene && pickedDrink && !drinkEnteringReveal && (
-              <DrinkNameReveal drink={pickedDrink} />
+            {showRecordDrinkTitle && pickedDrink && (
+              <DrinkNameReveal
+                drink={pickedDrink}
+                exiting={entranceState === "postRecordBlackout"}
+                timelineOrigin={drinkRevealTimelineOrigin}
+                skipped={drinkRevealSkipped}
+              />
             )}
+
+            {showRecordDrinkNote && pickedDrink && (
+              <DrinkRecordNote
+                drink={pickedDrink}
+                phase={recordDrinkIntroPhase === "note-exit" ? "exit" : "enter"}
+                onExitComplete={handleRecordDrinkNoteExitComplete}
+                timelineOrigin={drinkRevealTimelineOrigin}
+                skipped={drinkRevealSkipped}
+              />
+            )}
+
+            {showRecordBottomAction && (
+              <>
+                {recordBottomMicBlock && (
+                  <div
+                    className="pointer-events-none absolute inset-x-0 z-[42] flex justify-center px-5"
+                    style={{
+                      bottom: `calc(${RECORD_COUNTER_BOTTOM_TUNING.bottomPaddingPercent}% + 4.5rem)`,
+                    }}
+                  >
+                    <p className="max-w-sm whitespace-pre-line text-center font-serif-jp text-[12px] leading-relaxed text-amber-100/75">
+                      {micBlockedHintText(recordBottomMicBlock)}
+                    </p>
+                  </div>
+                )}
+                <RecordBottomAction
+                  textPhase={recordBottomTextPhase}
+                  onSip={handleSip}
+                  onFinish={handleFinishTalk}
+                  onSipExitComplete={handleRecordBottomSipExitComplete}
+                  disabled={
+                    Boolean(recordBottomMicBlock) ||
+                    recordingTutorialPending ||
+                    recordingTutorialActive
+                  }
+                  reveal={
+                    entranceState === "drinkServed" &&
+                    recordBottomTextPhase === "sip"
+                  }
+                />
+              </>
+            )}
+
+            {recordingTutorialActive ? (
+              <RecordingTutorialCard
+                onDismiss={handleRecordingTutorialDismiss}
+              />
+            ) : null}
             </div>
 
             {lampGlowHomeEditing && LAMP_GLOW_SHAPE_EDIT_ON_HOME && (
@@ -1443,6 +1669,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
               <DevPostRecordSkipButton
                 onClick={() => void handleDevSkipToPostRecord()}
                 loading={devSkipLoading}
+                hint={devSkipHint}
               />
             )}
 
@@ -1464,16 +1691,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
                   />
                 </div>
               )}
-
-            {moodSelectExitActive && (
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{
-                  zIndex: MOOD_VIGNETTE_TUNING.vignetteShellZIndex - 1,
-                  backgroundColor: MOOD_SELECT_BACKDROP_COLOR,
-                }}
-              />
-            )}
 
             {showPastBottleLink && !lampGlowHomeEditing && (
                 <div
@@ -1511,19 +1728,23 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
             {entranceState === "moodPrompt" && !lampGlowHomeEditing && (
               <div className="pointer-events-auto absolute inset-0">
                 <MasterMoodPromptPanel
-                  onComplete={() => setEntranceState("moodSelect")}
+                  skippedToPrefix={moodPromptSkippedFromReveal}
+                  onComplete={() => {
+                    setMoodPromptSkippedFromReveal(false);
+                    setEntranceState("moodSelect");
+                  }}
                 />
               </div>
             )}
 
-            {entranceState === "drinkServed" && !drinkEnteringReveal && (
-              <div className="pointer-events-auto absolute inset-0">
+            {entranceState === "drinkServed" &&
+              !drinkEnteringReveal &&
+              recordDrinkIntroPhase === "note" && (
                 <DrinkRecordIntroPanel
-                  onSip={handleSip}
-                  skipToSip={drinkIntroSkipToSip}
+                  introPhase={recordDrinkIntroPhase}
+                  onRequestSipButton={handleRequestSipButton}
                 />
-              </div>
-            )}
+              )}
 
             {showMoodSelectChrome && (
               <div
@@ -1537,7 +1758,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
                   onSelectionStart={() => {
                     setMoodSelectExitActive(true);
                     setMoodAwaitingGrass(true);
-                    setMoodCameraPose("neutral");
                   }}
                   onRegisterExitSkip={registerMoodExitSkip}
                   onSelect={handleMoodSelect}
@@ -1583,11 +1803,8 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
                   listenFailureCount={session.listenFailureCount}
                   listenFailureVisible={session.listenFailureVisible}
                   listenFailureReason={session.listenFailureReason}
-                  onFinish={handleFinishTalk}
                   onRetrySpeaking={handleRetrySpeaking}
                   onLeaveWithoutRecord={handleLeaveWithoutRecord}
-                  onPauseSpeaking={() => session.pauseSpeaking()}
-                  onResumeSpeaking={() => session.resumeSpeaking()}
                 />
               )}
             </div>

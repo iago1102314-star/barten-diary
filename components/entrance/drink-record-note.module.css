@@ -1,0 +1,26 @@
+.chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.content {
+  position: absolute;
+  inset-inline: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.noteText {
+  margin: 0;
+  font-family: var(--font-serif-jp), serif;
+  text-align: center;
+  white-space: pre-line;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .noteText {
+    transition: none !important;
+  }
+}

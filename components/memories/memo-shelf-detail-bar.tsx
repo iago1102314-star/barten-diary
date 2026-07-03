@@ -10,8 +10,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 type MemoShelfRecordBottomBarDetailActions = {
-  onEdit: () => void;
-  onShare: () => void;
+  onEdit?: () => void;
+  onShare?: () => void;
   shareDisabled?: boolean;
   onDelete: () => void;
   deleteDisabled?: boolean;
@@ -28,7 +28,7 @@ type MemoShelfRecordBottomBarProps = {
 /** 夜のメモ — 下部ナビ（戻る + タイトル + 詳細時アクション） */
 export function MemoShelfRecordBottomBar({
   backLabel,
-  title = "夜のメモ",
+  title = "夜の記録",
   onBack,
   backHref,
   detailActions,
@@ -106,31 +106,35 @@ export function MemoShelfRecordBottomBar({
 
             {menuOpen ? (
               <div className={styles.bottomBarMenuPanel} role="menu" aria-label="日記の操作">
-                <button
-                  type="button"
-                  className={styles.bottomBarMenuItem}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    detailActions.onEdit();
-                  }}
-                  role="menuitem"
-                >
-                  <EditActionIcon className={styles.bottomBarActionIcon} />
-                  編集
-                </button>
-                <button
-                  type="button"
-                  className={styles.bottomBarMenuItem}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    detailActions.onShare();
-                  }}
-                  disabled={detailActions.shareDisabled}
-                  role="menuitem"
-                >
-                  <ShareSaveIcon className={styles.bottomBarActionIcon} />
-                  共有
-                </button>
+                {detailActions.onEdit ? (
+                  <button
+                    type="button"
+                    className={styles.bottomBarMenuItem}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      detailActions.onEdit?.();
+                    }}
+                    role="menuitem"
+                  >
+                    <EditActionIcon className={styles.bottomBarActionIcon} />
+                    編集
+                  </button>
+                ) : null}
+                {detailActions.onShare ? (
+                  <button
+                    type="button"
+                    className={styles.bottomBarMenuItem}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      detailActions.onShare?.();
+                    }}
+                    disabled={detailActions.shareDisabled}
+                    role="menuitem"
+                  >
+                    <ShareSaveIcon className={styles.bottomBarActionIcon} />
+                    共有
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className={`${styles.bottomBarMenuItem} ${styles.bottomBarMenuDanger}`}

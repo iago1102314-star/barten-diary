@@ -19,7 +19,7 @@ export function MemoShelfTopBar({ onBack, backLabel }: MemoShelfTopBarProps) {
           <ShebronIcon className={styles.topBarIcon} />
         </button>
       </div>
-      <h1 className={styles.topBarTitle}>夜のメモ</h1>
+      <h1 className={styles.topBarTitle}>夜の記録</h1>
       <div className={`${styles.topBarSide} ${styles.topBarSideRight}`} aria-hidden />
     </header>
   );

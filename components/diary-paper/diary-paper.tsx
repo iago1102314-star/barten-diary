@@ -8,7 +8,9 @@ import {
 import { DiaryDrink } from "@/components/diary-paper/diary-drink";
 import { DiaryHeader } from "@/components/diary-paper/diary-header";
 import { DiaryCharacterComment } from "@/components/diary-paper/diary-character-comment";
+import { DiaryPaperGuestLoginPrompt } from "@/components/diary-paper/diary-paper-guest-login-prompt";
 import styles from "@/components/diary-paper/diary-paper.module.css";
+import { GUEST_DIARY_PREVIEW_TUNING as GUEST_PREVIEW } from "@/lib/memories/guest-diary-preview-tuning";
 import { zenKurenaido } from "@/lib/diary-paper/diary-paper-font";
 import { DIARY_PAPER_LAYOUT } from "@/lib/diary-paper/diary-paper-layout";
 import { resolveDiaryDrinkVisuals } from "@/lib/diary-paper/resolve-diary-drink-visuals";
@@ -21,6 +23,10 @@ type DiaryPaperProps = {
   bodyEdit?: DiaryBodyEditorProps;
   /** 詳細画面のみ — マスターコメント下まで罫線付きで画面高に伸ばす（共有画像には含めない） */
   stretchToViewport?: boolean;
+  /** ゲスト — 本文のみプレビュー（マスク＋ログイン導線） */
+  guestBodyPreview?: boolean;
+  /** guestBodyPreview 時の OAuth 戻り先 */
+  guestLoginNext?: string;
 };
 
 const paperLayoutStyle = {
@@ -46,6 +52,8 @@ export function DiaryPaper({
   className,
   bodyEdit,
   stretchToViewport = false,
+  guestBodyPreview = false,
+  guestLoginNext,
 }: DiaryPaperProps) {
   const bodyEditRef = useRef<HTMLDivElement>(null);
   const drinkVisuals =
@@ -59,6 +67,24 @@ export function DiaryPaper({
           data.diaryVisualSeed ?? data.dateLine,
           data.drinkName,
         );
+
+  const guestBodyPreviewStyle = {
+    "--guest-body-visible-lines": GUEST_PREVIEW.bodyVisibleLineCount,
+    "--guest-body-mask-line1-end": `${GUEST_PREVIEW.bodyMaskLine1EndPercent}%`,
+    "--guest-body-mask-line2-mid": `${GUEST_PREVIEW.bodyMaskLine2MidPercent}%`,
+    "--guest-body-mask-line2-mid-opacity": GUEST_PREVIEW.bodyMaskLine2MidOpacity,
+    "--guest-body-mask-line2-end": `${GUEST_PREVIEW.bodyMaskLine2EndPercent}%`,
+    "--guest-body-mask-line2-opacity": GUEST_PREVIEW.bodyMaskLine2Opacity,
+    "--guest-body-mask-line3-mid": `${GUEST_PREVIEW.bodyMaskLine3MidPercent}%`,
+    "--guest-body-mask-line3-mid-opacity": GUEST_PREVIEW.bodyMaskLine3MidOpacity,
+  } as CSSProperties;
+
+  const bodyContent =
+    bodyEdit && !guestBodyPreview ? (
+      <DiaryBodyEditor ref={bodyEditRef} {...bodyEdit} />
+    ) : (
+      <DiaryBody body={data.body} />
+    );
 
   return (
     <article
@@ -99,19 +125,42 @@ export function DiaryPaper({
               ) : null}
             </div>
           </EditDimmedSection>
-          {bodyEdit ? (
-            <DiaryBodyEditor ref={bodyEditRef} {...bodyEdit} />
+          {guestBodyPreview ? (
+            <>
+              <div
+                className={styles.bodyGuestPreview}
+                style={guestBodyPreviewStyle}
+              >
+                {bodyContent}
+              </div>
+              <div
+                className={styles.guestBlankZone}
+                style={
+                  {
+                    "--guest-blank-zone-min-rows":
+                      GUEST_PREVIEW.blankZoneMinRows,
+                    "--guest-fade-to-login-gap": `${GUEST_PREVIEW.fadeToLoginGapRem}rem`,
+                  } as CSSProperties
+                }
+              >
+                <DiaryPaperGuestLoginPrompt loginNext={guestLoginNext} />
+              </div>
+            </>
           ) : (
-            <DiaryBody body={data.body} />
+            bodyContent
           )}
-          <EditDimmedSection dimmed={Boolean(bodyEdit)}>
-            <DiaryCharacterComment
-              characterId={data.characterId}
-              comment={data.characterComment}
-              signature={data.characterSignature}
-            />
-          </EditDimmedSection>
-          <div className={styles.screenRuledFill} aria-hidden />
+          {!guestBodyPreview ? (
+            <EditDimmedSection dimmed={Boolean(bodyEdit)}>
+              <DiaryCharacterComment
+                characterId={data.characterId}
+                comment={data.characterComment}
+                signature={data.characterSignature}
+              />
+            </EditDimmedSection>
+          ) : null}
+          {!guestBodyPreview ? (
+            <div className={styles.screenRuledFill} aria-hidden />
+          ) : null}
         </div>
       </div>
     </article>

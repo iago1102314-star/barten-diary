@@ -1,12 +1,15 @@
 "use client";
 
 import { AfterNightBackdrop } from "@/components/entrance/after-night-backdrop";
-import { ShelfStatusMessage } from "@/components/memories/shelf-status-message";
-import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { AlleyDiaryCompletePanel } from "@/components/entrance/alley-diary-complete-panel";
+import { AlleyComposingWritingOverlay } from "@/components/entrance/alley-composing-writing-overlay";
+import overlayStyles from "@/components/entrance/alley-composing-writing-overlay.module.css";
 import { Reveal } from "@/components/motion/reveal";
 import { SceneFrame } from "@/components/entrance/scene-frame";
 import { BarButton } from "@/components/ui/bar-button";
-import { EASE_DRIFT } from "@/lib/entrance/motion-presets";
+import { AFTER_NIGHT_BACKDROP_TUNING } from "@/lib/entrance/after-night-backdrop-tuning";
+import { ALLEY_COMPOSING_TUNING as COMPOSING } from "@/lib/entrance/alley-composing-tuning";
+import { ALLEY_DIARY_COMPLETE_TUNING as ALLEY_COMPLETE } from "@/lib/entrance/alley-diary-complete-tuning";
 import type { NightAlleyOutcome } from "@/lib/entrance/night-outcome";
 import { MEMORIES_EXIT_FADE_SEC, MEMORIES_RETURN_FADE_OUT_SEC } from "@/lib/entrance/start-entry-timing";
 import { motion } from "motion/react";
@@ -66,18 +69,59 @@ export function NightAlleyScreen({
   const composingElapsedMs = useComposingElapsedMs(composingStartedAt);
   const showSlowHint = composingElapsedMs >= COMPOSING_SLOW_HINT_MS;
 
+  const showCompletePanel =
+    outcome.kind === "saved" || outcome.kind === "needsLogin";
+
+  const showComposingStack = outcome.kind === "composing";
+
   return (
     <SceneFrame>
       <AfterNightBackdrop />
 
-      {outcome.kind === "composing" ? (
-        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center">
-          <ShelfStatusMessage variant="writing" />
-        </div>
+      {showComposingStack ? <AlleyComposingWritingOverlay /> : null}
+
+      {showComposingStack ? (
+        <motion.div
+          className={overlayStyles.curtain}
+          style={{
+            zIndex: COMPOSING.entranceCurtainZIndex,
+            backgroundColor: COMPOSING.entranceCurtainColor,
+          }}
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 0 }}
+          transition={{
+            duration: COMPOSING.entranceCurtainFadeOutSec,
+            ease: AFTER_NIGHT_BACKDROP_TUNING.ease,
+          }}
+          aria-hidden
+        />
       ) : null}
 
-      <div className="absolute inset-0 z-30 flex flex-col items-center justify-end px-8 pb-[22%] pt-16">
-        <div className="w-full max-w-xs space-y-9 text-center">
+      <div
+        className={`absolute inset-0 z-30 flex flex-col items-center ${
+          showCompletePanel
+            ? "justify-center overflow-y-auto"
+            : "justify-end px-6 pb-[22%] pt-16"
+        }`}
+        style={
+          showCompletePanel
+            ? {
+                paddingInline: `${ALLEY_COMPLETE.screenPaddingXRem}rem`,
+                paddingBlock: `${ALLEY_COMPLETE.screenPaddingYRem}rem`,
+              }
+            : undefined
+        }
+      >
+        <div
+          className={`w-full space-y-9 text-center ${
+            showCompletePanel ? "" : "max-w-xs"
+          }`}
+          style={
+            showCompletePanel
+              ? { maxWidth: `${ALLEY_COMPLETE.panelMaxWidthRem}rem` }
+              : undefined
+          }
+        >
           {outcome.kind === "composing" && showSlowHint ? (
             <Reveal delay={0.2} duration={1.4}>
               <p className={outcomeTextClass}>少し時間がかかっています。</p>
@@ -85,26 +129,20 @@ export function NightAlleyScreen({
           ) : null}
 
           {outcome.kind === "saved" && (
-            <>
-              <Reveal delay={0.7} duration={1.7}>
-                <p className={outcomeTextClass}>今夜のメモを残しました。</p>
-              </Reveal>
-              <Reveal
-                delay={1.8}
-                duration={1.4}
-                className="flex flex-col items-center gap-6"
-              >
-                <BarButton
-                  variant="ghost"
-                  onClick={() => onOpenDiary?.(outcome.diaryId)}
-                >
-                  記録を開く
-                </BarButton>
-                <BarButton variant="quiet" onClick={onDismiss}>
-                  また今度読む
-                </BarButton>
-              </Reveal>
-            </>
+            <AlleyDiaryCompletePanel
+              paper={outcome.paper}
+              mode="saved"
+              onRead={() => onOpenDiary?.(outcome.diaryId)}
+              onDismiss={onDismiss}
+            />
+          )}
+
+          {outcome.kind === "needsLogin" && (
+            <AlleyDiaryCompletePanel
+              paper={outcome.paper}
+              mode="needsLogin"
+              onDismiss={onDismiss}
+            />
           )}
 
           {outcome.kind === "devSaved" && (
@@ -125,38 +163,6 @@ export function NightAlleyScreen({
             </>
           )}
 
-          {outcome.kind === "needsLogin" && (
-            <>
-              <Reveal delay={0.7} duration={1.7}>
-                <p className={outcomeTextClass}>
-                  今夜の記録を
-                  <br />
-                  一時的に預かりました。
-                </p>
-              </Reveal>
-              <Reveal delay={1.2} duration={1.5}>
-                <p className={`${outcomeTextClass} text-[13px] text-stone-300/70`}>
-                  ログインすると、あとからも読み返せます。
-                </p>
-              </Reveal>
-              <Reveal
-                delay={1.5}
-                duration={1.4}
-                className="flex flex-col items-center gap-6"
-              >
-                <GoogleSignInButton
-                  next="/diaries"
-                  label="Googleでログイン"
-                  googleIconPosition="right"
-                  className="w-full max-w-xs"
-                />
-                <BarButton variant="quiet" onClick={onDismiss}>
-                  また今度読む
-                </BarButton>
-              </Reveal>
-            </>
-          )}
-
           {outcome.kind === "saveFailed" && (
             <>
               <Reveal delay={0.7} duration={1.7}>
@@ -170,7 +176,7 @@ export function NightAlleyScreen({
                 className="flex flex-col items-center gap-6"
               >
                 {onRetry ? (
-                  <BarButton variant="ghost" onClick={onRetry}>
+                  <BarButton variant="quiet" onClick={onRetry}>
                     もう一度話す
                   </BarButton>
                 ) : null}
@@ -200,7 +206,7 @@ export function NightAlleyScreen({
             duration: homeFadeOut
               ? MEMORIES_RETURN_FADE_OUT_SEC
               : MEMORIES_EXIT_FADE_SEC,
-            ease: EASE_DRIFT,
+            ease: AFTER_NIGHT_BACKDROP_TUNING.ease,
           }}
           onAnimationComplete={
             homeFadeOut ? onHomeFadeOutComplete : onDiaryFadeOutComplete

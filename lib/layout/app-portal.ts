@@ -71,3 +71,32 @@ export function getAppStageMetrics(centerOffsetY = 0): AppStageMetrics {
     stageHeight: window.innerHeight,
   };
 }
+
+/** app-portal-root 内 fixed 用 — shell transform 時は shell ローカル座標へ */
+export function viewportPointToPortalFixed(
+  x: number,
+  y: number,
+): { x: number; y: number } {
+  const shellRect = getAppShellRect();
+  if (!shellRect) return { x, y };
+  return { x: x - shellRect.left, y: y - shellRect.top };
+}
+
+/** portal 内の退場アニメ — shell ローカル中央または viewport 中央 */
+export function getPortalStageMetrics(centerOffsetY = 0): AppStageMetrics {
+  if (typeof window === "undefined") {
+    return { centerX: 0, centerY: 0, stageWidth: 0, stageHeight: 0 };
+  }
+
+  const shellRect = getAppShellRect();
+  if (shellRect) {
+    return {
+      centerX: shellRect.width / 2,
+      centerY: shellRect.height / 2 + centerOffsetY,
+      stageWidth: shellRect.width,
+      stageHeight: shellRect.height,
+    };
+  }
+
+  return getAppStageMetrics(centerOffsetY);
+}

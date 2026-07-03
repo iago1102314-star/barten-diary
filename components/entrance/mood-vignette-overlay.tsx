@@ -40,16 +40,16 @@ export function MoodVignetteOverlay({
         };
 
   const exitTransition = {
-    duration: instant
-      ? 0
-      : t(
-          MOOD_SELECT_EXIT_TUNING.vignetteCloseDurationSec /
-            MOOD_SELECT_EXIT_TUNING.uiReverseSpeedFactor,
-        ),
-    ease: "easeIn" as const,
+    duration: t(MOOD_SELECT_EXIT_TUNING.vignetteCloseDurationSec),
+    ease: "easeInOut" as const,
   };
 
   const closeScaleY = MOOD_SELECT_EXIT_TUNING.vignetteCloseScaleY;
+
+  const bandVariants = {
+    open: { opacity: 1, y: 0, scaleY: 1 },
+    closed: { opacity: 1, y: 0, scaleY: closeScaleY },
+  };
 
   return (
     <div className="pointer-events-none absolute inset-0">
@@ -61,12 +61,15 @@ export function MoodVignetteOverlay({
           background: topBg,
           transformOrigin: "top center",
         }}
-        initial={instant && !exiting ? false : exiting ? { opacity: 1, y: 0, scaleY: 1 } : { opacity: 0, y: top.enterY, scaleY: 1 }}
-        animate={
-          exiting
-            ? { opacity: 1, y: 0, scaleY: closeScaleY }
-            : { opacity: 1, y: 0, scaleY: 1 }
+        initial={
+          instant && !exiting
+            ? false
+            : exiting
+              ? "open"
+              : { opacity: 0, y: top.enterY, scaleY: 1 }
         }
+        animate={exiting ? "closed" : "open"}
+        variants={bandVariants}
         transition={exiting ? exitTransition : enterTransition(top.delaySec, top.durationSec)}
       />
       {bottomLayers.map((layer, i) => (
@@ -83,14 +86,11 @@ export function MoodVignetteOverlay({
             instant && !exiting
               ? false
               : exiting
-                ? { opacity: 1, y: 0, scaleY: 1 }
+                ? "open"
                 : { opacity: 0, y: layer.enterY, scaleY: 1 }
           }
-          animate={
-            exiting
-              ? { opacity: 1, y: 0, scaleY: closeScaleY }
-              : { opacity: 1, y: 0, scaleY: 1 }
-          }
+          animate={exiting ? "closed" : "open"}
+          variants={bandVariants}
           transition={
             exiting
               ? exitTransition

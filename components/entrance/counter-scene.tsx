@@ -1,5 +1,6 @@
 "use client";
 
+import { CounterBackDarkenOverlay } from "@/components/entrance/counter-back-darken-overlay";
 import { DrinkOnCounter } from "@/components/entrance/drink-on-counter";
 import {
   GlowAnchorMarker,
@@ -18,10 +19,6 @@ import {
 } from "@/lib/entrance/counter-lamp-glows";
 import { EASE_DRIFT, EASE_SOFT } from "@/lib/entrance/motion-presets";
 import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
-import {
-  COUNTER_BACK_DARKEN_OPACITY,
-  COUNTER_BACK_DARKEN_TOP_GRADIENT,
-} from "@/lib/entrance/counter-scene-tuning";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
 import { motion } from "motion/react";
 import Image from "next/image";
@@ -123,32 +120,10 @@ function CounterBackLayer({
     />
   );
 
-  const darken =
-    COUNTER_BACK_DARKEN_OPACITY > 0 || COUNTER_BACK_DARKEN_TOP_GRADIENT > 0 ? (
-      <>
-        {COUNTER_BACK_DARKEN_TOP_GRADIENT > 0 && (
-          <div
-            className="pointer-events-none absolute inset-0"
-            aria-hidden
-            style={{
-              background: `radial-gradient(ellipse 95% 70% at 50% 18%, rgba(0, 0, 0, ${COUNTER_BACK_DARKEN_TOP_GRADIENT}), transparent 72%)`,
-            }}
-          />
-        )}
-        {COUNTER_BACK_DARKEN_OPACITY > 0 && (
-          <div
-            className="pointer-events-none absolute inset-0"
-            aria-hidden
-            style={{ backgroundColor: `rgba(0, 0, 0, ${COUNTER_BACK_DARKEN_OPACITY})` }}
-          />
-        )}
-      </>
-    ) : null;
-
   const content = (
     <>
       <div className="absolute inset-0">{img}</div>
-      {darken}
+      <CounterBackDarkenOverlay />
     </>
   );
 

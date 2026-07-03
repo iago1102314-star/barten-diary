@@ -1,8 +1,10 @@
+import type { DiaryPaperData } from "@/lib/diary-paper/diary-paper-types";
+
 export type NightAlleyOutcome =
   | { kind: "composing"; startedAt: number }
-  | { kind: "saved"; diaryId: string }
+  | { kind: "saved"; diaryId: string; paper: DiaryPaperData }
   | { kind: "devSaved" }
-  | { kind: "needsLogin" }
+  | { kind: "needsLogin"; paper: DiaryPaperData }
   | { kind: "saveFailed" }
   | { kind: "unsaved" };
 

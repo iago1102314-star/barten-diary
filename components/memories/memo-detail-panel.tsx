@@ -12,6 +12,7 @@ import { useDiaryDelete } from "@/hooks/use-diary-delete";
 import { useGuestDiaryBodyEdit } from "@/hooks/use-guest-diary-body-edit";
 import { useDiaryPaperExport } from "@/hooks/use-diary-paper-export";
 import { useShelfOutsideAmbience } from "@/hooks/use-shelf-outside-ambience";
+import { useAuthUser } from "@/hooks/use-auth-user";
 import type { DiaryListRow } from "@/lib/diaries/fetch-diaries";
 import { mapDiaryListRowToDiaryPaper } from "@/lib/diary-paper/map-diary-to-paper";
 import {
@@ -157,6 +158,12 @@ function useMemoDetailBodyEdit({
   };
 }
 
+function useGuestDiaryPreview() {
+  const { isLoggedIn, isLoading } = useAuthUser();
+  if (isLoading) return true;
+  return !isLoggedIn;
+}
+
 function MemoDetailPanelEmbedded({
   diary,
   onPersisted,
@@ -167,11 +174,12 @@ function MemoDetailPanelEmbedded({
 }: Omit<MemoDetailPanelProps, "layout" | "backHref" | "backLabel">) {
   const internalExportRef = useRef<HTMLDivElement>(null);
   const exportRef = exportRefProp ?? internalExportRef;
+  const guestBodyPreview = useGuestDiaryPreview();
   const { editing, setEditing } = useDetailEditing(editingProp, onEditingChange);
   const paperData = useMemo(() => mapDiaryListRowToDiaryPaper(diary), [diary]);
   const { bodyEditProps, saveNotice, dismissSaveNotice } = useMemoDetailBodyEdit({
     diary,
-    editing,
+    editing: guestBodyPreview ? false : editing,
     setEditing,
     onPersisted,
     onDirtyChange,
@@ -184,7 +192,8 @@ function MemoDetailPanelEmbedded({
           data={paperData}
           className={paperStyles.paperFullscreen}
           stretchToViewport
-          bodyEdit={bodyEditProps}
+          bodyEdit={guestBodyPreview ? undefined : bodyEditProps}
+          guestBodyPreview={guestBodyPreview}
         />
       </DiaryPaperExportHost>
       <DiaryExportNoticePanel
@@ -207,6 +216,7 @@ function MemoDetailPanelScreen({
   useShelfOutsideAmbience();
   const router = useRouter();
   const exportRef = useRef<HTMLDivElement>(null);
+  const guestBodyPreview = useGuestDiaryPreview();
   const { editing, setEditing } = useDetailEditing(editingProp, onEditingChange);
   const paperData = useMemo(() => mapDiaryListRowToDiaryPaper(diary), [diary]);
   const {
@@ -217,7 +227,7 @@ function MemoDetailPanelScreen({
     resetDraft,
   } = useMemoDetailBodyEdit({
     diary,
-    editing,
+    editing: guestBodyPreview ? false : editing,
     setEditing,
     onPersisted,
     onDirtyChange,
@@ -256,7 +266,9 @@ function MemoDetailPanelScreen({
               data={paperData}
               className={paperStyles.paperFullscreen}
               stretchToViewport
-              bodyEdit={bodyEditProps}
+              bodyEdit={guestBodyPreview ? undefined : bodyEditProps}
+              guestBodyPreview={guestBodyPreview}
+              guestLoginNext={backHref}
             />
           </DiaryPaperExportHost>
         </div>
@@ -264,13 +276,13 @@ function MemoDetailPanelScreen({
           backLabel={backLabel}
           onBack={handleBack}
           detailActions={
-            !editing
+            !editing && !guestBodyPreview
               ? {
                   onEdit: () => setEditing(true),
-                    onShare: diaryExport.exportDiary,
-                    shareDisabled: diaryExport.exporting || diaryDelete.deleting,
-                    onDelete: diaryDelete.deleteDiary,
-                    deleteDisabled: diaryDelete.deleting || diaryExport.exporting,
+                  onShare: diaryExport.exportDiary,
+                  shareDisabled: diaryExport.exporting || diaryDelete.deleting,
+                  onDelete: diaryDelete.deleteDiary,
+                  deleteDisabled: diaryDelete.deleting || diaryExport.exporting,
                 }
               : undefined
           }

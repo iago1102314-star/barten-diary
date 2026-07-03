@@ -11,7 +11,7 @@
 
 .inner {
   width: 100%;
-  max-width: 22rem;
+  max-width: var(--drink-name-max-width, 22rem);
   text-align: center;
 }
 

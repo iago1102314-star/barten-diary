@@ -4,7 +4,10 @@ import {
   layoutMasterDialogueShown,
   type MasterDialogueLayout,
 } from "@/lib/entrance/master-dialogue-layout";
-import { MASTER_DIALOGUE_TYPOGRAPHY } from "@/lib/entrance/master-dialogue-typography";
+import {
+  MASTER_DIALOGUE_TYPOGRAPHY,
+  resolveMasterDialogueTypewriterSpeedMs,
+} from "@/lib/entrance/master-dialogue-typography";
 import {
   forwardRef,
   useCallback,
@@ -20,6 +23,8 @@ type MasterDialogueBodyProps = {
   speed?: number;
   startDelay?: number;
   onDone?: () => void;
+  /** 先頭から即表示し、残りだけタイプ */
+  initialShown?: string;
 };
 
 export type MasterDialogueBodyHandle = {
@@ -46,9 +51,10 @@ export const MasterDialogueBody = forwardRef<
 >(function MasterDialogueBody(
   {
     text,
-    speed = MASTER_DIALOGUE_TYPOGRAPHY.typewriterSpeedMs,
+    speed = resolveMasterDialogueTypewriterSpeedMs(),
     startDelay = 0,
     onDone,
+    initialShown,
   },
   ref,
 ) {
@@ -107,13 +113,25 @@ export const MasterDialogueBody = forwardRef<
   }, []);
 
   useEffect(() => {
-    setShown("");
-    setTypingDone(false);
-    typingDoneRef.current = false;
+    const prefix =
+      initialShown && text.startsWith(initialShown) ? initialShown : "";
+    const startIndex = prefix.length;
+
+    setShown(prefix);
+    const alreadyDone = startIndex >= text.length;
+    setTypingDone(alreadyDone);
+    typingDoneRef.current = alreadyDone;
     setLayout(emptyLayout(maxIndentPx));
     clearTypingTimers();
 
-    let index = 0;
+    if (alreadyDone) {
+      if (startIndex > 0) {
+        doneRef.current?.();
+      }
+      return;
+    }
+
+    let index = startIndex;
 
     const startTimer = setTimeout(() => {
       const tick = () => {
@@ -133,7 +151,15 @@ export const MasterDialogueBody = forwardRef<
     timersRef.current.start = startTimer;
 
     return clearTypingTimers;
-  }, [text, speed, startDelay, maxIndentPx, clearTypingTimers, finishTyping]);
+  }, [
+    text,
+    speed,
+    startDelay,
+    initialShown,
+    maxIndentPx,
+    clearTypingTimers,
+    finishTyping,
+  ]);
 
   useLayoutEffect(() => {
     const measureNode = measureRef.current;
@@ -185,13 +211,14 @@ export const MasterDialogueBody = forwardRef<
     t.bodyTextIndentRem,
     t.bodyTextIndentExtraPx,
     t.bodyPaddingRightRem,
+    t.bodyLetterSpacingEm,
   ]);
 
   const bodyStyle = {
     color: t.bodyColor,
     fontSize: t.bodyFontSize,
     lineHeight: t.bodyLineHeight,
-    letterSpacing: t.bodyLetterSpacing,
+    letterSpacing: `${t.bodyLetterSpacingEm}em`,
   } as const;
 
   return (

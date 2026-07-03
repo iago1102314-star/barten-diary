@@ -6,8 +6,13 @@ import {
 } from "@/components/entrance/bar-seat-mood-picker";
 import { MOOD_SELECT_EXIT_SCALED } from "@/lib/entrance/mood-select-exit-timing";
 import { MOOD_SELECT_EXIT_TUNING } from "@/lib/entrance/mood-select-exit-tuning";
+import { MOOD_VIGNETTE_TUNING } from "@/lib/entrance/mood-vignette-tuning";
 import { EASE_DECELERATE } from "@/lib/entrance/motion-presets";
-import { getAppPortalRoot, getAppStageMetrics } from "@/lib/layout/app-portal";
+import {
+  getAppPortalRoot,
+  getPortalStageMetrics,
+  viewportPointToPortalFixed,
+} from "@/lib/layout/app-portal";
 import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -36,7 +41,8 @@ export function MoodConfirmButtonExit({
   const moveSec = MOOD_SELECT_EXIT_SCALED.buttonMoveToCenterSec;
   const dissolveSec = MOOD_SELECT_EXIT_SCALED.buttonDissolveSec;
   const dissolving = phase === "dissolve";
-  const stage = getAppStageMetrics(
+  const anchorPos = viewportPointToPortalFixed(anchor.centerX, anchor.centerY);
+  const stage = getPortalStageMetrics(
     MOOD_SELECT_EXIT_TUNING.buttonMoveCenterOffsetYpx,
   );
   const centerX = stage.centerX;
@@ -62,24 +68,28 @@ export function MoodConfirmButtonExit({
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="pointer-events-none fixed inset-0 z-[200]">
+    <div
+      className="pointer-events-none fixed inset-0"
+      style={{ zIndex: MOOD_VIGNETTE_TUNING.moodConfirmExitZIndex }}
+    >
       <motion.div
         className="fixed"
-        style={{ x: "-50%", y: "-50%" }}
+        style={{
+          x: "-50%",
+          y: "-50%",
+          width: targetWidth,
+        }}
         initial={{
-          left: anchor.centerX,
-          top: anchor.centerY,
-          width: anchor.width,
+          left: anchorPos.x,
+          top: anchorPos.y,
         }}
         animate={{
           left: centerX,
           top: centerY,
-          width: targetWidth,
         }}
         transition={{
-          left: { duration: moveSec, ease: EASE_DECELERATE },
-          top: { duration: moveSec, ease: EASE_DECELERATE },
-          width: { duration: moveSec, ease: EASE_DECELERATE },
+          duration: moveSec,
+          ease: EASE_DECELERATE,
         }}
       >
         <motion.div

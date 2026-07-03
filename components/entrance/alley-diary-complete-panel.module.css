@@ -1,0 +1,14 @@
+.readRecordButton :global(button > span > span.relative) {
+  font-family: var(--font-shippori-mincho), var(--font-serif-jp), serif;
+  font-feature-settings: "palt";
+  font-size: 1.3rem;
+  line-height: 1.9;
+  letter-spacing: 0.05em;
+}
+
+.savedActionsGroup {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+}

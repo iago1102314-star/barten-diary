@@ -5,6 +5,8 @@ import { MasterDialogueBody } from "@/components/entrance/master-dialogue-body";
 import type { MasterDialogueBodyHandle } from "@/components/entrance/master-dialogue-body";
 import {
   MASTER_DIALOGUE_TYPOGRAPHY,
+  masterDialogueBandBackdropFilter,
+  masterDialogueBandBackgroundColor,
   SHOW_DIALOGUE_ADVANCE_CUE,
 } from "@/lib/entrance/master-dialogue-typography";
 import { motion } from "motion/react";
@@ -20,6 +22,7 @@ type DialogueBoxProps = {
   label?: string;
   showAdvanceCue?: boolean;
   dialogueBodyRef?: RefObject<MasterDialogueBodyHandle | null>;
+  initialShown?: string;
 };
 
 /** マスター吹き出し — 画面端から端までの細い帯 */
@@ -32,9 +35,11 @@ export function DialogueBox({
   label = "マスター",
   showAdvanceCue = false,
   dialogueBodyRef,
+  initialShown,
 }: DialogueBoxProps) {
   const t = MASTER_DIALOGUE_TYPOGRAPHY;
   const horizontalPadding = `${t.horizontalPaddingRem}rem`;
+  const bandBackdropFilter = masterDialogueBandBackdropFilter();
 
   return (
     <motion.div
@@ -46,8 +51,9 @@ export function DialogueBox({
       style={{
         paddingTop: `${t.bandPaddingTopRem}rem`,
         paddingBottom: `${t.bandPaddingBottomRem}rem`,
-        backgroundColor: t.bandBackgroundColor,
-        backdropFilter: `blur(${t.bandBackdropBlurPx}px)`,
+        backgroundColor: masterDialogueBandBackgroundColor(),
+        backdropFilter: bandBackdropFilter,
+        WebkitBackdropFilter: bandBackdropFilter,
       }}
     >
       <p
@@ -55,7 +61,7 @@ export function DialogueBox({
         style={{
           color: t.labelColor,
           fontSize: t.labelFontSize,
-          letterSpacing: t.labelLetterSpacing,
+          letterSpacing: `${t.labelLetterSpacingEm}em`,
           paddingLeft: horizontalPadding,
           paddingRight: horizontalPadding,
           paddingBottom: `${t.labelPaddingBottomRem}rem`,
@@ -88,6 +94,7 @@ export function DialogueBox({
             text={text}
             speed={typewriterSpeed}
             onDone={onTypewriterDone}
+            initialShown={initialShown}
           />
         ) : (
           children

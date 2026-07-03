@@ -14,7 +14,6 @@ export type EntranceMenuState =
   | "recording"
   | "postRecordBlackout"
   | "postRecordThanks"
-  | "postRecordExitBlack"
   | "leaving"
   | "alley";
 
@@ -40,7 +39,6 @@ const NIGHT_PIPELINE_STATES = new Set<EntranceMenuState>([
   "recording",
   "postRecordBlackout",
   "postRecordThanks",
-  "postRecordExitBlack",
   "leaving",
   "alley",
 ]);
