@@ -19,6 +19,7 @@ type AwaitingAlleyComposingParams = {
   saveExpected: boolean;
   isDevSimulated: boolean;
   generationFailed: boolean;
+  dailyGenerationLimitReached: boolean;
   saveStatus: string;
   generationStatus: string;
 };
@@ -28,10 +29,12 @@ export function isAwaitingAlleyComposing({
   saveExpected,
   isDevSimulated,
   generationFailed,
+  dailyGenerationLimitReached,
   saveStatus,
   generationStatus,
 }: AwaitingAlleyComposingParams): boolean {
   if (!saveExpected || isDevSimulated || generationFailed) return false;
+  if (dailyGenerationLimitReached) return false;
   if (saveStatus === "saved" || saveStatus === "failed") return false;
   if (saveStatus === "loginRequired" && generationStatus === "success") {
     return false;

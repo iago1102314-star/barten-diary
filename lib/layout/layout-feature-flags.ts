@@ -17,8 +17,6 @@
  *   NEXT_PUBLIC_LAYOUT_IOS_SAFARI_HEIGHT=false
  */
 
-import { isNonProd } from "@/lib/env/app-env";
-
 export const LAYOUT_FLAG_STORAGE_KEYS = {
   appShell: "barten.layout.appShell",
   iosSafariHeight: "barten.layout.iosSafariHeight",
@@ -175,5 +173,5 @@ export function clearAllLayoutFeatureFlagStorage(): void {
 
 /** @deprecated isBisectFeatureFlagPanelEnabled を使用 */
 export function isLayoutFeatureFlagPanelEnabled(): boolean {
-  return isNonProd;
+  return process.env.NEXT_PUBLIC_ENABLE_BISECT_PANEL === "true";
 }

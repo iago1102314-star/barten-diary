@@ -83,7 +83,6 @@
   transform: scale(var(--menu-backdrop-scale, 1.08));
   transform-origin: center;
   filter: var(--menu-backdrop-filter, blur(4px) brightness(0.78));
-  will-change: filter;
 }
 
 .panelSurface {
@@ -805,4 +804,209 @@
 
 .sheetContent .sliderBlock:last-child {
   margin-bottom: 0;
+}
+
+/* ── フィードバック ── */
+
+.feedbackPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-bottom: 0.35rem;
+}
+
+.feedbackPanel .subPanelTitle {
+  margin-bottom: 0.35rem;
+}
+
+/* ── 法的情報 ── */
+
+.panelMainColumnLegal {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+}
+
+.panelInnerLegal {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.feedbackFieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.feedbackLegend {
+  margin: 0 0 0.45rem;
+  font-family: var(--font-serif-jp);
+  font-size: 0.72rem;
+  letter-spacing: var(--font-serif-jp-tracking);
+  color: rgba(196, 184, 164, 0.72);
+}
+
+.feedbackCategoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.feedbackCategoryOption {
+  width: 100%;
+  margin: 0;
+  padding: 0.72rem 0.9rem;
+  border: 1px solid rgba(255, 248, 235, 0.08);
+  border-radius: 0.75rem;
+  background: rgba(255, 248, 235, 0.04);
+  font-family: var(--font-serif-jp);
+  font-size: 0.86rem;
+  letter-spacing: var(--font-serif-jp-tracking);
+  color: rgba(232, 222, 205, 0.94);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.feedbackCategoryOption:hover:not(:disabled) {
+  border-color: rgba(214, 196, 168, 0.2);
+  background: rgba(255, 248, 235, 0.06);
+}
+
+.feedbackCategoryOptionActive {
+  border-color: rgba(214, 196, 168, 0.28);
+  background: rgba(214, 196, 168, 0.1);
+}
+
+.feedbackCategoryOption:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.feedbackRatingRow {
+  display: flex;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.feedbackStarButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 248, 235, 0.1);
+  border-radius: 0.55rem;
+  background: rgba(255, 248, 235, 0.04);
+  font-size: 1.05rem;
+  line-height: 1;
+  color: rgba(168, 158, 142, 0.55);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.feedbackStarButton:hover:not(:disabled) {
+  border-color: rgba(214, 196, 168, 0.22);
+  color: rgba(214, 196, 168, 0.75);
+}
+
+.feedbackStarButtonActive {
+  border-color: rgba(214, 196, 168, 0.32);
+  background: rgba(214, 196, 168, 0.12);
+  color: rgba(236, 220, 180, 0.96);
+}
+
+.feedbackStarButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.feedbackTextareaLabel {
+  font-family: var(--font-serif-jp);
+  font-size: 0.72rem;
+  letter-spacing: var(--font-serif-jp-tracking);
+  color: rgba(196, 184, 164, 0.72);
+}
+
+.feedbackTextarea {
+  width: 100%;
+  min-height: 6.5rem;
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(255, 248, 235, 0.1);
+  border-radius: 0.75rem;
+  background: rgba(0, 0, 0, 0.22);
+  font-family: var(--font-serif-jp);
+  font-size: 0.84rem;
+  line-height: 1.75;
+  letter-spacing: var(--font-serif-jp-tracking);
+  color: rgba(236, 228, 210, 0.94);
+  resize: vertical;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.feedbackTextarea::placeholder {
+  color: rgba(168, 158, 142, 0.48);
+}
+
+.feedbackTextarea:focus {
+  outline: none;
+  border-color: rgba(214, 196, 168, 0.28);
+}
+
+.feedbackTextarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.feedbackError {
+  margin: 0;
+  font-family: var(--font-ui-jp), var(--font-serif-jp), monospace;
+  font-size: 0.68rem;
+  line-height: 1.55;
+  letter-spacing: 0.02em;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: rgba(196, 118, 98, 0.92);
+}
+
+.feedbackSubmitButton {
+  width: 100%;
+  margin: 0.15rem 0 0;
+  padding: 0.82rem 1rem;
+  border: 1px solid rgba(214, 196, 168, 0.22);
+  border-radius: 999px;
+  background: rgba(214, 196, 168, 0.12);
+  font-family: var(--font-serif-jp);
+  font-size: 0.88rem;
+  letter-spacing: var(--font-serif-jp-tracking);
+  color: rgba(236, 228, 210, 0.96);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.feedbackSubmitButton:hover:not(:disabled) {
+  border-color: rgba(214, 196, 168, 0.34);
+  background: rgba(214, 196, 168, 0.18);
+}
+
+.feedbackSubmitButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

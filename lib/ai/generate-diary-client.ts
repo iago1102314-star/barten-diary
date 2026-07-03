@@ -6,6 +6,13 @@ import type {
 } from "@/lib/ai/types";
 import type { DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
 import { assertTranscriptPresentForGeneration } from "@/lib/night/assert-transcript-present";
+import {
+  DailyGenerationLimitError,
+  assertGuestCanGenerateDiary,
+  incrementGuestDailyGenerationCount,
+  isDailyGenerationLimitResponse,
+} from "@/lib/night/daily-generation-limit";
+import { createClient } from "@/lib/supabase/client";
 import { FetchTimeoutError, fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 const GENERATE_TIMEOUT_MS = 90_000;
@@ -63,6 +70,15 @@ async function requestGeneration(
 ): Promise<GeneratedDiary | GenerateDiaryVariantsResult> {
   assertTranscriptPresentForGeneration(transcript);
 
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    assertGuestCanGenerateDiary();
+  }
+
   let response: Response;
 
   try {
@@ -97,11 +113,18 @@ async function requestGeneration(
     | GenerateDiaryError;
 
   if (!response.ok) {
+    if (isDailyGenerationLimitResponse(data)) {
+      throw new DailyGenerationLimitError();
+    }
     throw new Error(
       "error" in data && data.error
         ? data.error
         : "夜の記録を紡げませんでした。",
     );
+  }
+
+  if (!user) {
+    incrementGuestDailyGenerationCount();
   }
 
   if ("variants" in data && Array.isArray(data.variants)) {

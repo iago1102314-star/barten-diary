@@ -13,19 +13,31 @@ import { useState } from "react";
 type MemoShelfEmptyCounterCtaProps = {
   /** 路地内の記録画面からカウンターへ — 暗転後に親が入店演出を開始 */
   onLaunchCounter?: () => void;
+  /** 暗転前 — 1日上限など。false なら暗転・入店を開始しない */
+  onValidateLaunch?: () => Promise<boolean>;
 };
 
 /** 記録が一枚もない棚 — カウンター入店への導線 */
 export function MemoShelfEmptyCounterCta({
   onLaunchCounter,
+  onValidateLaunch,
 }: MemoShelfEmptyCounterCtaProps) {
   const router = useRouter();
   const [fading, setFading] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   const handleLaunch = () => {
-    if (fading) return;
+    if (fading || checking) return;
     prepareBarAudioOnUserGesture();
-    setFading(true);
+    void (async () => {
+      if (onValidateLaunch) {
+        setChecking(true);
+        const allowed = await onValidateLaunch();
+        setChecking(false);
+        if (!allowed) return;
+      }
+      setFading(true);
+    })();
   };
 
   const handleFadeComplete = () => {
@@ -50,7 +62,7 @@ export function MemoShelfEmptyCounterCta({
           type="button"
           className={styles.emptyShelfLaunchButton}
           onClick={handleLaunch}
-          disabled={fading}
+          disabled={fading || checking}
         >
           <span className={styles.emptyShelfLaunchLabel}>カウンターへ</span>
           <span className={styles.emptyShelfLaunchIconSlot} aria-hidden>

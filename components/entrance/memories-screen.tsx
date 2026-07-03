@@ -37,6 +37,8 @@ type MemoriesScreenProps = {
   onBack: () => void;
   /** 空の棚からカウンター入店 — 暗転完了後に呼ぶ */
   onLaunchCounter?: () => void;
+  /** 暗転前 — 1日上限など。false なら入店演出を開始しない */
+  onValidateCounterLaunch?: () => Promise<boolean>;
   /** 指定時は一覧を飛ばしてその記録を開く（帰り道からなど） */
   initialDiaryId?: string;
 };
@@ -52,6 +54,7 @@ const contentFade = {
 export function MemoriesScreen({
   onBack,
   onLaunchCounter,
+  onValidateCounterLaunch,
   initialDiaryId,
 }: MemoriesScreenProps) {
   const [selectedMemo, setSelectedMemo] = useState<DiaryListItem | null>(null);
@@ -433,6 +436,7 @@ export function MemoriesScreen({
                           <div className={styles.listAlbumGrid}>
                             <MemoShelfEmptyCounterCta
                               onLaunchCounter={onLaunchCounter}
+                              onValidateLaunch={onValidateCounterLaunch}
                             />
                           </div>
                         )}

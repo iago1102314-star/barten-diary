@@ -7,6 +7,10 @@ import {
   ambientMessageFromUnknownFailure,
   type AmbientMessage,
 } from "@/lib/night/ambient-messages";
+import {
+  DAILY_GENERATION_LIMIT_AMBIENT,
+  isDailyGenerationLimitError,
+} from "@/lib/night/daily-generation-limit";
 import type { DrinkCategoryId, DrinkId } from "@/lib/drinks/drink-catalog";
 import { useCallback, useState } from "react";
 
@@ -14,7 +18,7 @@ export type GenerateDiaryStatus = "idle" | "loading" | "success" | "error";
 
 export type GenerateDiaryOutcome =
   | { ok: true; diary: GeneratedDiary }
-  | { ok: false; ambient: AmbientMessage };
+  | { ok: false; ambient: AmbientMessage; dailyLimitReached?: boolean };
 
 export function useGenerateDiary() {
   const [status, setStatus] = useState<GenerateDiaryStatus>("idle");
@@ -55,6 +59,14 @@ export function useGenerateDiary() {
         return { ok: true, diary: generated };
       } catch (err) {
         setStatus("error");
+        if (isDailyGenerationLimitError(err)) {
+          setError(DAILY_GENERATION_LIMIT_AMBIENT.lines.join("\n"));
+          return {
+            ok: false,
+            ambient: DAILY_GENERATION_LIMIT_AMBIENT,
+            dailyLimitReached: true,
+          };
+        }
         const message = err instanceof Error ? err.message : null;
         const ambient =
           message != null

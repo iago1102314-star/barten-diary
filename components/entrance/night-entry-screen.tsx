@@ -63,6 +63,8 @@ const ALLEY_KEN_BURNS = START_ENTRY_ALLEY_KEN_BURNS;
 export type EntryScreenPhase = "bokeh" | "revealing" | "normal";
 
 type NightEntryScreenProps = {
+  /** カウンター入店前の1日上限チェック中 — 二重タップ防止 */
+  counterEntryChecking?: boolean;
   onEnterCounter: () => void;
   onOpenMemories: () => void;
   /** 日記詳細デザインモック（本番以外） */
@@ -96,6 +98,7 @@ export function NightEntryScreen({
   onOpenMemories,
   onOpenDiaryPaperMock,
   onBackgroundTap,
+  counterEntryChecking = false,
   skipImageEntrance = false,
   steadyFadeIn = false,
   onSteadyFadeInComplete,
@@ -348,7 +351,7 @@ export function NightEntryScreen({
           >
             <HomeEntryButton
               onClick={interactionLocked ? undefined : onEnterCounter}
-              disabled={interactionLocked}
+              disabled={interactionLocked || counterEntryChecking}
             >
               カウンターへ
             </HomeEntryButton>

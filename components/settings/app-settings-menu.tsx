@@ -18,11 +18,16 @@ import { EASE_SOFT } from "@/lib/entrance/motion-presets";
 import {
   playMenuOpenSound,
   playMenuTapSound,
+  primeMenuAudioForGesture,
 } from "@/lib/settings/play-menu-sound";
 import { useAuthUser } from "@/hooks/use-auth-user";
+import type { DiaryExportNotice } from "@/hooks/use-diary-paper-export";
 import { SettingsProfileHeader } from "@/components/settings/settings-profile-header";
 import { SettingsMenuBackdropView } from "@/components/settings/settings-menu-backdrop-view";
 import { SettingsSignOutButton } from "@/components/settings/settings-sign-out-button";
+import { DiaryExportNoticePanel } from "@/components/diary-paper/diary-export-notice";
+import { SettingsFeedbackPanel } from "@/components/settings/settings-feedback-panel";
+import { SettingsLegalPanel } from "@/components/settings/settings-legal-panel";
 import { ShebronIcon } from "@/components/ui/shebron-icon";
 import {
   buildSettingsMenuCssVars,
@@ -35,7 +40,7 @@ import { useCallback, useEffect, useState } from "react";
 
 type SettingsSheet = "sound" | "settings" | null;
 
-type SettingsPanel = "main" | "feedback" | "terms" | "about";
+type SettingsPanel = "main" | "feedback" | "legal" | "about";
 
 type MenuItem = {
   id: SettingsPanel | "sound" | "settings";
@@ -54,24 +59,9 @@ const MENU_ITEMS: MenuItem[] = [
     icon: SettingsCommentIcon,
   },
   { id: "settings", label: "設定", icon: SettingsOptionIcon, sheet: "settings" },
-  { id: "terms", label: "利用規約", icon: SettingsRuleIcon },
+  { id: "legal", label: "法的情報", icon: SettingsRuleIcon },
   { id: "about", label: "このアプリについて", icon: SettingsInformationIcon },
 ];
-
-function PlaceholderPanel({
-  title,
-  message,
-}: {
-  title: string;
-  message: string;
-}) {
-  return (
-    <div>
-      <h2 className={styles.subPanelTitle}>{title}</h2>
-      <p className={styles.placeholderText}>{message}</p>
-    </div>
-  );
-}
 
 function AboutPanel() {
   return (
@@ -86,22 +76,20 @@ function AboutPanel() {
   );
 }
 
-function SettingsSubPanel({ panel }: { panel: SettingsPanel }) {
+function SettingsSubPanel({
+  panel,
+  legalPanelKey,
+  onFeedbackSuccess,
+}: {
+  panel: SettingsPanel;
+  legalPanelKey: number;
+  onFeedbackSuccess: () => void;
+}) {
   switch (panel) {
     case "feedback":
-      return (
-        <PlaceholderPanel
-          title="フィードバック"
-          message={"感想や不具合の送信は\n準備中です。"}
-        />
-      );
-    case "terms":
-      return (
-        <PlaceholderPanel
-          title="利用規約"
-          message={"利用規約は\n準備中です。"}
-        />
-      );
+      return <SettingsFeedbackPanel onSuccess={onFeedbackSuccess} />;
+    case "legal":
+      return <SettingsLegalPanel key={legalPanelKey} />;
     case "about":
       return <AboutPanel />;
     default:
@@ -114,7 +102,9 @@ export function AppSettingsMenu() {
   const { isLoggedIn } = useAuthUser();
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<SettingsPanel>("main");
+  const [legalPanelKey, setLegalPanelKey] = useState(0);
   const [sheet, setSheet] = useState<SettingsSheet>(null);
+  const [notice, setNotice] = useState<DiaryExportNotice | null>(null);
 
   const closeSheet = useCallback(() => {
     playMenuOpenSound();
@@ -126,6 +116,11 @@ export function AppSettingsMenu() {
     setPanel("main");
     setSheet(null);
   }, []);
+
+  const handleFeedbackSuccess = useCallback(() => {
+    closeAll();
+    setNotice({ type: "success", text: "送信しました" });
+  }, [closeAll]);
 
   const handleClose = useCallback(() => {
     if (sheet) {
@@ -154,6 +149,9 @@ export function AppSettingsMenu() {
       return;
     }
     playMenuTapSound();
+    if (item.id === "legal") {
+      setLegalPanelKey((key) => key + 1);
+    }
     setPanel(item.id as SettingsPanel);
   };
 
@@ -189,9 +187,14 @@ export function AppSettingsMenu() {
           type="button"
           className={styles.fab}
           aria-label="メニューを開く"
+          onPointerDown={() => {
+            primeMenuAudioForGesture();
+          }}
           onClick={() => {
             playMenuTapSound();
-            setOpen(true);
+            requestAnimationFrame(() => {
+              setOpen(true);
+            });
           }}
         >
           <SettingsHamburgerIcon className={styles.fabIcon} />
@@ -248,7 +251,11 @@ export function AppSettingsMenu() {
                   ) : null}
 
                   <div className={styles.panelMenuZone}>
-                    <div className={styles.panelMainColumn}>
+                    <div
+                      className={`${styles.panelMainColumn} ${
+                        panel === "legal" ? styles.panelMainColumnLegal : ""
+                      }`}
+                    >
                       <AnimatePresence mode="wait">
                         {panel === "main" ? (
                           <motion.div
@@ -304,13 +311,19 @@ export function AppSettingsMenu() {
                         ) : (
                           <motion.div
                             key={panel}
-                            className={styles.panelInner}
+                            className={`${styles.panelInner} ${
+                              panel === "legal" ? styles.panelInnerLegal : ""
+                            }`}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -8 }}
                             transition={{ duration: 0.38, ease: EASE_SOFT }}
                           >
-                            <SettingsSubPanel panel={panel} />
+                            <SettingsSubPanel
+                              panel={panel}
+                              legalPanelKey={legalPanelKey}
+                              onFeedbackSuccess={handleFeedbackSuccess}
+                            />
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -349,6 +362,10 @@ export function AppSettingsMenu() {
           </motion.div>
         ) : null}
       </AnimatePresence>
+      <DiaryExportNoticePanel
+        notice={notice}
+        onDismiss={() => setNotice(null)}
+      />
     </div>
   );
 }

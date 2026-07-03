@@ -11,7 +11,52 @@
   background: #000;
 }
 
-.leaving {
+.staticImage {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.staticOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: #000;
+}
+
+.memoriesPaper {
+  position: absolute;
+  inset: 0;
+  background-color: #ebe2cf;
+  background-image:
+    radial-gradient(
+      ellipse 95% 55% at 50% 8%,
+      rgba(255, 252, 245, 0.42) 0%,
+      transparent 62%
+    ),
+    linear-gradient(180deg, #f0e9da 0%, #ebe2cf 28%, #e5d8bc 100%);
+}
+
+.memoriesPaperTexture {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("/assets/diary/paper.webp");
+  background-repeat: repeat;
+  background-size: 260px auto;
+  opacity: 0.36;
+  mix-blend-mode: multiply;
+}
+
+.memoriesPaperVignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 100px rgba(90, 62, 28, 0.12);
 }

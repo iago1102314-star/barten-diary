@@ -32,6 +32,8 @@ import { PastBottleLink } from "@/components/entrance/past-bottle-link";
 import { RecordingPanel } from "@/components/entrance/recording-panel";
 import { RecordingTutorialCard } from "@/components/entrance/recording-tutorial-card";
 import { RecordingLimitNoticeCard } from "@/components/entrance/recording-limit-notice-card";
+import { DailyGenerationLimitNoticeCard } from "@/components/entrance/daily-generation-limit-notice-card";
+import { checkDailyGenerationGate } from "@/lib/night/daily-generation-limit";
 import { EntranceBottomToast } from "@/components/entrance/entrance-bottom-toast";
 import { SceneFrame } from "@/components/entrance/scene-frame";
 import { prepareBarAudioOnUserGesture, syncBarAudioUnlockFromClient, useBarAudio } from "@/hooks/use-bar-audio";
@@ -221,6 +223,10 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const [entranceState, setEntranceState] = useState<EntranceState>("entry");
   const [recordingLimitNoticeActive, setRecordingLimitNoticeActive] =
     useState(false);
+  const [dailyLimitNoticeAtEntry, setDailyLimitNoticeAtEntry] = useState(false);
+  const [counterEntryGateChecking, setCounterEntryGateChecking] =
+    useState(false);
+  const counterEntryGateLockRef = useRef(false);
   const onRecordingMaxDurationRef = useRef<() => void>(() => {});
 
   const session = useNightSession({
@@ -638,7 +644,8 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       setAlleyOutcome({ kind: "needsLogin", paper });
     } else if (
       session.generationFailed ||
-      session.saveStatus === "failed"
+      session.saveStatus === "failed" ||
+      session.dailyGenerationLimitReached
     ) {
       alleyWaitStartedRef.current = null;
       setAlleyOutcome({ kind: "saveFailed" });
@@ -656,6 +663,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     session.savedDiaryId,
     session.generationFailed,
     session.generationStatus,
+    session.dailyGenerationLimitReached,
   ]);
 
   useEffect(() => {
@@ -753,6 +761,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     if (session.isDevSimulated) return;
     if (entranceState !== "postRecordBlackout") return;
     if (recordingLimitNoticeActive) return;
+    if (session.dailyGenerationLimitReached) return;
     if (session.phase !== "ending" && session.phase !== "revealed") return;
 
     saveExpectedRef.current = true;
@@ -768,10 +777,39 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     session.isDevSimulated,
     audio,
     recordingLimitNoticeActive,
+    session.dailyGenerationLimitReached,
   ]);
 
   const handleRecordingLimitNoticeDismiss = useCallback(() => {
     setRecordingLimitNoticeActive(false);
+  }, []);
+
+  const handleDailyGenerationLimitNoticeDismiss = useCallback(() => {
+    saveExpectedRef.current = false;
+    farewellStartedRef.current = false;
+    leaveAnimationDoneRef.current = false;
+    returnToHomeSteady();
+  }, [returnToHomeSteady]);
+
+  const handleDailyLimitNoticeAtEntryDismiss = useCallback(() => {
+    setDailyLimitNoticeAtEntry(false);
+  }, []);
+
+  const validateCounterEntryGate = useCallback(async (): Promise<boolean> => {
+    if (counterEntryGateLockRef.current) return false;
+    counterEntryGateLockRef.current = true;
+    setCounterEntryGateChecking(true);
+    try {
+      const gate = await checkDailyGenerationGate();
+      if (!gate.allowed) {
+        setDailyLimitNoticeAtEntry(true);
+        return false;
+      }
+      return true;
+    } finally {
+      counterEntryGateLockRef.current = false;
+      setCounterEntryGateChecking(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -800,6 +838,12 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   useEffect(() => {
     if (entranceState !== "alley") return;
     if (alleyOutcome?.kind !== "composing") return;
+
+    if (session.dailyGenerationLimitReached) {
+      alleyWaitStartedRef.current = null;
+      setAlleyOutcome({ kind: "saveFailed" });
+      return;
+    }
 
     if (session.saveStatus === "saved" && session.savedDiaryId) {
       const waitingInAlleyMs = alleyWaitStartedRef.current
@@ -843,6 +887,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     session.generationFailed,
     session.generationStatus,
     session.recordWaitingInAlleyComplete,
+    session.dailyGenerationLimitReached,
   ]);
 
   useEffect(() => {
@@ -954,11 +999,15 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
   const handleEnterCounter = () => {
     if (entryTransition !== "idle") return;
-    resetNightRefs();
-    resetEntryOutsideStarted();
-    primeCounterEntryAudio();
-    audio.stopOutside(false, BAR_AUDIO_TIMING.doorExitOutsideFadeMs);
-    setEntryTransition("doorExit");
+    void (async () => {
+      const allowed = await validateCounterEntryGate();
+      if (!allowed) return;
+      resetNightRefs();
+      resetEntryOutsideStarted();
+      primeCounterEntryAudio();
+      audio.stopOutside(false, BAR_AUDIO_TIMING.doorExitOutsideFadeMs);
+      setEntryTransition("doorExit");
+    })();
   };
 
   const handleDoorExitComplete = () => {
@@ -1237,6 +1286,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
             onOpenMemories={handleOpenMemories}
             onOpenDiaryPaperMock={handleOpenDiaryPaperMock}
             onBackgroundTap={handleBackgroundTapForOutside}
+            counterEntryChecking={counterEntryGateChecking}
             skipImageEntrance={skipEntryEntrance}
             steadyFadeIn={entryTransition === "steadyFadeIn"}
             onSteadyFadeInComplete={handleSteadyFadeInComplete}
@@ -1259,6 +1309,11 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
               startLampGlowPositionEditing || startBokehOnlyPositionEditing
             }
           />
+          {dailyLimitNoticeAtEntry ? (
+            <DailyGenerationLimitNoticeCard
+              onDismiss={handleDailyLimitNoticeAtEntryDismiss}
+            />
+          ) : null}
           {startLampGlowPositionEditing && (
             <StartLampGlowPositionEditor
               glows={startPositionGlows}
@@ -1368,8 +1423,14 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
           <MemoriesScreen
             onBack={handleBackFromMemories}
             onLaunchCounter={handleLaunchCounterFromMemories}
+            onValidateCounterLaunch={validateCounterEntryGate}
             initialDiaryId={memoriesLaunch.initialDiaryId}
           />
+          {dailyLimitNoticeAtEntry ? (
+            <DailyGenerationLimitNoticeCard
+              onDismiss={handleDailyLimitNoticeAtEntryDismiss}
+            />
+          ) : null}
         </motion.div>
       </AnimatePresence>
     );
@@ -1434,6 +1495,11 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
             homeFadeOut={alleyHomeFadeOut}
             onHomeFadeOutComplete={handleAlleyHomeFadeOutComplete}
           />
+          {session.dailyGenerationLimitReached ? (
+            <DailyGenerationLimitNoticeCard
+              onDismiss={handleDailyGenerationLimitNoticeDismiss}
+            />
+          ) : null}
         </motion.div>
       </AnimatePresence>
     );
@@ -1663,6 +1729,13 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
             entranceState === "postRecordBlackout" ? (
               <RecordingLimitNoticeCard
                 onDismiss={handleRecordingLimitNoticeDismiss}
+              />
+            ) : null}
+
+            {session.dailyGenerationLimitReached &&
+            entranceState === "postRecordBlackout" ? (
+              <DailyGenerationLimitNoticeCard
+                onDismiss={handleDailyGenerationLimitNoticeDismiss}
               />
             ) : null}
             </div>

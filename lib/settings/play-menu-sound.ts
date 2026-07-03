@@ -1,21 +1,22 @@
 import { barAudioEngine } from "@/lib/entrance/bar-audio-engine";
 
 /** タップ操作と同じ同期コンテキストで unlock + SE プール */
-function primeMenuAudio(): void {
-  barAudioEngine.primeMenuSfxForUserGesture();
-}
-
 export function playMenuTapSound(): void {
-  primeMenuAudio();
+  primeMenuAudioForGesture();
   barAudioEngine.playClick();
 }
 
 export function playMenuOpenSound(): void {
-  primeMenuAudio();
+  primeMenuAudioForGesture();
   barAudioEngine.playMenuOpen();
 }
 
 export function playMenuAdjustSound(): void {
-  primeMenuAudio();
+  primeMenuAudioForGesture();
   barAudioEngine.playMenuClick();
+}
+
+/** FAB 押下前 — SE プール生成だけ先に済ませる */
+export function primeMenuAudioForGesture(): void {
+  barAudioEngine.primeMenuSfxForUserGesture();
 }

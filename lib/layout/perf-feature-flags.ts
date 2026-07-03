@@ -12,8 +12,6 @@
  * localStorage: barten.perf.<id> … "on" | "off"
  */
 
-import { isNonProd } from "@/lib/env/app-env";
-
 export const PERF_FLAG_STORAGE_KEYS = {
   all: "barten.perf.all",
   menuBackdrop: "barten.perf.menuBackdrop",
@@ -181,5 +179,5 @@ export function notifyPerfFlagsChanged(): void {
 }
 
 export function isBisectFeatureFlagPanelEnabled(): boolean {
-  return isNonProd;
+  return process.env.NEXT_PUBLIC_ENABLE_BISECT_PANEL === "true";
 }

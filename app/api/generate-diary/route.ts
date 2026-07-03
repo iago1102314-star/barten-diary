@@ -11,6 +11,12 @@ import type {
 } from "@/lib/ai/types";
 import { GENERATION_PARSE_ERROR_MESSAGE } from "@/lib/ai/security/generation-errors";
 import { assertTranscriptPresentForGeneration } from "@/lib/night/assert-transcript-present";
+import {
+  DAILY_GENERATION_LIMIT_CODE,
+  DAILY_GENERATION_LIMIT_MAX,
+  DAILY_GENERATION_LIMIT_TITLE,
+  countTodaysDiariesForUser,
+} from "@/lib/night/daily-generation-limit";
 import { assembleBottleTag } from "@/lib/bottle-tag/assemble-record";
 import { buildDrinkContext } from "@/lib/drinks/build-drink-context";
 import {
@@ -19,6 +25,7 @@ import {
 } from "@/lib/drinks/drink-catalog";
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
 const TEMPERATURE_LABELS = ["静", "標準", "温"] as const;
 const DEFAULT_TIME_ZONE = "Asia/Tokyo";
@@ -130,6 +137,35 @@ export async function POST(request: Request) {
     selectedDrinkId,
   );
   const drinkContext = buildDrinkContext(categoryId, bottleAssembly);
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    try {
+      const todaysDiaryCount = await countTodaysDiariesForUser(
+        supabase,
+        user.id,
+      );
+      if (todaysDiaryCount >= DAILY_GENERATION_LIMIT_MAX) {
+        return NextResponse.json(
+          {
+            error: DAILY_GENERATION_LIMIT_TITLE,
+            code: DAILY_GENERATION_LIMIT_CODE,
+          },
+          { status: 403 },
+        );
+      }
+    } catch (error) {
+      console.error("Failed to check daily generation limit:", error);
+      return NextResponse.json(
+        { error: "夜の記録を紡げませんでした。" },
+        { status: 500 },
+      );
+    }
+  }
 
   const openai = new OpenAI({ apiKey });
 

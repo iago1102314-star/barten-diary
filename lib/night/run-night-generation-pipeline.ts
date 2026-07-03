@@ -21,6 +21,7 @@ export type NightGenerationPipelineFailure = {
   ok: false;
   reason: string;
   phase: "transcribe" | "readiness" | "generation";
+  dailyLimitReached?: boolean;
   timings: Pick<
     NightPipelineTimings,
     "whisperMs" | "readinessMs" | "diaryGenerationMs" | "totalMs"
@@ -152,6 +153,7 @@ export async function runNightGenerationPipeline(
       ok: false,
       reason: generation.ambient.lines.join("\n"),
       phase: "generation",
+      dailyLimitReached: generation.dailyLimitReached,
       timings,
     };
   }

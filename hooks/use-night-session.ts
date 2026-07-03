@@ -92,6 +92,8 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
   );
   const [isDevSimulated, setIsDevSimulated] = useState(false);
   const [generationFailed, setGenerationFailed] = useState(false);
+  const [dailyGenerationLimitReached, setDailyGenerationLimitReached] =
+    useState(false);
   const [pipelineFailurePhase, setPipelineFailurePhase] =
     useState<NightPipelineFailurePhase | null>(null);
   const [saveStatus, setSaveStatus] = useState<NightSaveStatus>("idle");
@@ -199,6 +201,7 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
   const registerPipelineFailure = useCallback(
     (reason: string, phase: NightPipelineFailurePhase) => {
       setGenerationFailed(true);
+      setDailyGenerationLimitReached(false);
       setPipelineFailurePhase(phase);
       logRecordingPipelineError("night pipeline: failed after ending", {
         reason,
@@ -209,6 +212,18 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
     },
     [],
   );
+
+  const registerDailyGenerationLimit = useCallback(() => {
+    pipelineLock.current = false;
+    inflightGenerationKeyRef.current = null;
+    setGenerationFailed(false);
+    setPipelineFailurePhase(null);
+    setDailyGenerationLimitReached(true);
+    logRecordingPipeline("night pipeline: daily generation limit reached");
+    updateRecordingPipelineDiagnostic({
+      pipelineError: "daily generation limit reached",
+    });
+  }, []);
 
   const resetListenFailure = useCallback(() => {
     setListenFailureCount(0);
@@ -234,6 +249,7 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
     setContinuedFrom(null);
     setIsDevSimulated(false);
     setGenerationFailed(false);
+    setDailyGenerationLimitReached(false);
     setPipelineFailurePhase(null);
     setSaveStatus("idle");
     setSavedDiaryId(null);
@@ -508,7 +524,11 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
       });
 
       if (!result.ok) {
-        registerPipelineFailure(result.reason, result.phase);
+        if (result.dailyLimitReached) {
+          registerDailyGenerationLimit();
+        } else {
+          registerPipelineFailure(result.reason, result.phase);
+        }
         pipelineLock.current = false;
         return;
       }
@@ -537,6 +557,7 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
       selectedDrinkId,
       generation,
       registerPipelineFailure,
+      registerDailyGenerationLimit,
       clearListenFailureUi,
     ],
   );
@@ -650,11 +671,15 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
     }));
 
     if (!outcome.ok) {
-      setGenerationFailed(true);
-      setPipelineFailurePhase("generation");
-      updateRecordingPipelineDiagnostic({
-        pipelineError: outcome.ambient.lines.join("\n"),
-      });
+      if (outcome.dailyLimitReached) {
+        registerDailyGenerationLimit();
+      } else {
+        setGenerationFailed(true);
+        setPipelineFailurePhase("generation");
+        updateRecordingPipelineDiagnostic({
+          pipelineError: outcome.ambient.lines.join("\n"),
+        });
+      }
       inflightGenerationKeyRef.current = null;
       return false;
     }
@@ -665,7 +690,7 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
       diaryGenerationMs,
     });
     return true;
-  }, [transcript, selectedCategoryId, selectedDrinkId, recordedAt, generation, applyPipelineTimings]);
+  }, [transcript, selectedCategoryId, selectedDrinkId, recordedAt, generation, applyPipelineTimings, registerDailyGenerationLimit]);
 
   const restartRecordingAfterPipelineFailure =
     useCallback(async (): Promise<boolean> => {
@@ -936,6 +961,7 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
     record: generation.result,
     generationStatus: generation.status,
     generationFailed,
+    dailyGenerationLimitReached,
     pipelineFailurePhase,
     saveStatus,
     savedDiaryId,

@@ -4,7 +4,8 @@ export type AmbientMessageKind =
   | "too_short"
   | "unintelligible"
   | "silent"
-  | "generic";
+  | "generic"
+  | "daily_limit";
 
 export type AmbientMessage = {
   kind: AmbientMessageKind;
