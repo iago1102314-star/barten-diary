@@ -57,6 +57,15 @@ function getStoredBehaviorRef(): string | null {
   return localStorage.getItem(REF_KEY);
 }
 
+function isAdminBehaviorRef(ref: string | null): boolean {
+  return ref === "admin";
+}
+
+function readBehaviorLogContext(): { ref: string | null; is_admin: boolean } {
+  const ref = getStoredBehaviorRef();
+  return { ref, is_admin: isAdminBehaviorRef(ref) };
+}
+
 async function resolveUserId(): Promise<string | null> {
   try {
     const supabase = createClient();
@@ -89,13 +98,15 @@ export async function logBehaviorAccessOnce(): Promise<void> {
 
   const userId = await resolveUserId();
   const { width, height } = readScreenSize();
+  const { ref, is_admin } = readBehaviorLogContext();
 
   try {
     const supabase = createClient();
     const { error } = await supabase.from("access_logs").insert({
       session_id: sessionId,
       user_id: userId,
-      ref: getStoredBehaviorRef(),
+      ref,
+      is_admin,
       path: window.location.pathname,
       screen_width: width,
       screen_height: height,
@@ -120,6 +131,7 @@ export async function logBehaviorEvent(
   if (!sessionId) return;
 
   const userId = await resolveUserId();
+  const { ref, is_admin } = readBehaviorLogContext();
 
   try {
     const supabase = createClient();
@@ -127,7 +139,8 @@ export async function logBehaviorEvent(
       session_id: sessionId,
       user_id: userId,
       event_name: eventName,
-      ref: getStoredBehaviorRef(),
+      ref,
+      is_admin,
       metadata: metadata ?? null,
     });
   } catch {
