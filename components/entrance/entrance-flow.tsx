@@ -1333,8 +1333,12 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     session.selectCategory(categoryId, drink.id);
     setPickedDrink(drink);
 
+    const preloadPromise = waitForSceneRevealPreload(
+      recordCounterPreloadRef.current,
+    );
+
     const finishToDrinkServed = async () => {
-      await waitForSceneRevealPreload(recordCounterPreloadRef.current);
+      await preloadPromise;
       setMoodSelectExitActive(false);
       setMoodCameraPose("neutral");
       moodGrassPlayedRef.current = true;

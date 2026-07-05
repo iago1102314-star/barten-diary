@@ -1104,6 +1104,45 @@ function playSfxNow(
     ...slots.filter((slot) => !slot.paused),
   ];
 
+  let endedFired = false;
+  let endedFallbackTimer: number | null = null;
+  let endedListener: (() => void) | null = null;
+
+  const clearEndedWatch = (audio: HTMLAudioElement) => {
+    if (endedListener) {
+      audio.removeEventListener("ended", endedListener);
+      endedListener = null;
+    }
+    if (endedFallbackTimer !== null) {
+      window.clearTimeout(endedFallbackTimer);
+      endedFallbackTimer = null;
+    }
+  };
+
+  const fireEnded = () => {
+    if (!onEnded || endedFired) return;
+    endedFired = true;
+    onEnded();
+  };
+
+  const attachEndedWatch = (audio: HTMLAudioElement) => {
+    if (!onEnded) return;
+    clearEndedWatch(audio);
+    endedListener = () => {
+      clearEndedWatch(audio);
+      fireEnded();
+    };
+    audio.addEventListener("ended", endedListener, { once: true });
+    const durationMs =
+      Number.isFinite(audio.duration) && audio.duration > 0
+        ? Math.min(audio.duration * 1000 + 120, 4000)
+        : 2800;
+    endedFallbackTimer = window.setTimeout(() => {
+      clearEndedWatch(audio);
+      fireEnded();
+    }, durationMs);
+  };
+
   const playOnSlot = (audio: HTMLAudioElement, allowRetry: boolean) => {
     audio.volume = effectiveVolume;
     logAudioVolumeDebug("playSfx", {
@@ -1117,20 +1156,15 @@ function playSfxNow(
     audio.muted = false;
     audio.currentTime = 0;
 
-    if (onEnded) {
-      const handleEnded = () => {
-        audio.removeEventListener("ended", handleEnded);
-        onEnded();
-      };
-      audio.addEventListener("ended", handleEnded);
-    }
+    attachEndedWatch(audio);
 
     const playPromise = audio.play();
     if (!playPromise) return;
 
     playPromise.catch(() => {
+      clearEndedWatch(audio);
       if (!allowRetry) {
-        onEnded?.();
+        fireEnded();
         return;
       }
 
@@ -1149,7 +1183,7 @@ function playSfxNow(
         return;
       }
 
-      onEnded?.();
+      fireEnded();
     });
   };
 

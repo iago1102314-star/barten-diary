@@ -21,7 +21,6 @@ export const MOOD_SELECT_EXIT_SCALED = {
   buttonDissolveSec: moodSelectExitScaledSec(
     MOOD_SELECT_EXIT_TUNING.buttonDissolveSec,
   ),
-  grassFallbackDurationSec: moodSelectExitScaledSec(
-    MOOD_SELECT_EXIT_TUNING.grassFallbackDurationSec,
-  ),
+  /** 入場 scale 非適用 — iOS で ended が来ないときの過剰待ち（最大16s）を防ぐ */
+  grassFallbackDurationSec: MOOD_SELECT_EXIT_TUNING.grassFallbackDurationSec,
 } as const;

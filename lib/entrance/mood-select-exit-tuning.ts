@@ -28,6 +28,6 @@ export const MOOD_SELECT_EXIT_TUNING = {
   buttonDissolveScale: 0.98,
   buttonDissolveBlurPx: 6,
 
-  /** grass 終了待ち — onended が来ない場合のフォールバック */
-  grassFallbackDurationSec: 4,
+  /** grass 終了待ち — onended 欠落時（iOS 等）。入場 scale は掛けない（音源長ベース） */
+  grassFallbackDurationSec: 2.8,
 } as const;
