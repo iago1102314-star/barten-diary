@@ -407,26 +407,6 @@ async function ensureIosJazzEntryWebAudio(
   return (await connectLoopTrackWebAudio(audio, track)) !== null;
 }
 
-/** 入店フェード完了後 — 継続再生は要素音量へ戻す（iOS 全体 Web Audio 化はしない） */
-function handoffIosJazzEntryWebAudioToElement(
-  audio: HTMLAudioElement,
-  track: LoopingTrackState,
-  level: number,
-) {
-  if (!isIosAudioSession() || !track.webAudio) return;
-
-  const clamped = clampVolume(level);
-  disconnectTrackWebAudio(track);
-  audio.volume = clamped;
-  audio.muted = false;
-
-  logAudioVolumeDebug("jazzEntryFadePath", {
-    path: "webAudioGain",
-    handoff: "element",
-    elementVolume: clamped,
-  });
-}
-
 function setTrackOutputLevel(
   audio: HTMLAudioElement,
   track: LoopingTrackState,
@@ -652,11 +632,6 @@ function computeFadeLevel(
   return from + (to - from) * progress;
 }
 
-type FadeVolumeOptions = {
-  /** iOS 入店フェード — Web Audio 後に要素音量へ戻す */
-  iosHandoffToElementOnComplete?: boolean;
-};
-
 function fadeVolume(
   audio: HTMLAudioElement,
   from: number,
@@ -664,7 +639,6 @@ function fadeVolume(
   durationMs: number,
   track: LoopingTrackState,
   onComplete?: () => void,
-  options?: FadeVolumeOptions,
 ) {
   cancelTrackFade(track);
   track.ambient?.pause();
@@ -719,8 +693,14 @@ function fadeVolume(
       if (!usesWebAudio && fadeIn) {
         audio.muted = false;
       }
-      if (options?.iosHandoffToElementOnComplete) {
-        handoffIosJazzEntryWebAudioToElement(audio, track, to);
+      if (usesWebAudio && fadeIn && isIosAudioSession()) {
+        audio.volume = 1;
+        audio.muted = false;
+        logAudioVolumeDebug("jazzEntryFadePath", {
+          path: "webAudioGain",
+          keepConnected: true,
+          gain: to,
+        });
       }
       if (track.ambient && to > 0) {
         track.ambient.applyNow();
@@ -1423,14 +1403,7 @@ async function startLooping(
       return;
     }
 
-    const iosJazzEntryWebAudioHandoff =
-      isJazzCounterEntry &&
-      isIosAudioSession() &&
-      track.webAudio !== null;
-
-    fadeVolume(audio, fadeFrom, scaledVolume, fadeMs, track, undefined, {
-      iosHandoffToElementOnComplete: iosJazzEntryWebAudioHandoff,
-    });
+    fadeVolume(audio, fadeFrom, scaledVolume, fadeMs, track);
     return;
   }
 
