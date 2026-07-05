@@ -13,6 +13,7 @@ import {
   type BgmMixKey,
 } from "@/lib/entrance/audio-levels";
 import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
+import { isPerfAudioEnabled } from "@/lib/layout/perf-feature-flags";
 
 const SFX_SOURCES = [
   ENTRANCE_SOUNDS.door,
@@ -466,10 +467,23 @@ function disposeAmbientController(track: LoopingTrackState) {
   track.ambient = null;
 }
 
+function createNoopAmbientController(): AmbientVolumeController {
+  return {
+    pause: () => {},
+    resume: () => {},
+    applyNow: () => {},
+    dispose: () => {},
+  };
+}
+
 function createJazzAmbientModulation(
   audio: HTMLAudioElement,
   track: LoopingTrackState,
 ): AmbientVolumeController {
+  if (!isPerfAudioEnabled()) {
+    return createNoopAmbientController();
+  }
+
   let paused = false;
   let rafId: number | null = null;
 
@@ -567,6 +581,12 @@ function fadeVolume(
   track: LoopingTrackState,
   onComplete?: () => void,
 ) {
+  if (track === jazzTrack && !isPerfAudioEnabled()) {
+    setTrackOutputLevel(audio, track, to);
+    onComplete?.();
+    return;
+  }
+
   cancelTrackFade(track);
   track.ambient?.pause();
 
@@ -1039,6 +1059,8 @@ async function startLooping(
   fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   enableAmbientModulation = false,
 ) {
+  if (src === ENTRANCE_SOUNDS.jazz && !isPerfAudioEnabled()) return;
+
   if (!isBarAudioUnlocked() || shouldBlockBackgroundBgmPlayback()) return;
 
   if (shouldRouteLoopTrackThroughWebAudio()) {
@@ -1424,6 +1446,7 @@ export const barAudioEngine = {
     volume: number = getBgmMix("jazzCounter"),
     fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   ) {
+    if (!isPerfAudioEnabled()) return;
     markBarAudioUserInteraction();
     if (shouldRouteLoopTrackThroughWebAudio()) {
       void ensureBarAudioContext();

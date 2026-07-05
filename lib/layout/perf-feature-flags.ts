@@ -3,11 +3,14 @@
  *
  * URL 例:
  *   ?perfAll=off
+ *   ?perfGrain=off
+ *   ?perfLamp=off
+ *   ?perfLampBreathe=off
+ *   ?perfMotion=off
+ *   ?perfAudio=off
+ *   ?perfHaze=off
  *   ?perfMenuBackdrop=off
  *   ?perfMenuBlur=off
- *   ?perfLampBreathe=off
- *   ?perfGrain=off
- *   ?perfHaze=off
  *
  * localStorage: barten.perf.<id> … "on" | "off"
  */
@@ -16,8 +19,11 @@ export const PERF_FLAG_STORAGE_KEYS = {
   all: "barten.perf.all",
   menuBackdrop: "barten.perf.menuBackdrop",
   menuBlur: "barten.perf.menuBlur",
-  lampBreathe: "barten.perf.lampBreathe",
   grain: "barten.perf.grain",
+  lamp: "barten.perf.lamp",
+  lampBreathe: "barten.perf.lampBreathe",
+  motion: "barten.perf.motion",
+  audio: "barten.perf.audio",
   haze: "barten.perf.haze",
 } as const;
 
@@ -25,8 +31,11 @@ export const PERF_FLAG_URL_PARAMS = {
   all: "perfAll",
   menuBackdrop: "perfMenuBackdrop",
   menuBlur: "perfMenuBlur",
-  lampBreathe: "perfLampBreathe",
   grain: "perfGrain",
+  lamp: "perfLamp",
+  lampBreathe: "perfLampBreathe",
+  motion: "perfMotion",
+  audio: "perfAudio",
   haze: "perfHaze",
 } as const;
 
@@ -36,8 +45,11 @@ const PERF_FLAG_ENV_KEYS: Record<PerfFeatureFlagId, string> = {
   all: "NEXT_PUBLIC_PERF_ALL",
   menuBackdrop: "NEXT_PUBLIC_PERF_MENU_BACKDROP",
   menuBlur: "NEXT_PUBLIC_PERF_MENU_BLUR",
-  lampBreathe: "NEXT_PUBLIC_PERF_LAMP_BREATHE",
   grain: "NEXT_PUBLIC_PERF_GRAIN",
+  lamp: "NEXT_PUBLIC_PERF_LAMP",
+  lampBreathe: "NEXT_PUBLIC_PERF_LAMP_BREATHE",
+  motion: "NEXT_PUBLIC_PERF_MOTION",
+  audio: "NEXT_PUBLIC_PERF_AUDIO",
   haze: "NEXT_PUBLIC_PERF_HAZE",
 };
 
@@ -106,7 +118,21 @@ export function isPerfMenuBlurEnabled(): boolean {
 }
 
 export function isPerfLampBreatheEnabled(): boolean {
+  if (!isPerfLampEnabled()) return false;
   return isPerfEffectEnabled("lampBreathe");
+}
+
+export function isPerfLampEnabled(): boolean {
+  return isPerfEffectEnabled("lamp");
+}
+
+export function isPerfMotionEnabled(): boolean {
+  return isPerfEffectEnabled("motion");
+}
+
+/** jazz BGM / fade / ambient rAF — SE には影響しない */
+export function isPerfAudioEnabled(): boolean {
+  return isPerfEffectEnabled("audio");
 }
 
 export function isPerfGrainEnabled(): boolean {
@@ -124,8 +150,11 @@ export function readPerfFeatureFlags(): Record<PerfFeatureFlagId, boolean> {
     all,
     menuBackdrop: masterOff ? false : resolvePerfFlag("menuBackdrop"),
     menuBlur: masterOff ? false : resolvePerfFlag("menuBlur"),
-    lampBreathe: masterOff ? false : resolvePerfFlag("lampBreathe"),
     grain: masterOff ? false : resolvePerfFlag("grain"),
+    lamp: masterOff ? false : resolvePerfFlag("lamp"),
+    lampBreathe: masterOff ? false : resolvePerfFlag("lampBreathe"),
+    motion: masterOff ? false : resolvePerfFlag("motion"),
+    audio: masterOff ? false : resolvePerfFlag("audio"),
     haze: masterOff ? false : resolvePerfFlag("haze"),
   };
 }

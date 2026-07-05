@@ -7,6 +7,7 @@ import {
   type CounterLayerId,
 } from "@/lib/entrance/counter-camera-poses";
 import { MOOD_SELECT_ENTRANCE_DURATION_SCALE } from "@/lib/entrance/mood-select-entrance-tuning";
+import { isPerfMotionEnabled } from "@/lib/layout/perf-feature-flags";
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
 
@@ -25,6 +26,20 @@ export function ParallaxLayer({
   className = "",
 }: ParallaxLayerProps) {
   const { y, scale } = getLayerTransform(layer, pose);
+
+  if (!isPerfMotionEnabled()) {
+    return (
+      <div
+        className={className}
+        style={{
+          transform: `translateY(${y}px) scale(${scale})`,
+          transformOrigin: COUNTER_CAMERA.origin,
+        }}
+      >
+        {children}
+      </div>
+    );
+  }
 
   return (
     <motion.div

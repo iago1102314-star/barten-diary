@@ -20,6 +20,10 @@ import {
 import { EASE_DRIFT, EASE_SOFT } from "@/lib/entrance/motion-presets";
 import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
+import {
+  isPerfLampEnabled,
+  isPerfMotionEnabled,
+} from "@/lib/layout/perf-feature-flags";
 import { motion } from "motion/react";
 import Image from "next/image";
 import type { ReactNode } from "react";
@@ -268,37 +272,44 @@ export function CounterScene({
 }: CounterSceneProps) {
   perfRenderCount("CounterScene");
   const accent = moodAccent(moodCategoryId ?? null);
-  const masterAnim =
-    masterMode === "talking" ? "master-breathe" : "master-breathe";
+  const lampEffectsOn = isPerfLampEnabled();
+  const motionOn = isPerfMotionEnabled();
+  const masterAnim = lampEffectsOn ? "master-breathe" : "";
   const glowByAnchor = mapGlowsByAnchor(lampGlows ?? COUNTER_LAMP_GLOWS);
-  const showLampGlows = !reduceGpuLoad;
+  const showLampGlows = !reduceGpuLoad && lampEffectsOn;
   const showMarkers = showLampGlows && SHOW_LAMP_GLOW_DEBUG_MARKERS;
   const showGlow =
     showLampGlows && (showLampGlowLight ?? SHOW_LAMP_GLOW_LIGHT);
   const showLampOverlay = showMarkers || showGlow;
+  const staticLantern = reduceGpuLoad || !lampEffectsOn;
+  const enableKenBurns = !reduceGpuLoad && motionOn;
 
-  return (
-    <motion.div
-      className="absolute inset-0"
-      initial={settle ? { scale: 1.05, y: -8 } : false}
-      animate={{ scale: 1, y: 0 }}
-      transition={{ duration: 1.8, ease: EASE_SOFT }}
-    >
+  const sceneBody = (
+    <>
       {moodCategoryId && !reduceGpuLoad && (
         <ParallaxLayer layer="glow" pose={cameraPose} className="absolute inset-0 z-0">
-          <motion.div
-            className="pointer-events-none absolute inset-0"
-            animate={{ opacity: [0.65, 1, 0.65] }}
-            transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
-            style={{
-              background: `radial-gradient(85% 55% at 50% 28%, ${accent}, transparent 65%)`,
-            }}
-          />
+          {motionOn ? (
+            <motion.div
+              className="pointer-events-none absolute inset-0"
+              animate={{ opacity: [0.65, 1, 0.65] }}
+              transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+              style={{
+                background: `radial-gradient(85% 55% at 50% 28%, ${accent}, transparent 65%)`,
+              }}
+            />
+          ) : (
+            <div
+              className="pointer-events-none absolute inset-0 opacity-[0.825]"
+              style={{
+                background: `radial-gradient(85% 55% at 50% 28%, ${accent}, transparent 65%)`,
+              }}
+            />
+          )}
         </ParallaxLayer>
       )}
 
       <ParallaxLayer layer="back" pose={cameraPose} className="absolute inset-0 z-0">
-        <CounterBackLayer priority={priority} kenBurns={showLampGlows} />
+        <CounterBackLayer priority={priority} kenBurns={enableKenBurns} />
       </ParallaxLayer>
 
       <ParallaxLayer
@@ -317,12 +328,12 @@ export function CounterScene({
         <HangingLantern
           side="left"
           priority={priority}
-          staticLight={reduceGpuLoad}
+          staticLight={staticLantern}
         />
         <HangingLantern
           side="right"
           priority={priority}
-          staticLight={reduceGpuLoad}
+          staticLight={staticLantern}
         />
       </ParallaxLayer>
 
@@ -359,7 +370,7 @@ export function CounterScene({
             >
               <BackLampGlowAnchor
                 glow={glowByAnchor["back-lamp"]}
-                showKenBurns={showLampGlows}
+                showKenBurns={enableKenBurns}
                 showMarker={showMarkers}
                 showGlow={showGlow}
               />
@@ -380,16 +391,37 @@ export function CounterScene({
 
       {!backgroundOnly && drinkImageSrc && !drinkOnCounter && (
         <ParallaxLayer layer="drink" pose={cameraPose} className="absolute inset-0 z-[6]">
-          <motion.div
-            className="absolute inset-0"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1.2, ease: EASE_SOFT }}
-          >
-            <SceneLayer src={drinkImageSrc} alt="" />
-          </motion.div>
+          {motionOn ? (
+            <motion.div
+              className="absolute inset-0"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1.2, ease: EASE_SOFT }}
+            >
+              <SceneLayer src={drinkImageSrc} alt="" />
+            </motion.div>
+          ) : (
+            <div className="absolute inset-0">
+              <SceneLayer src={drinkImageSrc} alt="" />
+            </div>
+          )}
         </ParallaxLayer>
       )}
+    </>
+  );
+
+  if (!motionOn) {
+    return <div className="absolute inset-0">{sceneBody}</div>;
+  }
+
+  return (
+    <motion.div
+      className="absolute inset-0"
+      initial={settle ? { scale: 1.05, y: -8 } : false}
+      animate={{ scale: 1, y: 0 }}
+      transition={{ duration: 1.8, ease: EASE_SOFT }}
+    >
+      {sceneBody}
     </motion.div>
   );
 }

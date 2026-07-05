@@ -121,14 +121,30 @@ export function BisectFeatureFlagPanel() {
               onToggle={() => togglePerf("menuBlur")}
             />
             <FlagRow
-              label="Lamp breathe"
-              enabled={perfFlags.lampBreathe}
-              onToggle={() => togglePerf("lampBreathe")}
-            />
-            <FlagRow
               label="Grain"
               enabled={perfFlags.grain}
               onToggle={() => togglePerf("grain")}
+            />
+            <FlagRow
+              label="Lamp（店内光・flicker・breathe）"
+              enabled={perfFlags.lamp}
+              onToggle={() => togglePerf("lamp")}
+            />
+            <FlagRow
+              label="Lamp breathe（路地灯のみ細分化）"
+              enabled={perfFlags.lampBreathe}
+              disabled={!perfFlags.lamp}
+              onToggle={() => togglePerf("lampBreathe")}
+            />
+            <FlagRow
+              label="Motion（Ken Burns / Parallax）"
+              enabled={perfFlags.motion}
+              onToggle={() => togglePerf("motion")}
+            />
+            <FlagRow
+              label="Audio（jazz / rAF）"
+              enabled={perfFlags.audio}
+              onToggle={() => togglePerf("audio")}
             />
             <FlagRow
               label="Haze / fog-drift"
