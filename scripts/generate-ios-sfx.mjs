@@ -20,17 +20,27 @@ const repoRoot = process.cwd();
 const soundsDir = path.join(repoRoot, "public", "sounds");
 const iosDir = path.join(soundsDir, "ios");
 
-/** SE3 聴感ベース — 実機で微調整してから再生成 */
+/** SE3 聴感ベース — 値を変えたら必ず npm run generate:ios-sfx */
 const IOS_SFX_ATTENUATION_DB = {
-  click: -12,
-  door: -16,
-  glassSlide: -10,
+  click: -14,
+  door: -25,
+  glassSlide: -12,
+  send: -9,
+  menuOpen: -9,
+  menuClick: -10,
+  page: -12,
+  think: -13,
 };
 
 const IOS_SFX_SOURCES = {
   click: { input: "click.mp4", output: "click.mp4" },
   door: { input: "door.mp4", output: "door.mp4" },
   glassSlide: { input: "grass.mp4", output: "grass.mp4" },
+  send: { input: "send.mp4", output: "send.mp4" },
+  menuOpen: { input: "menu-open.mp4", output: "menu-open.mp4" },
+  menuClick: { input: "menu-click.mp4", output: "menu-click.mp4" },
+  page: { input: "page.mp4", output: "page.mp4" },
+  think: { input: "think.mp4", output: "think.mp4" },
 };
 
 function parseOnlyArg(argv) {
@@ -82,7 +92,9 @@ async function main() {
     : Object.keys(IOS_SFX_SOURCES);
 
   if (targets.length === 0) {
-    console.error("No valid targets. Use click | door | glassSlide");
+    console.error(
+      "No valid targets. Use: " + Object.keys(IOS_SFX_SOURCES).join(" | "),
+    );
     process.exit(1);
   }
 
@@ -101,6 +113,22 @@ async function main() {
   }
 
   console.info("[ios-sfx] done — run: npm run prepare:ios-sfx");
+  await runManifestBump();
+}
+
+function runManifestBump() {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "node",
+      ["scripts/generate-ios-sfx-manifest.mjs", "--bump"],
+      { stdio: "inherit", cwd: repoRoot },
+    );
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`manifest bump exited with code ${code}`));
+    });
+  });
 }
 
 main().catch((error) => {

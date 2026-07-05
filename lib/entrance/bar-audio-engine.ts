@@ -15,9 +15,12 @@ import {
   type BarSfxKind,
   type BgmMixKey,
 } from "@/lib/entrance/audio-levels";
-import { installAudioVolumeRouteTestApi } from "@/lib/entrance/audio-volume-route-test";
 import {
-  IOS_SFX_PATHS,
+  installIosSfxNetworkProofApi,
+  queueIosSfxNetworkProof,
+} from "@/lib/entrance/ios-sfx-network-proof";
+import {
+  isIosSfxResolvedSrc,
   isIosSfxTargetKind,
   logIosSfxSrcDebug,
   markIosSfxRuntimeFallback,
@@ -25,6 +28,7 @@ import {
   resolveBarSfxSrc,
   resolveDefaultBarSfxSrc,
 } from "@/lib/entrance/ios-sfx-assets";
+import { IOS_SFX_CACHE_REVISION } from "@/lib/entrance/generated-ios-sfx-manifest";
 import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
 import { isPerfAudioEnabled } from "@/lib/layout/perf-feature-flags";
 
@@ -42,6 +46,7 @@ const BAR_SFX_KINDS: BarSfxKind[] = [
 const sfxPool = new Map<string, HTMLAudioElement[]>();
 const sfxKindBySrc = new Map<string, BarSfxKind>();
 let sfxPoolInitialized = false;
+let sfxPoolCacheRevision: number | null = null;
 
 let bgmPausedForRecording = false;
 let appBackgroundSuspended = false;
@@ -988,10 +993,23 @@ function replaceSfxPoolSlot(src: string, broken: HTMLAudioElement): void {
   slots[index] = replacement;
 }
 
+function resetSfxPool(): void {
+  for (const slots of sfxPool.values()) {
+    for (const audio of slots) {
+      releaseAudio(audio);
+    }
+  }
+  sfxPool.clear();
+  sfxKindBySrc.clear();
+  sfxPoolInitialized = false;
+  sfxPoolCacheRevision = null;
+  warmUpPromise = null;
+}
+
 function fallbackIosSfxPoolToDefault(kind: BarSfxKind): void {
   if (!isIosSfxTargetKind(kind)) return;
 
-  const iosSrc = IOS_SFX_PATHS[kind];
+  const iosSrc = resolveBarSfxSrc(kind);
   const defaultSrc = resolveDefaultBarSfxSrc(kind);
   const iosSlots = sfxPool.get(iosSrc);
   if (!iosSlots) return;
@@ -1041,7 +1059,7 @@ function wireSfxSlotErrorHandler(
       if (
         resolvedKind &&
         isIosSfxTargetKind(resolvedKind) &&
-        src === IOS_SFX_PATHS[resolvedKind]
+        isIosSfxResolvedSrc(src, resolvedKind)
       ) {
         fallbackIosSfxPoolToDefault(resolvedKind);
         return;
@@ -1056,6 +1074,19 @@ function wireSfxSlotErrorHandler(
 }
 
 function ensureSfxPool() {
+  if (
+    sfxPoolInitialized &&
+    sfxPoolCacheRevision !== null &&
+    sfxPoolCacheRevision !== IOS_SFX_CACHE_REVISION
+  ) {
+    logIosSfxSrcDebug("ensureSfxPool.revisionChanged", {
+      previousRevision: sfxPoolCacheRevision,
+      nextRevision: IOS_SFX_CACHE_REVISION,
+      poolBeforeReset: snapshotSfxPoolForDebug(),
+    });
+    resetSfxPool();
+  }
+
   if (sfxPoolInitialized) {
     logIosSfxSrcDebug("ensureSfxPool.skip", {
       reason: "alreadyInitialized",
@@ -1095,10 +1126,12 @@ function ensureSfxPool() {
     if (slots.length > 0) {
       sfxPool.set(src, slots);
       sfxKindBySrc.set(src, kind);
+      queueIosSfxNetworkProof(kind, src);
     }
   }
 
   sfxPoolInitialized = true;
+  sfxPoolCacheRevision = IOS_SFX_CACHE_REVISION;
   logIosSfxSrcDebug("ensureSfxPool.done", {
     pool: snapshotSfxPoolForDebug(),
     resolveSnapshot: {
@@ -1300,6 +1333,7 @@ function playSfxNow(
   }
 
   const src = resolveBarSfxSrc(kind);
+  queueIosSfxNetworkProof(kind, src);
   const slots = sfxPool.get(src);
   if (!slots?.length) {
     logIosSfxSrcDebug("playSfxNow.poolMiss", {
@@ -1828,18 +1862,7 @@ function ensureAudioVolumeDevApi() {
   installAudioVolumeDevApi(() => {
     barAudioEngine.reapplyTuningVolumes();
   });
-  installAudioVolumeRouteTestApi({
-    unlock: unlockBarAudioForUserGesture,
-    ensureContext: ensureBarAudioContext,
-  });
-}
-
-/** 音量 route 診断 UI — タップ内で unlock + AudioContext を起動 */
-export function primeBarAudioForRouteTest(): void {
-  unlockBarAudioForUserGesture();
-  if (shouldRouteLoopTrackThroughWebAudio() || isIosAudioSession()) {
-    void ensureBarAudioContext();
-  }
+  installIosSfxNetworkProofApi();
 }
 
 export const barAudioEngine = {
@@ -2041,14 +2064,6 @@ export const barAudioEngine = {
     barAudioElementUnlockDone = false;
     stopLooping(outsideTrack, true);
     stopLooping(jazzTrack, true);
-
-    for (const slots of sfxPool.values()) {
-      for (const audio of slots) {
-        releaseAudio(audio);
-      }
-    }
-    sfxPool.clear();
-    sfxPoolInitialized = false;
-    warmUpPromise = null;
+    resetSfxPool();
   },
 };

@@ -26,7 +26,7 @@ export const MOBILE_IOS_AUDIO_MIX = {
   bgm: {
     outsideAlley: 0.16,
     outsideLeaving: 0.09,
-    jazzCounter: 0.011,
+    jazzCounter: 0.017,
   },
   se: {
     door: 0.07,

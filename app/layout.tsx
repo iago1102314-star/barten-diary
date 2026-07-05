@@ -6,7 +6,6 @@ import {
   zenOldMinchoBold,
 } from "@/lib/fonts/jp-brand-fonts";
 import { BehaviorLogInit } from "@/components/app/behavior-log-init";
-import { AudioVolumeRouteTestPanel } from "@/components/app/audio-volume-route-test-panel";
 import { BisectFeatureFlagPanel } from "@/components/app/bisect-feature-flag-panel";
 import { LayoutShell } from "@/components/app/layout-shell";
 import { ServiceWorkerRegister } from "@/components/app/service-worker-register";
@@ -68,7 +67,6 @@ export default function RootLayout({
         </LayoutShell>
         <Analytics />
         <BisectFeatureFlagPanel />
-        <AudioVolumeRouteTestPanel />
       </body>
     </html>
   );
