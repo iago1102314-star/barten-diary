@@ -1,4 +1,9 @@
 import { ENTRANCE_SOUNDS } from "@/lib/entrance/asset-paths";
+import {
+  getPlatformBgmVolumeScale,
+  getPlatformSeVolumeScale,
+  readPlatformAudioVolumeDebugInfo,
+} from "@/lib/entrance/audio-volume-platform";
 
 /**
  * 音量最終調整 — このファイルの mix / peakDbfs / sceneScale を編集してください。
@@ -17,6 +22,9 @@ import { ENTRANCE_SOUNDS } from "@/lib/entrance/asset-paths";
  *   2. このファイルの AUDIO_VOLUME_TUNING.*.mix を書き換え
  *   3. パネルで「リセット」（localStorage オーバーライドを消す）
  *   4. dev にコミット
+ *
+ * iOS 実機の音量バランスは lib/entrance/audio-volume-platform.ts の
+ * MOBILE_IOS_AUDIO_VOLUME_SCALE を編集（PC の mix は変えない）。
  */
 export const AUDIO_VOLUME_TUNING = {
   bgm: {
@@ -142,22 +150,24 @@ export function clearAudioVolumeOverrides(): void {
   window.localStorage.removeItem(OVERRIDE_STORAGE_KEY);
 }
 
-/** 実行時 mix — コード定数 + localStorage オーバーライド */
+/** 実行時 mix — コード定数 + localStorage オーバーライド + プラットフォーム倍率 */
 export function getBgmMix(key: BgmMixKey): number {
   const override = readAudioVolumeOverrides().bgm?.[key];
-  if (typeof override === "number" && Number.isFinite(override)) {
-    return clampMix(override);
-  }
-  return AUDIO_VOLUME_TUNING.bgm[key].mix;
+  const base =
+    typeof override === "number" && Number.isFinite(override)
+      ? clampMix(override)
+      : AUDIO_VOLUME_TUNING.bgm[key].mix;
+  return clampMix(base * getPlatformBgmVolumeScale(key));
 }
 
-/** 実行時 SE mix — peakDbfs 補正前の目標値 */
+/** 実行時 SE mix — peakDbfs 補正前の目標値 + プラットフォーム倍率 */
 export function getSeMix(kind: BarSfxKind): number {
   const override = readAudioVolumeOverrides().se?.[kind];
-  if (typeof override === "number" && Number.isFinite(override)) {
-    return clampMix(override);
-  }
-  return AUDIO_VOLUME_TUNING.se[kind].mix;
+  const base =
+    typeof override === "number" && Number.isFinite(override)
+      ? clampMix(override)
+      : AUDIO_VOLUME_TUNING.se[kind].mix;
+  return clampMix(base * getPlatformSeVolumeScale(kind));
 }
 
 /** スライダー下書き or localStorage を含めた mix（保存前のプレビュー用） */
@@ -360,6 +370,7 @@ type AudioVolumeDevApi = {
     overrides: AudioVolumeOverrides;
     effective: ReturnType<typeof readBarAudioLevels>;
     snapshot: ReturnType<typeof getEffectiveMixSnapshot>;
+    platform: ReturnType<typeof readPlatformAudioVolumeDebugInfo>;
     snippet: string;
   };
   set: (patch: AudioVolumeOverrides) => void;
@@ -381,6 +392,7 @@ export function installAudioVolumeDevApi(applyTuning: () => void): void {
         overrides: readAudioVolumeOverrides(),
         effective: readBarAudioLevels(),
         snapshot: getEffectiveMixSnapshot(),
+        platform: readPlatformAudioVolumeDebugInfo(),
         snippet: formatAudioVolumeTuningSnippet(),
       };
     },
