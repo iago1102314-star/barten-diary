@@ -15,32 +15,32 @@ import {
   type BarSfxKind,
   type BgmMixKey,
 } from "@/lib/entrance/audio-levels";
+import { installAudioVolumeRouteTestApi } from "@/lib/entrance/audio-volume-route-test";
+import {
+  IOS_SFX_PATHS,
+  isIosSfxTargetKind,
+  logIosSfxSrcDebug,
+  markIosSfxRuntimeFallback,
+  readIosSfxResolveDebugInfo,
+  resolveBarSfxSrc,
+  resolveDefaultBarSfxSrc,
+} from "@/lib/entrance/ios-sfx-assets";
 import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
 import { isPerfAudioEnabled } from "@/lib/layout/perf-feature-flags";
 
-const SFX_SOURCES = [
-  ENTRANCE_SOUNDS.door,
-  ENTRANCE_SOUNDS.click,
-  ENTRANCE_SOUNDS.menuOpen,
-  ENTRANCE_SOUNDS.menuClick,
-  ENTRANCE_SOUNDS.glassSlide,
-  ENTRANCE_SOUNDS.send,
-  ENTRANCE_SOUNDS.page,
-  ENTRANCE_SOUNDS.think,
-] as const;
-
-const SFX_SRC_BY_KIND: Record<BarSfxKind, string> = {
-  door: ENTRANCE_SOUNDS.door,
-  click: ENTRANCE_SOUNDS.click,
-  menuOpen: ENTRANCE_SOUNDS.menuOpen,
-  menuClick: ENTRANCE_SOUNDS.menuClick,
-  glassSlide: ENTRANCE_SOUNDS.glassSlide,
-  send: ENTRANCE_SOUNDS.send,
-  page: ENTRANCE_SOUNDS.page,
-  think: ENTRANCE_SOUNDS.think,
-};
+const BAR_SFX_KINDS: BarSfxKind[] = [
+  "door",
+  "click",
+  "menuOpen",
+  "menuClick",
+  "glassSlide",
+  "send",
+  "page",
+  "think",
+];
 
 const sfxPool = new Map<string, HTMLAudioElement[]>();
+const sfxKindBySrc = new Map<string, BarSfxKind>();
 let sfxPoolInitialized = false;
 
 let bgmPausedForRecording = false;
@@ -187,6 +187,8 @@ function shouldBlockBackgroundBgmPlayback(): boolean {
 
 /** 扉を開ける / メモを見る等 — 最初の明確なユーザー操作後にのみ呼ぶ */
 export function unlockBarAudioForUserGesture(): void {
+  ensureAudioVolumeDevApi();
+
   const firstUnlock = !barAudioUserGestureUnlocked;
   if (firstUnlock) {
     barAudioUserGestureUnlocked = true;
@@ -234,6 +236,34 @@ function createAudio(src: string, preload: "none" | "auto" = "none"): HTMLAudioE
   } catch {
     return null;
   }
+}
+
+function readAudioElementSrc(audio: HTMLAudioElement): string {
+  try {
+    return audio.currentSrc || audio.src || "";
+  } catch {
+    return "";
+  }
+}
+
+function snapshotSfxPoolForDebug(): Array<Record<string, unknown>> {
+  const entries: Array<Record<string, unknown>> = [];
+
+  for (const [poolKey, slots] of sfxPool.entries()) {
+    entries.push({
+      poolKey,
+      kind: sfxKindBySrc.get(poolKey) ?? null,
+      slots: slots.map((audio, index) => ({
+        index,
+        elementSrc: readAudioElementSrc(audio),
+        paused: audio.paused,
+        readyState: audio.readyState,
+        networkState: audio.networkState,
+      })),
+    });
+  }
+
+  return entries;
 }
 
 const loopPrefetch = new Map<string, HTMLAudioElement>();
@@ -958,14 +988,65 @@ function replaceSfxPoolSlot(src: string, broken: HTMLAudioElement): void {
   slots[index] = replacement;
 }
 
+function fallbackIosSfxPoolToDefault(kind: BarSfxKind): void {
+  if (!isIosSfxTargetKind(kind)) return;
+
+  const iosSrc = IOS_SFX_PATHS[kind];
+  const defaultSrc = resolveDefaultBarSfxSrc(kind);
+  const iosSlots = sfxPool.get(iosSrc);
+  if (!iosSlots) return;
+
+  markIosSfxRuntimeFallback(kind);
+  logIosSfxSrcDebug("fallbackIosSfxPoolToDefault", {
+    kind,
+    iosSrc,
+    defaultSrc,
+    reason: "iosSlotError",
+    poolBeforeFallback: snapshotSfxPoolForDebug(),
+  });
+  for (const audio of iosSlots) {
+    releaseAudio(audio);
+  }
+  sfxPool.delete(iosSrc);
+  sfxKindBySrc.delete(iosSrc);
+
+  const slots = [createAudio(defaultSrc), createAudio(defaultSrc)].filter(
+    (audio): audio is HTMLAudioElement => audio !== null,
+  );
+  slots.forEach((audio, slotIndex) => {
+    audio.volume = 0;
+    wireSfxSlotErrorHandler(defaultSrc, audio, slotIndex, kind);
+    audio.load();
+  });
+  if (slots.length > 0) {
+    sfxPool.set(defaultSrc, slots);
+    sfxKindBySrc.set(defaultSrc, kind);
+  }
+}
+
 function wireSfxSlotErrorHandler(
   src: string,
   audio: HTMLAudioElement,
   slotIndex: number,
+  kind?: BarSfxKind,
 ): void {
+  if (kind) {
+    sfxKindBySrc.set(src, kind);
+  }
+
   audio.addEventListener(
     "error",
     () => {
+      const resolvedKind = kind ?? sfxKindBySrc.get(src);
+      if (
+        resolvedKind &&
+        isIosSfxTargetKind(resolvedKind) &&
+        src === IOS_SFX_PATHS[resolvedKind]
+      ) {
+        fallbackIosSfxPoolToDefault(resolvedKind);
+        return;
+      }
+
       const slots = sfxPool.get(src);
       if (!slots || slots[slotIndex] !== audio) return;
       replaceSfxPoolSlot(src, audio);
@@ -975,25 +1056,57 @@ function wireSfxSlotErrorHandler(
 }
 
 function ensureSfxPool() {
-  if (sfxPoolInitialized) return;
+  if (sfxPoolInitialized) {
+    logIosSfxSrcDebug("ensureSfxPool.skip", {
+      reason: "alreadyInitialized",
+      pool: snapshotSfxPoolForDebug(),
+      resolveSnapshot: {
+        click: readIosSfxResolveDebugInfo("click"),
+        door: readIosSfxResolveDebugInfo("door"),
+        glassSlide: readIosSfxResolveDebugInfo("glassSlide"),
+      },
+    });
+    return;
+  }
 
-  for (const src of SFX_SOURCES) {
+  for (const kind of BAR_SFX_KINDS) {
+    const src = resolveBarSfxSrc(kind);
+    logIosSfxSrcDebug("ensureSfxPool.slot", {
+      ...readIosSfxResolveDebugInfo(kind),
+      poolInitSrc: src,
+    });
+
     const slots = [createAudio(src), createAudio(src)].filter(
       (audio): audio is HTMLAudioElement => audio !== null,
     );
 
     slots.forEach((audio, slotIndex) => {
       audio.volume = 0;
-      wireSfxSlotErrorHandler(src, audio, slotIndex);
+      wireSfxSlotErrorHandler(src, audio, slotIndex, kind);
       audio.load();
+      logIosSfxSrcDebug("ensureSfxPool.element", {
+        kind,
+        poolInitSrc: src,
+        slotIndex,
+        elementSrc: readAudioElementSrc(audio),
+      });
     });
 
     if (slots.length > 0) {
       sfxPool.set(src, slots);
+      sfxKindBySrc.set(src, kind);
     }
   }
 
   sfxPoolInitialized = true;
+  logIosSfxSrcDebug("ensureSfxPool.done", {
+    pool: snapshotSfxPoolForDebug(),
+    resolveSnapshot: {
+      click: readIosSfxResolveDebugInfo("click"),
+      door: readIosSfxResolveDebugInfo("door"),
+      glassSlide: readIosSfxResolveDebugInfo("glassSlide"),
+    },
+  });
 }
 
 /**
@@ -1003,7 +1116,7 @@ function primeBarAudioUnlockOnFirstGesture(): void {
   if (barAudioElementUnlockDone) return;
 
   ensureSfxPool();
-  const unlockSlot = sfxPool.get(ENTRANCE_SOUNDS.click)?.[0];
+  const unlockSlot = sfxPool.get(resolveBarSfxSrc("click"))?.[0];
   if (!unlockSlot) return;
 
   const previousMuted = unlockSlot.muted;
@@ -1186,9 +1299,16 @@ function playSfxNow(
     return;
   }
 
-  const src = SFX_SRC_BY_KIND[kind];
+  const src = resolveBarSfxSrc(kind);
   const slots = sfxPool.get(src);
   if (!slots?.length) {
+    logIosSfxSrcDebug("playSfxNow.poolMiss", {
+      ...readIosSfxResolveDebugInfo(kind),
+      poolLookupSrc: src,
+      poolKeys: [...sfxPool.keys()],
+      pool: snapshotSfxPoolForDebug(),
+      playOk: false,
+    });
     onEnded?.();
     return;
   }
@@ -1242,6 +1362,14 @@ function playSfxNow(
 
   const playOnSlot = (audio: HTMLAudioElement, allowRetry: boolean) => {
     audio.volume = effectiveVolume;
+    logIosSfxSrcDebug("playSfxNow", {
+      ...readIosSfxResolveDebugInfo(kind),
+      poolLookupSrc: src,
+      slotSrc: readAudioElementSrc(audio),
+      poolKeys: [...sfxPool.keys()],
+      playVolume: effectiveVolume,
+      allowRetry,
+    });
     logAudioVolumeDebug("playSfx", {
       kind,
       seMix: getSeMix(kind),
@@ -1256,7 +1384,38 @@ function playSfxNow(
     attachEndedWatch(audio);
 
     const playPromise = audio.play();
-    if (!playPromise) return;
+    if (!playPromise) {
+      logIosSfxSrcDebug("playSfxNow.result", {
+        kind,
+        resolvedSrc: src,
+        slotSrc: readAudioElementSrc(audio),
+        runtimeFallback: readIosSfxResolveDebugInfo(kind).runtimeFallback,
+        playOk: false,
+        reason: "noPlayPromise",
+      });
+      return;
+    }
+
+    void playPromise
+      .then(() => {
+        logIosSfxSrcDebug("playSfxNow.result", {
+          kind,
+          resolvedSrc: src,
+          slotSrc: readAudioElementSrc(audio),
+          runtimeFallback: readIosSfxResolveDebugInfo(kind).runtimeFallback,
+          playOk: true,
+        });
+      })
+      .catch((error) => {
+        logIosSfxSrcDebug("playSfxNow.result", {
+          kind,
+          resolvedSrc: src,
+          slotSrc: readAudioElementSrc(audio),
+          runtimeFallback: readIosSfxResolveDebugInfo(kind).runtimeFallback,
+          playOk: false,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      });
 
     playPromise.catch(() => {
       clearEndedWatch(audio);
@@ -1654,6 +1813,12 @@ export function getBarAudioDiagnostics(): Record<string, unknown> {
     jazz: snapshotLoopTrack(jazzTrack),
     outside: snapshotLoopTrack(outsideTrack),
     activeSfx: snapshotActiveSfx(),
+    iosSfx: {
+      click: readIosSfxResolveDebugInfo("click"),
+      door: readIosSfxResolveDebugInfo("door"),
+      glassSlide: readIosSfxResolveDebugInfo("glassSlide"),
+      pool: snapshotSfxPoolForDebug(),
+    },
   };
 }
 
@@ -1663,6 +1828,18 @@ function ensureAudioVolumeDevApi() {
   installAudioVolumeDevApi(() => {
     barAudioEngine.reapplyTuningVolumes();
   });
+  installAudioVolumeRouteTestApi({
+    unlock: unlockBarAudioForUserGesture,
+    ensureContext: ensureBarAudioContext,
+  });
+}
+
+/** 音量 route 診断 UI — タップ内で unlock + AudioContext を起動 */
+export function primeBarAudioForRouteTest(): void {
+  unlockBarAudioForUserGesture();
+  if (shouldRouteLoopTrackThroughWebAudio() || isIosAudioSession()) {
+    void ensureBarAudioContext();
+  }
 }
 
 export const barAudioEngine = {

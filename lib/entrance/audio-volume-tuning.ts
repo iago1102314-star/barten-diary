@@ -8,6 +8,7 @@ import {
   getMobileIosSeMix,
   readPlatformAudioVolumeDebugInfo,
 } from "@/lib/entrance/audio-volume-platform";
+import { isIosSfxFileActive } from "@/lib/entrance/ios-sfx-assets";
 
 /**
  * 音量最終調整 — このファイルの mix / peakDbfs / sceneScale を編集してください。
@@ -29,6 +30,9 @@ import {
  *
  * iOS 実機の音量バランスは lib/entrance/audio-volume-platform.ts の
  * MOBILE_IOS_AUDIO_MIX を編集（PC の mix は変えない）。
+ *
+ * click / door / glassSlide は iOS 専用音源（public/sounds/ios/）で
+ * ラウドネスを下げる。専用ファイルがある場合は PC の mix を使う。
  */
 export const AUDIO_VOLUME_TUNING = {
   bgm: {
@@ -162,6 +166,9 @@ function resolveBgmBaseMix(key: BgmMixKey): number {
 }
 
 function resolveSeBaseMix(kind: BarSfxKind): number {
+  if (isIosSfxFileActive(kind)) {
+    return AUDIO_VOLUME_TUNING.se[kind].mix;
+  }
   if (getAudioVolumePlatformId() === "mobileIos") {
     return getMobileIosSeMix(kind);
   }

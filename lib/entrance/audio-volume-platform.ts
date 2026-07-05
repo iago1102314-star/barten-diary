@@ -12,20 +12,21 @@ import type { BarSfxKind, BgmMixKey } from "@/lib/entrance/audio-volume-tuning";
  */
 
 /** SE3 チューニング版 — 実機コンソールで適用確認用 */
-export const MOBILE_IOS_AUDIO_MIX_REVISION = 3;
+export const MOBILE_IOS_AUDIO_MIX_REVISION = 4;
 
 /**
  * iPhone / iPad — Safari 実機 mix（PC 値とは独立）
  *
  * SE3 フィードバック（2026-07）:
- *   door/click/jazz/outside … 大きすぎ → PC より大幅に下げる
- *   think/send/grass … 小さい → PC より上げる
+ *   jazzCounter … 店内ジャズが大きすぎ → 下記 bgm.jazzCounter で調整
+ *   door/click … click/door/glassSlide は ios 音源で調整
+ *   think/send/grass … 小さい → 下記 mix で補正（ios 音源なしの SE）
  */
 export const MOBILE_IOS_AUDIO_MIX = {
   bgm: {
     outsideAlley: 0.16,
     outsideLeaving: 0.09,
-    jazzCounter: 0.012,
+    jazzCounter: 0.011,
   },
   se: {
     door: 0.07,

@@ -1838,8 +1838,9 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     entranceState !== "postRecordBlackout";
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.div key={getSceneMotionKey(entranceState)} {...sceneExit}>
+    <>
+      <AnimatePresence mode="wait">
+        <motion.div key={getSceneMotionKey(entranceState)} {...sceneExit}>
         {showCounter && (
           entranceState === "decliningNight" && declineBlackoutReady ? (
             <SceneFrame className="bg-black" atmosphere={false}>
@@ -2174,12 +2175,13 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
           </SceneFrame>
           )
         )}
-      </motion.div>
+        </motion.div>
+      </AnimatePresence>
       <EntranceBottomToast
         text={pastBottleBetaNotice}
         onDismiss={dismissPastBottleBetaNotice}
       />
       {showAudioVolumeTunePanel && <AudioVolumeTunePanel />}
-    </AnimatePresence>
+    </>
   );
 }

@@ -6,10 +6,11 @@ import {
   zenOldMinchoBold,
 } from "@/lib/fonts/jp-brand-fonts";
 import { BehaviorLogInit } from "@/components/app/behavior-log-init";
+import { AudioVolumeRouteTestPanel } from "@/components/app/audio-volume-route-test-panel";
 import { BisectFeatureFlagPanel } from "@/components/app/bisect-feature-flag-panel";
 import { LayoutShell } from "@/components/app/layout-shell";
+import { ServiceWorkerRegister } from "@/components/app/service-worker-register";
 import { IosSafariVisualHeightSync } from "@/components/app/ios-safari-visual-height-sync";
-import { buildIosSafariVisualHeightBootstrapScript } from "@/lib/layout/ios-safari-visual-height";
 import { isLayoutAppShellEnabledServer } from "@/lib/layout/layout-feature-flags";
 import "./globals.css";
 
@@ -50,45 +51,24 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const iosBootstrapScript = buildIosSafariVisualHeightBootstrapScript();
   const serverAppShellEnabled = isLayoutAppShellEnabledServer();
 
   return (
     <html
       lang="ja"
       className={`${geistSans.variable} ${geistMono.variable} ${zenOldMinchoBold.variable} ${shipporiMincho.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <head>
-        {iosBootstrapScript ? (
-          <script
-            dangerouslySetInnerHTML={{
-              __html: iosBootstrapScript,
-            }}
-          />
-        ) : null}
-        {/* Service Worker — production のみ（Preview/dev では JS チャンク競合を避ける） */}
-        {process.env.NEXT_PUBLIC_APP_ENV === "production" && (
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `
-                if ('serviceWorker' in navigator) {
-                  window.addEventListener('load', function() {
-                    navigator.serviceWorker.register('/sw.js');
-                  });
-                }
-              `,
-            }}
-          />
-        )}
-      </head>
       <body className="min-h-full flex flex-col bg-stone-950 text-stone-200">
         <IosSafariVisualHeightSync />
+        <ServiceWorkerRegister />
         <BehaviorLogInit />
         <LayoutShell serverAppShellEnabled={serverAppShellEnabled}>
           {children}
         </LayoutShell>
         <Analytics />
         <BisectFeatureFlagPanel />
+        <AudioVolumeRouteTestPanel />
       </body>
     </html>
   );
