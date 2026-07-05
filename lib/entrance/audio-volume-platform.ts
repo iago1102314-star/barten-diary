@@ -9,9 +9,9 @@ import type { BarSfxKind, BgmMixKey } from "@/lib/entrance/audio-volume-tuning";
  * 最終 BGM ≒ getBgmMix(key) × 設定スライダー
  * 最終 SE  ≒ getSfxPlayVolume(kind) × sceneScale × 設定スライダー
  *
- * SE3 検証の目安:
- *   jazzCounter / outsideAlley … 0.05 刻みで 1.0〜1.3
- *   door / click / think … 0.05 刻みで 1.0〜1.4
+ * SE3 実機チューニング（2026-07）:
+ *   大きすぎ → 0.65〜0.75 / バカでかい → 0.40
+ *   少し大きい → 0.88 / 小さい → 1.35〜1.45
  */
 
 export type PlatformAudioVolumeScaleTable = {
@@ -41,27 +41,28 @@ export const DESKTOP_AUDIO_VOLUME_SCALE: PlatformAudioVolumeScaleTable = {
 };
 
 /**
- * iPhone / iPad / iPod — Safari 実機向け倍率（初期は 1.0、SE3 で上書き調整）
+ * iPhone / iPad / iPod — Safari 実機向け倍率（SE3 聴感ベース）
  *
  * 定数名は AUDIO_VOLUME_TUNING の BgmMixKey / BarSfxKind と一致させる。
+ * PC の AUDIO_VOLUME_TUNING.mix は触らない — ここだけ編集する。
  */
 export const MOBILE_IOS_AUDIO_VOLUME_SCALE: PlatformAudioVolumeScaleTable = {
   bgm: {
     default: 1,
-    outsideAlley: 1,
-    outsideLeaving: 1,
-    jazzCounter: 1,
+    outsideAlley: 0.75,
+    outsideLeaving: 0.8,
+    jazzCounter: 0.4,
   },
   se: {
     default: 1,
-    door: 1,
-    glassSlide: 1,
-    send: 1,
-    click: 1,
-    menuOpen: 1,
-    menuClick: 1,
-    page: 1,
-    think: 1,
+    door: 0.65,
+    glassSlide: 1.4,
+    send: 1.35,
+    click: 0.65,
+    menuOpen: 0.88,
+    menuClick: 0.88,
+    page: 0.88,
+    think: 1.45,
   },
 };
 
