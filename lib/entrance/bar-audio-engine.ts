@@ -614,12 +614,6 @@ function fadeVolume(
   track: LoopingTrackState,
   onComplete?: () => void,
 ) {
-  if (track === jazzTrack && !isPerfAudioEnabled()) {
-    setTrackOutputLevel(audio, track, to);
-    onComplete?.();
-    return;
-  }
-
   cancelTrackFade(track);
   track.ambient?.pause();
 
@@ -647,8 +641,9 @@ function fadeVolume(
     const progress = easeInOut(linearProgress);
     const level = computeFadeLevel(audio, track, from, to, progress);
 
-    if (!usesWebAudio && fadeIn && progress > 0) {
-      audio.muted = false;
+    if (!usesWebAudio && fadeIn) {
+      // iOS 要素音量 — 無音のまま unmute しない（いきなり鳴るのを防ぐ）
+      audio.muted = level <= 0.001;
     }
 
     setTrackOutputLevel(audio, track, level);
@@ -863,6 +858,13 @@ async function prepareJazzForCounterEntry(): Promise<void> {
       primeLoopAudioSilence(audio, jazzTrack);
       audio.pause();
       primeLoopAudioSilence(audio, jazzTrack);
+    } else {
+      try {
+        audio.pause();
+      } catch {
+        // ignore
+      }
+      primeLoopAudioSilence(audio, jazzTrack);
     }
   })();
 
@@ -994,11 +996,6 @@ function primeJazzPlayOnUserGesture(): void {
 
   primeLoopAudioSilence(audio, jazzTrack);
 
-  const previousVolume = audio.volume;
-  const previousMuted = audio.muted;
-  audio.volume = 0;
-  audio.muted = true;
-
   try {
     const playPromise = audio.play();
     if (!playPromise) return;
@@ -1012,14 +1009,15 @@ function primeJazzPlayOnUserGesture(): void {
         // ignore
       })
       .finally(() => {
-        if (audio.paused) {
-          audio.muted = previousMuted;
-          audio.volume = previousVolume;
+        try {
+          audio.pause();
+        } catch {
+          // ignore
         }
+        primeLoopAudioSilence(audio, jazzTrack);
       });
   } catch {
-    audio.muted = previousMuted;
-    audio.volume = previousVolume;
+    primeLoopAudioSilence(audio, jazzTrack);
   }
 }
 
@@ -1231,6 +1229,11 @@ async function startLooping(
   const scaledVolume = scaleBgmVolume(volume);
   track.targetVolume = scaledVolume;
 
+  const isJazzCounterEntry =
+    track === jazzTrack &&
+    enableAmbientModulation &&
+    src === ENTRANCE_SOUNDS.jazz;
+
   if (track.started && track.audio) {
     const audio = track.audio;
 
@@ -1241,21 +1244,27 @@ async function startLooping(
 
     let fadeFrom = getTrackOutputLevel(audio, track);
 
-    if (audio.paused) {
+    if (isJazzCounterEntry || audio.paused) {
       await waitForMetadata(audio);
       if (!isTrackAudioCurrent(track, token, audio)) {
         releaseAudio(audio);
         return;
       }
-      audio.currentTime = pickRandomStartTime(audio.duration);
+      if (isJazzCounterEntry) {
+        audio.currentTime = pickRandomStartTime(audio.duration);
+      } else if (audio.paused) {
+        audio.currentTime = pickRandomStartTime(audio.duration);
+      }
       await ensureTrackWebAudio(audio, track);
       primeLoopAudioSilence(audio, track);
-      if (!(await safePlayLoopTrack(audio, track))) {
-        logAudioVolumeDebug("bgmPlayRejected", {
-          src,
-          track: track === jazzTrack ? "jazz" : "outside",
-        });
-        return;
+      if (audio.paused) {
+        if (!(await safePlayLoopTrack(audio, track))) {
+          logAudioVolumeDebug("bgmPlayRejected", {
+            src,
+            track: track === jazzTrack ? "jazz" : "outside",
+          });
+          return;
+        }
       }
       if (!isTrackAudioCurrent(track, token, audio)) {
         releaseAudio(audio);
