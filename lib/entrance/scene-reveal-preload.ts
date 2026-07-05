@@ -133,7 +133,8 @@ export function resolveMoodOptionDrinkId(option: MoodOption): string {
 }
 
 /**
- * 明転前ゲート — 最低 minMs、preload は最大 maxMs まで待つ。
+ * 明転前ゲート — preload ありかつ minMs 前に完了なら min 待ちを省略。
+ * preload 未完了時は最大 maxMs まで待つ。preload なしは minMs を待つ。
  * 失敗・タイムアウトでも resolve する。
  */
 export async function waitForSceneRevealPreload(
@@ -154,19 +155,34 @@ export async function waitForSceneRevealPreload(
   const totalStartedAt =
     debug && typeof performance !== "undefined" ? performance.now() : 0;
 
+  if (!preloadPromise) {
+    await delay(timing.minMs);
+
+    if (debug && typeof performance !== "undefined") {
+      const totalWaitMs = performance.now() - totalStartedAt;
+      perfLog("waitForSceneRevealPreload", {
+        "preload wait": "0ms",
+        "min wait": `${Math.round(totalWaitMs)}ms`,
+        total: `${Math.round(totalWaitMs)}ms`,
+        preloadFinishedBeforeMin: false,
+        minWaitSkipped: false,
+        hitMaxTimeout: false,
+      });
+    }
+    return;
+  }
+
   let hitMaxTimeout = false;
   let resolvedByPreload = false;
   let cappedResolvedAt: number | null = null;
 
-  const cappedPreload = Promise.race([
-    (preloadPromise ?? Promise.resolve())
-      .catch(() => {})
-      .then(() => {
-        resolvedByPreload = true;
-        if (debug && typeof performance !== "undefined") {
-          cappedResolvedAt = performance.now();
-        }
-      }),
+  await Promise.race([
+    preloadPromise.catch(() => {}).then(() => {
+      resolvedByPreload = true;
+      if (debug && typeof performance !== "undefined") {
+        cappedResolvedAt = performance.now();
+      }
+    }),
     delay(timing.maxMs).then(() => {
       if (!resolvedByPreload) {
         hitMaxTimeout = true;
@@ -177,31 +193,22 @@ export async function waitForSceneRevealPreload(
     }),
   ]);
 
-  let minResolvedAt: number | null = null;
-  const minWait = delay(timing.minMs).then(() => {
-    if (debug && typeof performance !== "undefined") {
-      minResolvedAt = performance.now();
-    }
-  });
-
-  await Promise.all([minWait, cappedPreload]);
-
   if (debug && typeof performance !== "undefined") {
     const totalEnd = performance.now();
     const preloadWaitMs =
       cappedResolvedAt !== null ? cappedResolvedAt - totalStartedAt : timing.maxMs;
-    const minWaitMs =
-      minResolvedAt !== null ? minResolvedAt - totalStartedAt : timing.minMs;
     const preloadFinishedBeforeMin =
-      cappedResolvedAt !== null &&
-      minResolvedAt !== null &&
-      cappedResolvedAt < minResolvedAt;
+      resolvedByPreload && preloadWaitMs < timing.minMs;
+    const minWaitSkipped = preloadFinishedBeforeMin;
 
     perfLog("waitForSceneRevealPreload", {
       "preload wait": `${Math.round(preloadWaitMs)}ms`,
-      "min wait": `${Math.round(minWaitMs)}ms`,
+      "min wait": minWaitSkipped
+        ? "0ms (skipped)"
+        : `${timing.minMs}ms (not applied)`,
       total: `${Math.round(totalEnd - totalStartedAt)}ms`,
       preloadFinishedBeforeMin,
+      minWaitSkipped,
       hitMaxTimeout,
     });
   }
