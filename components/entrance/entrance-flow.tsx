@@ -552,6 +552,65 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     saveStartBokehOnlyLampGlowOverrides(bokehOnlyLampGlows);
   }, [startBokehOnlyShapeEditing, bokehOnlyLampGlows]);
 
+  useEffect(() => {
+    if (!isPerfDebugEnabled()) return;
+
+    const showCounter =
+      entranceState === "counterReveal" ||
+      entranceState === "moodPrompt" ||
+      entranceState === "moodSelect" ||
+      entranceState === "pastBottleSelect" ||
+      entranceState === "decliningNight" ||
+      entranceState === "unheldNight" ||
+      entranceState === "drinkServed" ||
+      entranceState === "recording" ||
+      entranceState === "postRecordBlackout";
+    const showRecordCounterScene =
+      entranceState === "drinkServed" || entranceState === "recording";
+    const hideCounterDuringMoodExit = moodSelectExitActive;
+    const reduceCounterGpuLoad =
+      !lampGlowHomeEditing &&
+      (entranceState === "moodSelect" || entranceState === "pastBottleSelect");
+    const showLegacyCounterScene =
+      showCounter &&
+      !showRecordCounterScene &&
+      entranceState !== "postRecordBlackout";
+
+    perfLog("mount layers", {
+      entranceState,
+      showCounter,
+      showLegacyCounterScene,
+      showRecordCounterScene,
+      hideCounterDuringMoodExit,
+      reduceCounterGpuLoad,
+    });
+  }, [entranceState, moodSelectExitActive, lampGlowHomeEditing]);
+
+  useEffect(() => {
+    if (!isPerfDebugEnabled() || !moodSelectExitActive) return;
+
+    const isDeclineFading =
+      entranceState === "decliningNight" && !declineBlackoutReady;
+    const showMoodParallaxCamera =
+      (entranceState === "moodSelect" ||
+        entranceState === "pastBottleSelect" ||
+        isDeclineFading) &&
+      !moodSelectExitActive;
+    const counterUsesMoodCameraPose =
+      showMoodParallaxCamera ||
+      (moodSelectExitActive && entranceState === "moodSelect");
+
+    perfLog("moodSelectExit", {
+      counterUsesMoodCameraPose,
+      moodCameraPose,
+    });
+  }, [
+    declineBlackoutReady,
+    entranceState,
+    moodCameraPose,
+    moodSelectExitActive,
+  ]);
+
   const drinkImageSrc = getDrinkImagePath(pickedDrink?.id);
 
   const clearTimers = useCallback(() => {
@@ -1718,25 +1777,6 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     showCounter &&
     !showRecordCounterScene &&
     entranceState !== "postRecordBlackout";
-
-  useEffect(() => {
-    if (!isPerfDebugEnabled()) return;
-    perfLog("mount layers", {
-      entranceState,
-      showCounter,
-      showLegacyCounterScene,
-      showRecordCounterScene,
-      hideCounterDuringMoodExit,
-      reduceCounterGpuLoad,
-    });
-  }, [
-    entranceState,
-    showCounter,
-    showLegacyCounterScene,
-    showRecordCounterScene,
-    hideCounterDuringMoodExit,
-    reduceCounterGpuLoad,
-  ]);
 
   return (
     <AnimatePresence mode="wait">

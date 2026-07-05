@@ -1,5 +1,6 @@
 import type { MoodOption } from "@/components/entrance/bar-seat-mood-picker";
 import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
+import { isPerfDebugEnabled, perfLog } from "@/lib/entrance/perf-debug";
 import { preloadImage } from "@/lib/entrance/preload-image";
 import { getRecordDrinkImagePath } from "@/lib/entrance/record-drink-image";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
@@ -25,6 +26,16 @@ function delay(ms: number): Promise<void> {
   });
 }
 
+function yieldToMainThread(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => resolve());
+      return;
+    }
+    window.setTimeout(resolve, 0);
+  });
+}
+
 /** 単一失敗でも全体は続行 */
 export function preloadSceneImages(sources: readonly string[]): Promise<void> {
   const unique = [...new Set(sources.filter(Boolean))];
@@ -33,10 +44,63 @@ export function preloadSceneImages(sources: readonly string[]): Promise<void> {
   return Promise.allSettled(unique.map((src) => preloadImage(src))).then(() => {});
 }
 
+/**
+ * 1 枚ずつ decode — 枚間でメインスレッドへ yield。
+ * 単一失敗でも全体は続行。
+ */
+async function preloadSceneImagesSequential(
+  sources: readonly string[],
+  logLabel: string,
+): Promise<void> {
+  const unique = [...new Set(sources.filter(Boolean))];
+  if (unique.length === 0) return;
+
+  const debug = isPerfDebugEnabled();
+  const startedAt = debug && typeof performance !== "undefined" ? performance.now() : 0;
+
+  if (debug) {
+    perfLog(`${logLabel} start`, { count: unique.length, sources: unique });
+  }
+
+  for (let index = 0; index < unique.length; index += 1) {
+    const src = unique[index];
+    const itemStartedAt =
+      debug && typeof performance !== "undefined" ? performance.now() : 0;
+
+    try {
+      await preloadImage(src);
+    } catch {
+      // 1 枚失敗しても残りは続行
+    }
+
+    if (debug && typeof performance !== "undefined") {
+      perfLog(`${logLabel} image done`, {
+        index: index + 1,
+        total: unique.length,
+        src,
+        ms: (performance.now() - itemStartedAt).toFixed(1),
+      });
+    }
+
+    if (index < unique.length - 1) {
+      await yieldToMainThread();
+    }
+  }
+
+  if (debug && typeof performance !== "undefined") {
+    perfLog(`${logLabel} complete`, {
+      ms: (performance.now() - startedAt).toFixed(1),
+    });
+  }
+}
+
 /** masterOnBlack 中 — 入店カウンター主要画像 */
 export function startCounterEntryScenePreload(): Promise<void> {
   if (!counterEntryPreloadPromise) {
-    counterEntryPreloadPromise = preloadSceneImages(COUNTER_ENTRY_IMAGE_SOURCES);
+    counterEntryPreloadPromise = preloadSceneImagesSequential(
+      COUNTER_ENTRY_IMAGE_SOURCES,
+      "counterEntryScenePreload",
+    );
   }
   return counterEntryPreloadPromise;
 }
