@@ -636,7 +636,6 @@ function fadeVolume(
   }
 
   const startTime = performance.now();
-  const iosUnmuteThreshold = 0.04;
 
   const applyFadeFrame = (now: number): boolean => {
     if (track.audio !== audio) {
@@ -649,12 +648,15 @@ function fadeVolume(
       (now - startTime) / Math.max(1, durationMs),
     );
     const progress = easeInOut(linearProgress);
-    const level = computeFadeLevel(audio, track, from, to, progress);
+    // iOS 要素経路 — ambient 係数付きだと target が低いとき閾値を超えず
+    // muted のまま完了まで無音→一気に鳴る。入店フェードは to へ直線補間。
+    const level = useIosIntervalFade
+      ? clampVolume(to * progress)
+      : computeFadeLevel(audio, track, from, to, progress);
 
     if (!usesWebAudio && fadeIn) {
-      // iOS 要素音量 — unmute は十分に上がってから（play 直後の漏れを防ぐ）
-      audio.muted =
-        level <= (useIosIntervalFade ? iosUnmuteThreshold : 0.001);
+      // iOS 要素 — muted 中は音量変化が聞こえないため、volume>0 で即 unmute
+      audio.muted = useIosIntervalFade ? level <= 0 : level <= 0.001;
     }
 
     setTrackOutputLevel(audio, track, level);
