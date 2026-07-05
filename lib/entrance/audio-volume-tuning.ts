@@ -3,8 +3,9 @@
 import { ENTRANCE_SOUNDS } from "@/lib/entrance/asset-paths";
 import {
   ensureClientPlatformAudioMixReady,
-  getPlatformBgmVolumeScale,
-  getPlatformSeVolumeScale,
+  getAudioVolumePlatformId,
+  getMobileIosBgmMix,
+  getMobileIosSeMix,
   readPlatformAudioVolumeDebugInfo,
 } from "@/lib/entrance/audio-volume-platform";
 
@@ -27,7 +28,7 @@ import {
  *   4. dev にコミット
  *
  * iOS 実機の音量バランスは lib/entrance/audio-volume-platform.ts の
- * MOBILE_IOS_AUDIO_VOLUME_SCALE を編集（PC の mix は変えない）。
+ * MOBILE_IOS_AUDIO_MIX を編集（PC の mix は変えない）。
  */
 export const AUDIO_VOLUME_TUNING = {
   bgm: {
@@ -153,30 +154,42 @@ export function clearAudioVolumeOverrides(): void {
   window.localStorage.removeItem(OVERRIDE_STORAGE_KEY);
 }
 
-/** 実行時 mix — コード定数 + localStorage オーバーライド + プラットフォーム倍率 */
+function resolveBgmBaseMix(key: BgmMixKey): number {
+  if (getAudioVolumePlatformId() === "mobileIos") {
+    return getMobileIosBgmMix(key);
+  }
+  return AUDIO_VOLUME_TUNING.bgm[key].mix;
+}
+
+function resolveSeBaseMix(kind: BarSfxKind): number {
+  if (getAudioVolumePlatformId() === "mobileIos") {
+    return getMobileIosSeMix(kind);
+  }
+  return AUDIO_VOLUME_TUNING.se[kind].mix;
+}
+
+/** 実行時 mix — コード定数（iOS は MOBILE_IOS_AUDIO_MIX）+ localStorage オーバーライド */
 export function getBgmMix(key: BgmMixKey): number {
   if (typeof window !== "undefined") {
     ensureClientPlatformAudioMixReady();
   }
   const override = readAudioVolumeOverrides().bgm?.[key];
-  const base =
-    typeof override === "number" && Number.isFinite(override)
-      ? clampMix(override)
-      : AUDIO_VOLUME_TUNING.bgm[key].mix;
-  return clampMix(base * getPlatformBgmVolumeScale(key));
+  if (typeof override === "number" && Number.isFinite(override)) {
+    return clampMix(override);
+  }
+  return clampMix(resolveBgmBaseMix(key));
 }
 
-/** 実行時 SE mix — peakDbfs 補正前の目標値 + プラットフォーム倍率 */
+/** 実行時 SE mix — peakDbfs 補正前の目標値 */
 export function getSeMix(kind: BarSfxKind): number {
   if (typeof window !== "undefined") {
     ensureClientPlatformAudioMixReady();
   }
   const override = readAudioVolumeOverrides().se?.[kind];
-  const base =
-    typeof override === "number" && Number.isFinite(override)
-      ? clampMix(override)
-      : AUDIO_VOLUME_TUNING.se[kind].mix;
-  return clampMix(base * getPlatformSeVolumeScale(kind));
+  if (typeof override === "number" && Number.isFinite(override)) {
+    return clampMix(override);
+  }
+  return clampMix(resolveSeBaseMix(kind));
 }
 
 /** スライダー下書き or localStorage を含めた mix（保存前のプレビュー用） */
@@ -375,13 +388,24 @@ export function logAudioVolumeDebug(
   console.info(`[audio-vol] ${label}`, data);
 }
 
-/** 初回 unlock 時 — プラットフォーム倍率が効いているか実機で確認 */
+/** 初回 unlock 時 — プラットフォーム mix が効いているか実機で確認 */
 export function logPlatformAudioMixReady(): void {
   if (!isAudioVolumeDebugEnabled()) return;
   ensureClientPlatformAudioMixReady();
+  const overrides = readAudioVolumeOverrides();
+  const snapshot = getEffectiveMixSnapshot();
+  const playVolumes = Object.fromEntries(
+    ALL_SE_MIX_KEYS.map((key) => [key, getSfxPlayVolume(key)]),
+  ) as Record<BarSfxKind, number>;
   console.info("[audio-vol] platformMixReady", {
     ...readPlatformAudioVolumeDebugInfo(),
-    effective: getEffectiveMixSnapshot(),
+    overrides,
+    hasOverrides:
+      Object.keys(overrides.bgm ?? {}).length > 0 ||
+      Object.keys(overrides.se ?? {}).length > 0,
+    seMix: snapshot.se,
+    sePlayVolume: playVolumes,
+    bgmMix: snapshot.bgm,
   });
 }
 

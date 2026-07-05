@@ -35,17 +35,16 @@ export {
 } from "@/lib/entrance/audio-volume-tuning";
 
 export {
-  DESKTOP_AUDIO_VOLUME_SCALE,
   ensureClientPlatformAudioMixReady,
   getAudioVolumePlatformId,
-  getPlatformBgmVolumeScale,
-  getPlatformSeVolumeScale,
+  getMobileIosBgmMix,
+  getMobileIosSeMix,
+  isMobileIosAudioMixActive,
   isMobileIosAudioPlatform,
+  MOBILE_IOS_AUDIO_MIX,
   MOBILE_IOS_AUDIO_MIX_REVISION,
-  MOBILE_IOS_AUDIO_VOLUME_SCALE,
   readPlatformAudioVolumeDebugInfo,
   type AudioVolumePlatformId,
-  type PlatformAudioVolumeScaleTable,
 } from "@/lib/entrance/audio-volume-platform";
 
 export const BAR_AUDIO_TIMING = {

@@ -7,6 +7,7 @@ import {
   BAR_AUDIO_TIMING,
   ensureClientPlatformAudioMixReady,
   getBgmMix,
+  getSeMix,
   getSfxPlayVolume,
   installAudioVolumeDevApi,
   logAudioVolumeDebug,
@@ -852,6 +853,7 @@ function ensureSfxPool() {
     );
 
     for (const audio of slots) {
+      audio.volume = 0;
       audio.load();
     }
 
@@ -873,7 +875,6 @@ function primeBarAudioUnlockOnFirstGesture(): void {
   const unlockSlot = sfxPool.get(ENTRANCE_SOUNDS.click)?.[0];
   if (!unlockSlot) return;
 
-  const previousVolume = unlockSlot.volume;
   const previousMuted = unlockSlot.muted;
   unlockSlot.volume = 0;
   unlockSlot.muted = true;
@@ -897,11 +898,12 @@ function primeBarAudioUnlockOnFirstGesture(): void {
       })
       .finally(() => {
         unlockSlot.muted = previousMuted;
-        unlockSlot.volume = previousVolume;
+        // デフォルト 1.0 に戻すと直後の SE 再生音量を上書きする（iOS Safari）
+        unlockSlot.volume = 0;
       });
   } catch {
     unlockSlot.muted = previousMuted;
-    unlockSlot.volume = previousVolume;
+    unlockSlot.volume = 0;
   }
 }
 
@@ -1035,7 +1037,9 @@ function playSfxNow(
   audio.volume = effectiveVolume;
   logAudioVolumeDebug("playSfx", {
     kind,
-    mix: effectiveVolume,
+    seMix: getSeMix(kind),
+    playVolume: effectiveVolume,
+    elementVolumeAfterSet: audio.volume,
     volumeScale,
     seMultiplier: getSeVolumeMultiplier(),
   });
