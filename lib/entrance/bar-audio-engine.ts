@@ -363,11 +363,10 @@ function disconnectTrackWebAudio(track: LoopingTrackState) {
   track.webAudio = null;
 }
 
-async function ensureTrackWebAudio(
+async function connectLoopTrackWebAudio(
   audio: HTMLAudioElement,
   track: LoopingTrackState,
 ): Promise<GainNode | null> {
-  if (!shouldRouteLoopTrackThroughWebAudio()) return null;
   if (track.webAudio) return track.webAudio.gain;
 
   const ctx = await ensureBarAudioContext();
@@ -386,6 +385,46 @@ async function ensureTrackWebAudio(
   } catch {
     return null;
   }
+}
+
+async function ensureTrackWebAudio(
+  audio: HTMLAudioElement,
+  track: LoopingTrackState,
+): Promise<GainNode | null> {
+  if (!shouldRouteLoopTrackThroughWebAudio()) return null;
+  return connectLoopTrackWebAudio(audio, track);
+}
+
+/**
+ * iOS 入店ジャズフェードのみ — 通常 BGM は要素音量のまま。
+ * 失敗時は呼び出し側が element interval フェードへフォールバックする。
+ */
+async function ensureIosJazzEntryWebAudio(
+  audio: HTMLAudioElement,
+  track: LoopingTrackState,
+): Promise<boolean> {
+  if (!isIosAudioSession()) return false;
+  return (await connectLoopTrackWebAudio(audio, track)) !== null;
+}
+
+/** 入店フェード完了後 — 継続再生は要素音量へ戻す（iOS 全体 Web Audio 化はしない） */
+function handoffIosJazzEntryWebAudioToElement(
+  audio: HTMLAudioElement,
+  track: LoopingTrackState,
+  level: number,
+) {
+  if (!isIosAudioSession() || !track.webAudio) return;
+
+  const clamped = clampVolume(level);
+  disconnectTrackWebAudio(track);
+  audio.volume = clamped;
+  audio.muted = false;
+
+  logAudioVolumeDebug("jazzEntryFadePath", {
+    path: "webAudioGain",
+    handoff: "element",
+    elementVolume: clamped,
+  });
 }
 
 function setTrackOutputLevel(
@@ -613,6 +652,11 @@ function computeFadeLevel(
   return from + (to - from) * progress;
 }
 
+type FadeVolumeOptions = {
+  /** iOS 入店フェード — Web Audio 後に要素音量へ戻す */
+  iosHandoffToElementOnComplete?: boolean;
+};
+
 function fadeVolume(
   audio: HTMLAudioElement,
   from: number,
@@ -620,6 +664,7 @@ function fadeVolume(
   durationMs: number,
   track: LoopingTrackState,
   onComplete?: () => void,
+  options?: FadeVolumeOptions,
 ) {
   cancelTrackFade(track);
   track.ambient?.pause();
@@ -628,6 +673,13 @@ function fadeVolume(
   const usesWebAudio = track.webAudio !== null;
   const useIosIntervalFade =
     fadeIn && !usesWebAudio && isIosAudioSession();
+
+  if (fadeIn && usesWebAudio && isIosAudioSession()) {
+    logAudioVolumeDebug("jazzEntryFadePath", {
+      path: "webAudioGain",
+      durationMs,
+    });
+  }
 
   if (fadeIn) {
     primeLoopAudioSilence(audio, track);
@@ -667,6 +719,9 @@ function fadeVolume(
       if (!usesWebAudio && fadeIn) {
         audio.muted = false;
       }
+      if (options?.iosHandoffToElementOnComplete) {
+        handoffIosJazzEntryWebAudioToElement(audio, track, to);
+      }
       if (track.ambient && to > 0) {
         track.ambient.applyNow();
         track.ambient.resume();
@@ -679,7 +734,8 @@ function fadeVolume(
   };
 
   if (useIosIntervalFade) {
-    logAudioVolumeDebug("jazzEntryFadeIos", {
+    logAudioVolumeDebug("jazzEntryFadePath", {
+      path: "elementInterval",
       durationMs,
       fadeStepMs: BAR_AUDIO_TIMING.fadeStepMs,
     });
@@ -1318,7 +1374,20 @@ async function startLooping(
       } else if (audio.paused) {
         audio.currentTime = pickRandomStartTime(audio.duration);
       }
-      await ensureTrackWebAudio(audio, track);
+
+      if (isJazzCounterEntry && isIosAudioSession()) {
+        const webAudioReady = await ensureIosJazzEntryWebAudio(audio, track);
+        if (!webAudioReady) {
+          logAudioVolumeDebug("jazzEntryFadePath", {
+            path: "elementInterval",
+            reason: "webAudioSetupFailed",
+            durationMs: fadeMs,
+          });
+        }
+      } else {
+        await ensureTrackWebAudio(audio, track);
+      }
+
       primeLoopAudioSilence(audio, track);
 
       if (isJazzCounterEntry && isIosAudioSession()) {
@@ -1353,7 +1422,15 @@ async function startLooping(
     if (!isTrackAudioCurrent(track, token, audio)) {
       return;
     }
-    fadeVolume(audio, fadeFrom, scaledVolume, fadeMs, track);
+
+    const iosJazzEntryWebAudioHandoff =
+      isJazzCounterEntry &&
+      isIosAudioSession() &&
+      track.webAudio !== null;
+
+    fadeVolume(audio, fadeFrom, scaledVolume, fadeMs, track, undefined, {
+      iosHandoffToElementOnComplete: iosJazzEntryWebAudioHandoff,
+    });
     return;
   }
 
@@ -1681,7 +1758,7 @@ export const barAudioEngine = {
   ) {
     recoverBarAudioOnUserGesture();
     if (!isPerfAudioEnabled()) return;
-    if (shouldRouteLoopTrackThroughWebAudio()) {
+    if (shouldRouteLoopTrackThroughWebAudio() || isIosAudioSession()) {
       void ensureBarAudioContext();
     }
     syncJazzCounterEntryPlayInUserGesture();
