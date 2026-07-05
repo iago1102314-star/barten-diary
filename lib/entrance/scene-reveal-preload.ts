@@ -140,10 +140,69 @@ export async function waitForSceneRevealPreload(
   preloadPromise: Promise<void> | null | undefined,
   timing: typeof SCENE_REVEAL_PRELOAD_TIMING = SCENE_REVEAL_PRELOAD_TIMING,
 ): Promise<void> {
+  const debug = isPerfDebugEnabled();
+  const hasPreloadPromise = Boolean(preloadPromise);
+
+  if (debug) {
+    perfLog("waitForSceneRevealPreload wait start", {
+      hasPreloadPromise,
+      minMs: timing.minMs,
+      maxMs: timing.maxMs,
+    });
+  }
+
+  const totalStartedAt =
+    debug && typeof performance !== "undefined" ? performance.now() : 0;
+
+  let hitMaxTimeout = false;
+  let resolvedByPreload = false;
+  let cappedResolvedAt: number | null = null;
+
   const cappedPreload = Promise.race([
-    (preloadPromise ?? Promise.resolve()).catch(() => {}),
-    delay(timing.maxMs),
+    (preloadPromise ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => {
+        resolvedByPreload = true;
+        if (debug && typeof performance !== "undefined") {
+          cappedResolvedAt = performance.now();
+        }
+      }),
+    delay(timing.maxMs).then(() => {
+      if (!resolvedByPreload) {
+        hitMaxTimeout = true;
+      }
+      if (debug && typeof performance !== "undefined" && cappedResolvedAt === null) {
+        cappedResolvedAt = performance.now();
+      }
+    }),
   ]);
 
-  await Promise.all([delay(timing.minMs), cappedPreload]);
+  let minResolvedAt: number | null = null;
+  const minWait = delay(timing.minMs).then(() => {
+    if (debug && typeof performance !== "undefined") {
+      minResolvedAt = performance.now();
+    }
+  });
+
+  await Promise.all([minWait, cappedPreload]);
+
+  if (debug && typeof performance !== "undefined") {
+    const totalEnd = performance.now();
+    const preloadWaitMs =
+      cappedResolvedAt !== null ? cappedResolvedAt - totalStartedAt : timing.maxMs;
+    const minWaitMs =
+      minResolvedAt !== null ? minResolvedAt - totalStartedAt : timing.minMs;
+    const preloadFinishedBeforeMin =
+      cappedResolvedAt !== null &&
+      minResolvedAt !== null &&
+      cappedResolvedAt < minResolvedAt;
+
+    perfLog("waitForSceneRevealPreload", {
+      "preload wait": `${Math.round(preloadWaitMs)}ms`,
+      "min wait": `${Math.round(minWaitMs)}ms`,
+      total: `${Math.round(totalEnd - totalStartedAt)}ms`,
+      preloadFinishedBeforeMin,
+      hitMaxTimeout,
+    });
+  }
 }

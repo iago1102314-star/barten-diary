@@ -164,7 +164,15 @@ import { useSettingsMenuHidden } from "@/lib/settings/settings-menu-visibility";
 import { useRegisterSettingsMenuBackdrop } from "@/lib/settings/settings-menu-backdrop-context";
 import { resolveEntranceMenuBackdrop } from "@/lib/settings/resolve-entrance-menu-backdrop";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+} from "react";
 
 type EntranceState =
   | "entry"
@@ -229,6 +237,26 @@ const OUTSIDE_AMBIENT_STATES = new Set<EntranceState>([
 
 function getSceneMotionKey(state: EntranceState): string {
   return COUNTER_SCENE_STATES.has(state) ? "counter" : state;
+}
+
+function perfLogGreetingPhase(markName: string, label = markName): void {
+  if (!isPerfDebugEnabled() || typeof performance === "undefined") return;
+
+  try {
+    const measureName = `greeting_complete__${markName}`;
+    performance.measure(measureName, "greeting_complete_tap", markName);
+    const entry = performance.getEntriesByName(measureName, "measure").at(-1);
+    if (entry) {
+      perfLog(`→ ${label}: ${Math.round(entry.duration)}ms`);
+    }
+  } catch {
+    // duplicate mark / measure は無視
+  }
+}
+
+function CounterEnteringReveal(props: ComponentProps<typeof EnteringReveal>) {
+  perfRenderCount("EnteringReveal");
+  return <EnteringReveal {...props} />;
 }
 
 type EntranceFlowProps = {
@@ -510,6 +538,23 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     if (entranceState !== "masterOnBlack") return;
     perfMark("master_black_mount");
     counterEntryPreloadRef.current = startCounterEntryScenePreload();
+  }, [entranceState]);
+
+  useLayoutEffect(() => {
+    if (!isPerfDebugEnabled() || entranceState !== "counterReveal") return;
+
+    perfMark("counter_reveal_mount");
+    perfLogGreetingPhase("counter_reveal_mount", "counterReveal_mount");
+    perfMeasure(
+      "greeting_complete_to_counter_reveal_mount",
+      "greeting_complete_tap",
+      "counter_reveal_mount",
+    );
+    perfMeasurePair(
+      "master_black_to_counter_reveal",
+      "master_black_mount",
+      "counter_reveal_mount",
+    );
   }, [entranceState]);
 
   useEffect(() => {
@@ -1211,22 +1256,32 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const beginCounterReveal = useCallback(async () => {
+    perfMark("beginCounterReveal_start");
     await waitForSceneRevealPreload(counterEntryPreloadRef.current);
+    perfMark("beginCounterReveal_end");
+    perfLogGreetingPhase("beginCounterReveal_end", "beginCounterReveal");
+    perfMark("counterReveal_setState");
+    perfLogGreetingPhase("counterReveal_setState");
     setEntranceState("counterReveal");
-    perfMeasurePair(
-      "master_black_to_counter_reveal",
-      "master_black_mount",
-      "counter_reveal_mount",
-    );
     void logBehaviorEvent("counter_enter");
   }, []);
 
   const handleMasterGreetingComplete = () => {
+    perfMark("greeting_complete_tap");
+    if (isPerfDebugEnabled()) {
+      perfLog("greeting_complete");
+    }
+
     unlockBarAudio();
+
+    perfMark("startJazz_start");
     audio.startJazz(
       getBgmMix("jazzCounter"),
       BAR_AUDIO_TIMING.jazzEntryFadeMs,
     );
+    perfMark("startJazz_end");
+    perfLogGreetingPhase("startJazz_end", "startJazz");
+
     void beginCounterReveal();
   };
 
@@ -1907,7 +1962,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
             )}
 
             {entranceState === "counterReveal" && (
-              <EnteringReveal onComplete={handleCounterRevealComplete} />
+              <CounterEnteringReveal onComplete={handleCounterRevealComplete} />
             )}
 
             <EntranceTapSkipLayer
