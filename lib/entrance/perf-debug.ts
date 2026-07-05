@@ -2,18 +2,24 @@
 
 /**
  * console / Performance API 計測の ON/OFF。
- * - `NEXT_PUBLIC_PERF_DEBUG=true` で明示 ON
+ * - `NEXT_PUBLIC_PERF_DEBUG=true` のときのみ ON（dev でも自動 ON にしない）
  * - `NEXT_PUBLIC_PERF_DEBUG=false` で明示 OFF
- * - 未設定時は Vercel Dev（`NEXT_PUBLIC_APP_ENV=dev`）のみ ON
+ *
+ * render 回数（console.count）は別フラグ:
+ * - `NEXT_PUBLIC_PERF_RENDER_COUNT=true` のときのみ
  */
 export function isPerfDebugEnabled(): boolean {
   if (process.env.NEXT_PUBLIC_PERF_DEBUG === "true") return true;
   if (process.env.NEXT_PUBLIC_PERF_DEBUG === "false") return false;
-  return process.env.NEXT_PUBLIC_APP_ENV === "dev";
+  return false;
+}
+
+export function isPerfRenderCountEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_PERF_RENDER_COUNT === "true";
 }
 
 export function perfRenderCount(componentName: string): void {
-  if (!isPerfDebugEnabled()) return;
+  if (!isPerfRenderCountEnabled()) return;
   console.count(`[perf:render] ${componentName}`);
 }
 
