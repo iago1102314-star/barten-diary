@@ -92,6 +92,25 @@ function markBarAudioUserInteraction(): void {
   appBackgroundSuspended = false;
 }
 
+/**
+ * SE / BGM 再生前 — unlock 済みでもプール破棄・context suspend から復旧する。
+ * dispose() 後や visibility 中断後に「以降すべて鳴らない」を防ぐ。
+ */
+function recoverBarAudioOnUserGesture(): void {
+  markBarAudioUserInteraction();
+
+  if (!sfxPoolInitialized) {
+    ensureSfxPool();
+    if (barAudioUserGestureUnlocked) {
+      void warmUpBarAudio();
+    }
+  }
+
+  if (barAudioContext?.state === "suspended") {
+    void barAudioContext.resume().catch(() => {});
+  }
+}
+
 function pauseLoopTrackForAppBackground(track: LoopingTrackState) {
   const audio = track.audio;
   if (!audio || !track.started) return;
@@ -106,23 +125,23 @@ function pauseLoopTrackForAppBackground(track: LoopingTrackState) {
 }
 
 /**
- * ホーム画面・他アプリ・画面ロック — BGM / SE を即停止。
- * フォアグラウンド復帰時の自動再開は行わない（ユーザー操作後のみ）。
+ * ホーム画面・他アプリ・画面ロック — BGM を pause（SE は完走させる）。
+ * フォアグラウンド復帰時の自動再開は行わない（visible でブロックだけ解除）。
  */
 export function suspendBarAudioForAppBackground(): void {
   if (typeof document === "undefined") return;
 
   appBackgroundSuspended = true;
-  outsideTrack.generation += 1;
-  jazzTrack.generation += 1;
   outsidePreparePromise = null;
   jazzPreparePromise = null;
 
   pauseLoopTrackForAppBackground(outsideTrack);
   pauseLoopTrackForAppBackground(jazzTrack);
-  stopAllActiveSfx();
 
-  if (barAudioContext?.state === "running") {
+  if (
+    barAudioContext?.state === "running" &&
+    shouldRouteLoopTrackThroughWebAudio()
+  ) {
     void barAudioContext.suspend();
   }
 }
@@ -137,11 +156,22 @@ export function attachBarAudioAppLifecycle(): void {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
       suspendBarAudioForAppBackground();
+      return;
     }
+    // 復帰 — ブロックだけ解除（BGM 自動再開はしない）
+    appBackgroundSuspended = false;
   });
 
   window.addEventListener("pagehide", () => {
     suspendBarAudioForAppBackground();
+  });
+
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+    appBackgroundSuspended = false;
+    if (barAudioUserGestureUnlocked && !sfxPoolInitialized) {
+      ensureSfxPool();
+    }
   });
 }
 
@@ -157,8 +187,6 @@ function shouldBlockBackgroundBgmPlayback(): boolean {
 
 /** 扉を開ける / メモを見る等 — 最初の明確なユーザー操作後にのみ呼ぶ */
 export function unlockBarAudioForUserGesture(): void {
-  markBarAudioUserInteraction();
-
   const firstUnlock = !barAudioUserGestureUnlocked;
   if (firstUnlock) {
     barAudioUserGestureUnlocked = true;
@@ -166,10 +194,11 @@ export function unlockBarAudioForUserGesture(): void {
     prefetchLoopingSource(ENTRANCE_SOUNDS.jazz);
     prefetchLoopingSource(ENTRANCE_SOUNDS.outside);
     beginOutsideAlleyPreload();
-    ensureSfxPool();
     primeBarAudioUnlockOnFirstGesture();
     void warmUpBarAudio();
   }
+
+  recoverBarAudioOnUserGesture();
 
   if (shouldRouteLoopTrackThroughWebAudio()) {
     void ensureBarAudioContext();
@@ -844,6 +873,39 @@ async function prepareJazzForCounterEntry(): Promise<void> {
   }
 }
 
+function replaceSfxPoolSlot(src: string, broken: HTMLAudioElement): void {
+  const slots = sfxPool.get(src);
+  if (!slots) return;
+
+  const index = slots.indexOf(broken);
+  if (index < 0) return;
+
+  releaseAudio(broken);
+  const replacement = createAudio(src);
+  if (!replacement) return;
+
+  replacement.volume = 0;
+  replacement.load();
+  wireSfxSlotErrorHandler(src, replacement, index);
+  slots[index] = replacement;
+}
+
+function wireSfxSlotErrorHandler(
+  src: string,
+  audio: HTMLAudioElement,
+  slotIndex: number,
+): void {
+  audio.addEventListener(
+    "error",
+    () => {
+      const slots = sfxPool.get(src);
+      if (!slots || slots[slotIndex] !== audio) return;
+      replaceSfxPoolSlot(src, audio);
+    },
+    { once: true },
+  );
+}
+
 function ensureSfxPool() {
   if (sfxPoolInitialized) return;
 
@@ -852,10 +914,11 @@ function ensureSfxPool() {
       (audio): audio is HTMLAudioElement => audio !== null,
     );
 
-    for (const audio of slots) {
+    slots.forEach((audio, slotIndex) => {
       audio.volume = 0;
+      wireSfxSlotErrorHandler(src, audio, slotIndex);
       audio.load();
-    }
+    });
 
     if (slots.length > 0) {
       sfxPool.set(src, slots);
@@ -1019,6 +1082,8 @@ function playSfxNow(
   onEnded?: () => void,
   volumeScale = 1,
 ) {
+  recoverBarAudioOnUserGesture();
+
   if (!isBarAudioUnlocked() || !sfxPoolInitialized || isDocumentHidden()) {
     onEnded?.();
     return;
@@ -1031,32 +1096,64 @@ function playSfxNow(
     return;
   }
 
-  const audio = slots.find((slot) => slot.paused) ?? slots[0];
   const effectiveVolume =
     getSfxPlayVolume(kind) * volumeScale * getSeVolumeMultiplier();
-  audio.volume = effectiveVolume;
-  logAudioVolumeDebug("playSfx", {
-    kind,
-    seMix: getSeMix(kind),
-    playVolume: effectiveVolume,
-    elementVolumeAfterSet: audio.volume,
-    volumeScale,
-    seMultiplier: getSeVolumeMultiplier(),
-  });
-  audio.muted = false;
-  audio.currentTime = 0;
 
-  if (onEnded) {
-    const handleEnded = () => {
-      audio.removeEventListener("ended", handleEnded);
-      onEnded();
-    };
-    audio.addEventListener("ended", handleEnded);
-  }
+  const orderedSlots = [
+    ...slots.filter((slot) => slot.paused),
+    ...slots.filter((slot) => !slot.paused),
+  ];
 
-  void audio.play().catch(() => {
-    onEnded?.();
-  });
+  const playOnSlot = (audio: HTMLAudioElement, allowRetry: boolean) => {
+    audio.volume = effectiveVolume;
+    logAudioVolumeDebug("playSfx", {
+      kind,
+      seMix: getSeMix(kind),
+      playVolume: effectiveVolume,
+      elementVolumeAfterSet: audio.volume,
+      volumeScale,
+      seMultiplier: getSeVolumeMultiplier(),
+    });
+    audio.muted = false;
+    audio.currentTime = 0;
+
+    if (onEnded) {
+      const handleEnded = () => {
+        audio.removeEventListener("ended", handleEnded);
+        onEnded();
+      };
+      audio.addEventListener("ended", handleEnded);
+    }
+
+    const playPromise = audio.play();
+    if (!playPromise) return;
+
+    playPromise.catch(() => {
+      if (!allowRetry) {
+        onEnded?.();
+        return;
+      }
+
+      const alternate = orderedSlots.find(
+        (slot) => slot !== audio && slot.paused,
+      );
+      if (alternate) {
+        playOnSlot(alternate, false);
+        return;
+      }
+
+      replaceSfxPoolSlot(src, audio);
+      const rebuilt = sfxPool.get(src)?.find((slot) => slot.paused);
+      if (rebuilt) {
+        playOnSlot(rebuilt, false);
+        return;
+      }
+
+      onEnded?.();
+    });
+  };
+
+  playOnSlot(orderedSlots[0], orderedSlots.length > 1);
 }
 
 async function startLooping(
@@ -1067,6 +1164,8 @@ async function startLooping(
   enableAmbientModulation = false,
 ) {
   if (src === ENTRANCE_SOUNDS.jazz && !isPerfAudioEnabled()) return;
+
+  recoverBarAudioOnUserGesture();
 
   if (!isBarAudioUnlocked() || shouldBlockBackgroundBgmPlayback()) return;
 
@@ -1118,6 +1217,10 @@ async function startLooping(
       await ensureTrackWebAudio(audio, track);
       primeLoopAudioSilence(audio, track);
       if (!(await safePlayLoopTrack(audio, track))) {
+        logAudioVolumeDebug("bgmPlayRejected", {
+          src,
+          track: track === jazzTrack ? "jazz" : "outside",
+        });
         return;
       }
       if (!isTrackAudioCurrent(track, token, audio)) {
@@ -1365,6 +1468,8 @@ function snapshotActiveSfx(): Array<Record<string, unknown>> {
 export function getBarAudioDiagnostics(): Record<string, unknown> {
   return {
     bgmPausedForRecording,
+    appBackgroundSuspended,
+    sfxPoolInitialized,
     barAudioUnlocked: barAudioUserGestureUnlocked,
     usesIosElementVolume: !shouldRouteLoopTrackThroughWebAudio(),
     tuning: {
@@ -1428,6 +1533,7 @@ export const barAudioEngine = {
     fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
     volume: number = getBgmMix("outsideAlley"),
   ) {
+    recoverBarAudioOnUserGesture();
     void prepareOutsideForEntry(fadeMs, volume);
   },
 
@@ -1435,6 +1541,7 @@ export const barAudioEngine = {
     volume: number = getBgmMix("outsideAlley"),
     fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   ) {
+    recoverBarAudioOnUserGesture();
     void prepareOutsideForEntry(fadeMs, volume);
   },
 
@@ -1453,8 +1560,8 @@ export const barAudioEngine = {
     volume: number = getBgmMix("jazzCounter"),
     fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   ) {
+    recoverBarAudioOnUserGesture();
     if (!isPerfAudioEnabled()) return;
-    markBarAudioUserInteraction();
     if (shouldRouteLoopTrackThroughWebAudio()) {
       void ensureBarAudioContext();
     }
