@@ -1,5 +1,8 @@
+"use client";
+
 import { ENTRANCE_SOUNDS } from "@/lib/entrance/asset-paths";
 import {
+  ensureClientPlatformAudioMixReady,
   getPlatformBgmVolumeScale,
   getPlatformSeVolumeScale,
   readPlatformAudioVolumeDebugInfo,
@@ -152,6 +155,9 @@ export function clearAudioVolumeOverrides(): void {
 
 /** 実行時 mix — コード定数 + localStorage オーバーライド + プラットフォーム倍率 */
 export function getBgmMix(key: BgmMixKey): number {
+  if (typeof window !== "undefined") {
+    ensureClientPlatformAudioMixReady();
+  }
   const override = readAudioVolumeOverrides().bgm?.[key];
   const base =
     typeof override === "number" && Number.isFinite(override)
@@ -162,6 +168,9 @@ export function getBgmMix(key: BgmMixKey): number {
 
 /** 実行時 SE mix — peakDbfs 補正前の目標値 + プラットフォーム倍率 */
 export function getSeMix(kind: BarSfxKind): number {
+  if (typeof window !== "undefined") {
+    ensureClientPlatformAudioMixReady();
+  }
   const override = readAudioVolumeOverrides().se?.[kind];
   const base =
     typeof override === "number" && Number.isFinite(override)
@@ -353,7 +362,9 @@ export const JAZZ_BGM_AMBIENT_TUNING =
   AUDIO_VOLUME_TUNING.bgm.jazzCounter.ambient;
 
 export function isAudioVolumeDebugEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_AUDIO_VOLUME_DEBUG === "true";
+  if (process.env.NEXT_PUBLIC_AUDIO_VOLUME_DEBUG === "true") return true;
+  if (process.env.NEXT_PUBLIC_AUDIO_VOLUME_DEBUG === "false") return false;
+  return process.env.NEXT_PUBLIC_APP_ENV === "dev";
 }
 
 export function logAudioVolumeDebug(
@@ -362,6 +373,16 @@ export function logAudioVolumeDebug(
 ): void {
   if (!isAudioVolumeDebugEnabled()) return;
   console.info(`[audio-vol] ${label}`, data);
+}
+
+/** 初回 unlock 時 — プラットフォーム倍率が効いているか実機で確認 */
+export function logPlatformAudioMixReady(): void {
+  if (!isAudioVolumeDebugEnabled()) return;
+  ensureClientPlatformAudioMixReady();
+  console.info("[audio-vol] platformMixReady", {
+    ...readPlatformAudioVolumeDebugInfo(),
+    effective: getEffectiveMixSnapshot(),
+  });
 }
 
 type AudioVolumeDevApi = {

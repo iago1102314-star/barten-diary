@@ -23,6 +23,7 @@ export {
   isAudioVolumeTunePanelEnabled,
   JAZZ_BGM_AMBIENT_TUNING,
   logAudioVolumeDebug,
+  logPlatformAudioMixReady,
   readAudioVolumeOverrides,
   readBarAudioLevels,
   resolveBgmMix,
@@ -35,10 +36,12 @@ export {
 
 export {
   DESKTOP_AUDIO_VOLUME_SCALE,
+  ensureClientPlatformAudioMixReady,
   getAudioVolumePlatformId,
   getPlatformBgmVolumeScale,
   getPlatformSeVolumeScale,
   isMobileIosAudioPlatform,
+  MOBILE_IOS_AUDIO_MIX_REVISION,
   MOBILE_IOS_AUDIO_VOLUME_SCALE,
   readPlatformAudioVolumeDebugInfo,
   type AudioVolumePlatformId,

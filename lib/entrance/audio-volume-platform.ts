@@ -1,3 +1,5 @@
+"use client";
+
 import type { BarSfxKind, BgmMixKey } from "@/lib/entrance/audio-volume-tuning";
 
 /**
@@ -12,7 +14,12 @@ import type { BarSfxKind, BgmMixKey } from "@/lib/entrance/audio-volume-tuning";
  * SE3 実機チューニング（2026-07）:
  *   大きすぎ → 0.65〜0.75 / バカでかい → 0.40
  *   少し大きい → 0.88 / 小さい → 1.35〜1.45
+ *
+ * デプロイ確認: コンソールの `[audio-vol] platformMixReady` に revision が出る。
  */
+
+/** SE3 チューニング版 — 実機コンソールで適用確認用 */
+export const MOBILE_IOS_AUDIO_MIX_REVISION = 2;
 
 export type PlatformAudioVolumeScaleTable = {
   bgm: Record<BgmMixKey, number> & { default: number };
@@ -68,17 +75,36 @@ export const MOBILE_IOS_AUDIO_VOLUME_SCALE: PlatformAudioVolumeScaleTable = {
 
 export type AudioVolumePlatformId = "desktop" | "mobileIos";
 
+let clientPlatformId: AudioVolumePlatformId | null = null;
+
 export function isMobileIosAudioPlatform(): boolean {
   if (typeof window === "undefined") return false;
-  return /iPhone|iPod|iPad/.test(window.navigator.userAgent);
+  const ua = window.navigator.userAgent;
+  if (/iPhone|iPod|iPad/.test(ua)) return true;
+  // iPadOS — デスクトップ UA でもタッチ端末
+  return navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
 }
 
-export function getAudioVolumePlatformId(): AudioVolumePlatformId {
+function resolveClientPlatformId(): AudioVolumePlatformId {
   return isMobileIosAudioPlatform() ? "mobileIos" : "desktop";
 }
 
+/** クライアント初回 unlock 前に呼ぶ — SSR 時の desktop 誤判定を捨てる */
+export function ensureClientPlatformAudioMixReady(): AudioVolumePlatformId {
+  if (typeof window === "undefined") return "desktop";
+  clientPlatformId = resolveClientPlatformId();
+  return clientPlatformId;
+}
+
+export function getAudioVolumePlatformId(): AudioVolumePlatformId {
+  if (clientPlatformId) return clientPlatformId;
+  if (typeof window === "undefined") return "desktop";
+  return resolveClientPlatformId();
+}
+
 export function getPlatformAudioVolumeScaleTable(): PlatformAudioVolumeScaleTable {
-  return isMobileIosAudioPlatform()
+  const platform = getAudioVolumePlatformId();
+  return platform === "mobileIos"
     ? MOBILE_IOS_AUDIO_VOLUME_SCALE
     : DESKTOP_AUDIO_VOLUME_SCALE;
 }
@@ -111,6 +137,9 @@ export function readPlatformAudioVolumeDebugInfo() {
   return {
     platform,
     isMobileIos: platform === "mobileIos",
+    revision: MOBILE_IOS_AUDIO_MIX_REVISION,
+    userAgent:
+      typeof window !== "undefined" ? window.navigator.userAgent : null,
     scaleTable: table,
   };
 }

@@ -5,10 +5,12 @@ import {
 } from "@/lib/settings/audio-preferences";
 import {
   BAR_AUDIO_TIMING,
+  ensureClientPlatformAudioMixReady,
   getBgmMix,
   getSfxPlayVolume,
   installAudioVolumeDevApi,
   logAudioVolumeDebug,
+  logPlatformAudioMixReady,
   type BarSfxKind,
   type BgmMixKey,
 } from "@/lib/entrance/audio-levels";
@@ -159,6 +161,7 @@ export function unlockBarAudioForUserGesture(): void {
   const firstUnlock = !barAudioUserGestureUnlocked;
   if (firstUnlock) {
     barAudioUserGestureUnlocked = true;
+    logPlatformAudioMixReady();
     prefetchLoopingSource(ENTRANCE_SOUNDS.jazz);
     prefetchLoopingSource(ENTRANCE_SOUNDS.outside);
     beginOutsideAlleyPreload();
@@ -1475,6 +1478,7 @@ export const barAudioEngine = {
 
   /** localStorage オーバーライドや tuning 変更後 — 再生中トラックへ即反映 */
   reapplyTuningVolumes() {
+    ensureClientPlatformAudioMixReady();
     if (jazzTrack.audio && jazzTrack.started) {
       setLoopingVolume(getBgmMix("jazzCounter"), jazzTrack);
     }
