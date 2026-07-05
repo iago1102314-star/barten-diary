@@ -1,8 +1,15 @@
 "use client";
 
-/** NEXT_PUBLIC_PERF_DEBUG=true のときだけ console / Performance API を使う */
+/**
+ * console / Performance API 計測の ON/OFF。
+ * - `NEXT_PUBLIC_PERF_DEBUG=true` で明示 ON
+ * - `NEXT_PUBLIC_PERF_DEBUG=false` で明示 OFF
+ * - 未設定時は Vercel Dev（`NEXT_PUBLIC_APP_ENV=dev`）のみ ON
+ */
 export function isPerfDebugEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_PERF_DEBUG === "true";
+  if (process.env.NEXT_PUBLIC_PERF_DEBUG === "true") return true;
+  if (process.env.NEXT_PUBLIC_PERF_DEBUG === "false") return false;
+  return process.env.NEXT_PUBLIC_APP_ENV === "dev";
 }
 
 export function perfRenderCount(componentName: string): void {
