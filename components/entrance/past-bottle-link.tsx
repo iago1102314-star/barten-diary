@@ -6,10 +6,9 @@ import {
   MOOD_SELECT_ENTRANCE_DURATION_SCALE,
   moodSelectUiAnimScaledSec,
 } from "@/lib/entrance/mood-select-entrance-tuning";
-import {
-  moodLinkTextStyle,
-  PAST_BOTTLE_LINK_TUNING,
-} from "@/lib/entrance/past-bottle-link-tuning";
+import { moodLinkTextStyle } from "@/lib/entrance/past-bottle-link-tuning";
+import { resolvePastBottleLinkTuning } from "@/lib/entrance/compact-height-viewport";
+import { useCompactHeightViewport } from "@/hooks/use-compact-height-viewport";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
@@ -35,8 +34,9 @@ export function PastBottleLink({
   skipEntrance = false,
   entranceDelaySec = 0,
 }: PastBottleLinkProps) {
-  const { text, icon, hover, tap, hit, divider, entrance, navigate } =
-    PAST_BOTTLE_LINK_TUNING;
+  const compactHeight = useCompactHeightViewport();
+  const tuning = resolvePastBottleLinkTuning(compactHeight);
+  const { text, icon, hover, tap, hit, divider, entrance, navigate } = tuning;
   const playEntrance = !skipEntrance || MOOD_SELECT_ENTRANCE_DURATION_SCALE > 1;
   const [isHovered, setIsHovered] = useState(false);
   const [tapTick, setTapTick] = useState(0);

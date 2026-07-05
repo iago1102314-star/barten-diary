@@ -22,7 +22,7 @@ const iosDir = path.join(soundsDir, "ios");
 
 /** SE3 聴感ベース — 値を変えたら必ず npm run generate:ios-sfx */
 const IOS_SFX_ATTENUATION_DB = {
-  click: -14,
+  click: -10,
   door: -25,
   glassSlide: -12,
   send: -9,
@@ -65,12 +65,13 @@ function runFfmpeg(inputPath, outputPath, attenuationDb) {
       "-y",
       "-i",
       inputPath,
+      "-vn",
       "-af",
       filter,
       "-c:a",
       "aac",
       "-b:a",
-      "128k",
+      "192k",
       "-movflags",
       "+faststart",
       outputPath,

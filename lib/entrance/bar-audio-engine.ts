@@ -32,6 +32,9 @@ import { IOS_SFX_CACHE_REVISION } from "@/lib/entrance/generated-ios-sfx-manifes
 import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
 import { isPerfAudioEnabled } from "@/lib/layout/perf-feature-flags";
 
+/** 短い UI 音 — 重ね再生で潰れないよう再生前に同一プールを止める */
+const MONOPHONIC_SFX_KINDS = new Set<BarSfxKind>(["click", "menuClick"]);
+
 const BAR_SFX_KINDS: BarSfxKind[] = [
   "door",
   "click",
@@ -365,6 +368,8 @@ type LoopingTrackState = {
   fade: number | null;
   /** iOS 要素フェード — rAF より setInterval の方が音量反映が安定 */
   fadeTimer: ReturnType<typeof setInterval> | null;
+  /** Web Audio linearRamp 完了待ち */
+  fadeCompleteTimer: number | null;
   targetVolume: number;
   ambient: AmbientVolumeController | null;
   webAudio: LoopWebAudioRouting | null;
@@ -378,6 +383,7 @@ function createInitialTrackState(defaultVolume: number): LoopingTrackState {
     started: false,
     fade: null,
     fadeTimer: null,
+    fadeCompleteTimer: null,
     targetVolume: defaultVolume,
     ambient: null,
     webAudio: null,
@@ -431,10 +437,10 @@ async function ensureTrackWebAudio(
 }
 
 /**
- * iOS 入店ジャズフェードのみ — 通常 BGM は要素音量のまま。
+ * iOS ループ BGM（jazz / outside）— Web Audio Gain で音量制御。
  * 失敗時は呼び出し側が element interval フェードへフォールバックする。
  */
-async function ensureIosJazzEntryWebAudio(
+async function ensureIosLoopBgmWebAudio(
   audio: HTMLAudioElement,
   track: LoopingTrackState,
 ): Promise<boolean> {
@@ -578,7 +584,7 @@ function createJazzAmbientModulation(
   let rafId: number | null = null;
 
   const applyNow = () => {
-    if (paused || track.fade || audio.paused) return;
+    if (paused || isTrackFading(track) || audio.paused) return;
 
     const duration = audio.duration;
     if (!Number.isFinite(duration) || duration <= 0) return;
@@ -621,6 +627,14 @@ function createJazzAmbientModulation(
   };
 }
 
+function isTrackFading(track: LoopingTrackState): boolean {
+  return (
+    track.fade !== null ||
+    track.fadeTimer !== null ||
+    track.fadeCompleteTimer !== null
+  );
+}
+
 function cancelTrackFade(track: LoopingTrackState) {
   if (track.fade !== null) {
     cancelAnimationFrame(track.fade);
@@ -629,6 +643,18 @@ function cancelTrackFade(track: LoopingTrackState) {
   if (track.fadeTimer !== null) {
     clearInterval(track.fadeTimer);
     track.fadeTimer = null;
+  }
+  if (track.fadeCompleteTimer !== null) {
+    clearTimeout(track.fadeCompleteTimer);
+    track.fadeCompleteTimer = null;
+  }
+  if (track.webAudio) {
+    try {
+      const gainNode = track.webAudio.gain;
+      gainNode.gain.cancelScheduledValues(gainNode.context.currentTime);
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -655,13 +681,9 @@ function computeFadeLevel(
   to: number,
   progress: number,
 ): number {
-  if (track.ambient && to > 0 && from === 0) {
-    const duration = audio.duration;
-    const ambientMult =
-      Number.isFinite(duration) && duration > 0
-        ? computeJazzAmbientMultiplier(audio.currentTime, duration)
-        : 1;
-    return clampVolume(track.targetVolume * ambientMult * progress);
+  // 入店フェード中は呼吸・ループ係数を掛けない（完了後に ambient が再開）
+  if (to > 0 && from === 0) {
+    return clampVolume(to * progress);
   }
 
   return from + (to - from) * progress;
@@ -694,6 +716,43 @@ function fadeVolume(
     primeLoopAudioSilence(audio, track);
   } else {
     setTrackOutputLevel(audio, track, from);
+  }
+
+  if (usesWebAudio) {
+    const gainNode = track.webAudio!.gain;
+    const gainParam = gainNode.gain;
+    const ctx = gainNode.context;
+    const start = ctx.currentTime;
+    const durSec = Math.max(0.001, durationMs / 1000);
+    const targetTo = clampVolume(to);
+    const startFrom = clampVolume(from);
+
+    gainParam.cancelScheduledValues(start);
+    gainParam.setValueAtTime(startFrom, start);
+    gainParam.linearRampToValueAtTime(targetTo, start + durSec);
+
+    if (fadeIn && isIosAudioSession()) {
+      audio.volume = 1;
+      audio.muted = false;
+      logAudioVolumeDebug("jazzEntryFadePath", {
+        path: "webAudioGainScheduled",
+        durationMs,
+        from: startFrom,
+        to: targetTo,
+      });
+    }
+
+    track.fadeCompleteTimer = window.setTimeout(() => {
+      track.fadeCompleteTimer = null;
+      if (track.audio !== audio) return;
+      setTrackOutputLevel(audio, track, targetTo);
+      if (track.ambient && targetTo > 0) {
+        track.ambient.applyNow();
+        track.ambient.resume();
+      }
+      onComplete?.();
+    }, durationMs + 32);
+    return;
   }
 
   const startTime = performance.now();
@@ -796,7 +855,7 @@ function isIosAudioSession(): boolean {
   return /iPhone|iPod|iPad/.test(window.navigator.userAgent);
 }
 
-/** iOS — Web Audio 経路は無音化しやすいため BGM は要素音量を使う */
+/** iOS — ループ BGM（jazz / outside）は Web Audio Gain、それ以外は要素音量 */
 function shouldRouteLoopTrackThroughWebAudio(): boolean {
   return !isIosAudioSession();
 }
@@ -834,7 +893,7 @@ function primeOutsidePlayOnUserGesture() {
   if (!audio) return;
 
   primeLoopAudioSilence(audio, outsideTrack);
-  if (shouldRouteLoopTrackThroughWebAudio()) {
+  if (shouldRouteLoopTrackThroughWebAudio() || isIosAudioSession()) {
     void ensureBarAudioContext();
   }
   void audio.play().catch(() => {});
@@ -875,7 +934,18 @@ async function prepareOutsideForEntry(
     if (!isTrackAudioCurrent(outsideTrack, token, audio)) return;
     if (shouldBlockBackgroundBgmPlayback()) return;
 
-    await ensureTrackWebAudio(audio, outsideTrack);
+    if (isIosAudioSession()) {
+      const webAudioReady = await ensureIosLoopBgmWebAudio(audio, outsideTrack);
+      if (!webAudioReady) {
+        logAudioVolumeDebug("outsideEntryFadePath", {
+          path: "elementInterval",
+          reason: "webAudioSetupFailed",
+          durationMs: fadeMs,
+        });
+      }
+    } else {
+      await ensureTrackWebAudio(audio, outsideTrack);
+    }
     primeLoopAudioSilence(audio, outsideTrack);
 
     if (audio.paused) {
@@ -1143,28 +1213,30 @@ function ensureSfxPool() {
 }
 
 /**
- * iOS Safari — 初回ジェスチャーで click 1 本だけ無音 play→pause（プール全件は重すぎる）。
+ * iOS Safari — 初回ジェスチャーで click を無音 play→pause（プールは汚さない）。
  */
 function primeBarAudioUnlockOnFirstGesture(): void {
   if (barAudioElementUnlockDone) return;
 
   ensureSfxPool();
-  const unlockSlot = sfxPool.get(resolveBarSfxSrc("click"))?.[0];
-  if (!unlockSlot) return;
+  const unlockAudio = createAudio(resolveBarSfxSrc("click"));
+  if (!unlockAudio) return;
 
-  const previousMuted = unlockSlot.muted;
-  unlockSlot.volume = 0;
-  unlockSlot.muted = true;
+  unlockAudio.volume = 0;
+  unlockAudio.muted = true;
 
   try {
-    const playPromise = unlockSlot.play();
-    if (!playPromise) return;
+    const playPromise = unlockAudio.play();
+    if (!playPromise) {
+      releaseAudio(unlockAudio);
+      return;
+    }
 
     void playPromise
       .then(() => {
-        unlockSlot.pause();
+        unlockAudio.pause();
         try {
-          unlockSlot.currentTime = 0;
+          unlockAudio.currentTime = 0;
         } catch {
           // ignore
         }
@@ -1174,13 +1246,10 @@ function primeBarAudioUnlockOnFirstGesture(): void {
         // ignore — 未ロード等
       })
       .finally(() => {
-        unlockSlot.muted = previousMuted;
-        // デフォルト 1.0 に戻すと直後の SE 再生音量を上書きする（iOS Safari）
-        unlockSlot.volume = 0;
+        releaseAudio(unlockAudio);
       });
   } catch {
-    unlockSlot.muted = previousMuted;
-    unlockSlot.volume = 0;
+    releaseAudio(unlockAudio);
   }
 }
 
@@ -1345,6 +1414,17 @@ function playSfxNow(
     });
     onEnded?.();
     return;
+  }
+
+  if (MONOPHONIC_SFX_KINDS.has(kind)) {
+    for (const slot of slots) {
+      try {
+        slot.pause();
+        slot.currentTime = 0;
+      } catch {
+        // ignore
+      }
+    }
   }
 
   const effectiveVolume =
@@ -1525,6 +1605,10 @@ async function startLooping(
     track === jazzTrack &&
     enableAmbientModulation &&
     src === ENTRANCE_SOUNDS.jazz;
+  const isOutsideBgmEntry =
+    track === outsideTrack && src === ENTRANCE_SOUNDS.outside;
+  const useIosLoopBgmWebAudio =
+    isIosAudioSession() && (isJazzCounterEntry || isOutsideBgmEntry);
 
   if (track.started && track.audio) {
     const audio = track.audio;
@@ -1548,14 +1632,17 @@ async function startLooping(
         audio.currentTime = pickRandomStartTime(audio.duration);
       }
 
-      if (isJazzCounterEntry && isIosAudioSession()) {
-        const webAudioReady = await ensureIosJazzEntryWebAudio(audio, track);
+      if (useIosLoopBgmWebAudio) {
+        const webAudioReady = await ensureIosLoopBgmWebAudio(audio, track);
         if (!webAudioReady) {
-          logAudioVolumeDebug("jazzEntryFadePath", {
-            path: "elementInterval",
-            reason: "webAudioSetupFailed",
-            durationMs: fadeMs,
-          });
+          logAudioVolumeDebug(
+            isJazzCounterEntry ? "jazzEntryFadePath" : "outsideEntryFadePath",
+            {
+              path: "elementInterval",
+              reason: "webAudioSetupFailed",
+              durationMs: fadeMs,
+            },
+          );
         }
       } else {
         await ensureTrackWebAudio(audio, track);
@@ -1563,12 +1650,12 @@ async function startLooping(
 
       primeLoopAudioSilence(audio, track);
 
-      if (isJazzCounterEntry && isIosAudioSession()) {
+      if (useIosLoopBgmWebAudio) {
         if (audio.paused) {
           if (!(await safePlayLoopTrack(audio, track))) {
             logAudioVolumeDebug("bgmPlayRejected", {
               src,
-              track: "jazz",
+              track: track === jazzTrack ? "jazz" : "outside",
             });
             return;
           }
@@ -1629,7 +1716,11 @@ async function startLooping(
   }
 
   try {
-    await ensureTrackWebAudio(audio, track);
+    if (useIosLoopBgmWebAudio) {
+      await ensureIosLoopBgmWebAudio(audio, track);
+    } else {
+      await ensureTrackWebAudio(audio, track);
+    }
     primeLoopAudioSilence(audio, track);
 
     if (!(await safePlayLoopTrack(audio, track))) {
@@ -1911,6 +2002,9 @@ export const barAudioEngine = {
     fadeMs: number = BAR_AUDIO_TIMING.fadeMs,
   ) {
     recoverBarAudioOnUserGesture();
+    if (shouldRouteLoopTrackThroughWebAudio() || isIosAudioSession()) {
+      void ensureBarAudioContext();
+    }
     void prepareOutsideForEntry(fadeMs, volume);
   },
 

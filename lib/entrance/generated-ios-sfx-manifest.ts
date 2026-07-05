@@ -3,7 +3,7 @@
  * Do not edit manually.
  */
 /** Safari / HTMLAudioElement pool — ios 音源再生成時に bump する */
-export const IOS_SFX_CACHE_REVISION = 12;
+export const IOS_SFX_CACHE_REVISION = 13;
 
 export const IOS_SFX_FILE_AVAILABLE = {
   click: true,
@@ -18,7 +18,7 @@ export const IOS_SFX_FILE_AVAILABLE = {
 
 /** ビルド時の実ファイルサイズ — SE3 fetch 証明ログと照合 */
 export const IOS_SFX_FILE_BYTE_LENGTH = {
-  click: 8396,
+  click: 4124,
   door: 67201,
   glassSlide: 40850,
   send: 20476,
@@ -30,7 +30,7 @@ export const IOS_SFX_FILE_BYTE_LENGTH = {
 
 /** ビルド時の mtime（ISO） — Last-Modified 照合用 */
 export const IOS_SFX_FILE_LAST_MODIFIED = {
-  click: "2026-07-05T15:29:41.997Z",
+  click: "2026-07-05T15:54:55.812Z",
   door: "2026-07-05T15:29:43.512Z",
   glassSlide: "2026-07-05T15:29:44.309Z",
   send: "2026-07-05T15:29:44.790Z",

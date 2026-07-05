@@ -4,8 +4,9 @@
  * ═══════════════════════════════════════════════════════════
  *  吹き出し全体の縦位置（帯・ラベル・縦線・本文・三角マークが一体）
  * ═══════════════════════════════════════════════════════════
- *  dialoguePanelBottomPaddingRem  画面下端からの余白。小さいほど上へ
+ *  dialoguePanelBottomPaddingRem  1行時の帯下端が来る位置（rem）。小さいほど上へ
  *  dialogueBlockOffsetYpx           追加の縦ずらし（px）。負で上・正で下
+ *  ※ 帯は上端固定。2行目以降は下へだけ伸び、1行目・ラベルは動かない
  *
  * ═══════════════════════════════════════════════════════════
  *  しっぽり（タイプライター）速度
@@ -42,6 +43,9 @@ export const MASTER_DIALOGUE_TYPOGRAPHY = {
 
   /** 「マスター」ラベル */
   labelFontSize: "1.0rem",
+  /** 高さ計算用（rem） */
+  labelFontSizeNumeric: 1.0,
+  labelLineHeight: 1.25,
   /** 字間（em）。大きいほど広い */
   labelLetterSpacingEm: 0.2,
   /** ラベルと本文ブロックの間（rem） */
@@ -49,22 +53,15 @@ export const MASTER_DIALOGUE_TYPOGRAPHY = {
 
   /** セリフ本文 */
   bodyFontSize: "1.3rem",
+  /** 高さ計算用（rem） */
+  bodyFontSizeNumeric: 1.3,
   bodyLineHeight: 1.9,
   /** 字間（em）。大きいほど広い */
   bodyLetterSpacingEm: 0.05,
-  /** 本文エリアの最小高さ（rem） */
-  bodyMinHeightRem: 2.375,
-  /** 縦線の右 — 本文をさらに右へ（rem） */
+  /** 1行目・2行目以降の左インデント（rem ベース + bodyTextIndentExtraPx） */
   bodyTextIndentRem: -1,
   /** 本文インデントの追加（px） */
   bodyTextIndentExtraPx: 50,
-  /**
-   * 1行目 — 左へ詰めきる下限（px）。
-   * 0 = 縦線＋ gap の直後。負値 = gap 内へ寄せて縦線に近づける。
-   */
-  bodyTextIndentMinPx: -19,
-  /** 1行目が溢れそうなとき、左インデントを1段ずつ詰める幅（px） */
-  bodyTextIndentSqueezeStepPx: 3,
   /** 本文下の余白（rem） */
   bodyPaddingBottomRem: 0,
   /** 本文右側の空け（rem）— 折り返し・行幅の右限 */
@@ -123,6 +120,23 @@ export const MASTER_DIALOGUE_TYPOGRAPHY = {
   },
 } as const;
 
+/** 1行セリフ時の帯の高さ（rem）— 上端固定レイアウトの基準 */
+export function masterDialogueBandOneLineHeightRem(): number {
+  const t = MASTER_DIALOGUE_TYPOGRAPHY;
+  const oneLineBodyRem = t.bodyFontSizeNumeric * t.bodyLineHeight;
+  const contentRowRem = Math.max(
+    t.accentLineTopRem + t.accentLineHeightRem,
+    oneLineBodyRem,
+  );
+  return (
+    t.bandPaddingTopRem +
+    t.labelFontSizeNumeric * t.labelLineHeight +
+    t.labelPaddingBottomRem +
+    contentRowRem +
+    t.bandPaddingBottomRem
+  );
+}
+
 /** 帯 — 黒レイヤー背景色 */
 export function masterDialogueBandBackgroundColor(): string {
   const t = MASTER_DIALOGUE_TYPOGRAPHY;
@@ -142,11 +156,15 @@ export function masterDialogueBandBackdropFilter(): string {
   return parts.join(" ") || "none";
 }
 
-/** マスター吹き出しラッパー — 下端余白（帯ごと上へ移動） */
+/** マスター吹き出しラッパー — 上端固定（2行目は下へだけ伸びる） */
 export function masterDialoguePanelWrapperStyle() {
   const t = MASTER_DIALOGUE_TYPOGRAPHY;
+  const oneLineBandRem = masterDialogueBandOneLineHeightRem();
   return {
-    paddingBottom: `${t.dialoguePanelBottomPaddingRem}rem`,
+    position: "absolute" as const,
+    left: 0,
+    right: 0,
+    top: `calc(100% - ${t.dialoguePanelBottomPaddingRem}rem - ${oneLineBandRem}rem)`,
   } as const;
 }
 

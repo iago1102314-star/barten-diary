@@ -44,7 +44,7 @@ function emptyLayout(maxIndentPx: number): MasterDialogueLayout {
   };
 }
 
-/** マスター吹き出し本文 — 1行目インデント詰め + タイプライター */
+/** マスター吹き出し本文 — 1行目固定インデント + タイプライター */
 export const MasterDialogueBody = forwardRef<
   MasterDialogueBodyHandle,
   MasterDialogueBodyProps
@@ -194,8 +194,6 @@ export const MasterDialogueBody = forwardRef<
     const layoutOptions = {
       textAreaWidthPx,
       maxIndentPx,
-      minIndentPx: t.bodyTextIndentMinPx,
-      indentStepPx: t.bodyTextIndentSqueezeStepPx,
       measure,
     };
 
@@ -206,10 +204,6 @@ export const MasterDialogueBody = forwardRef<
     contentWidthPx,
     paddingRightPx,
     maxIndentPx,
-    t.bodyTextIndentMinPx,
-    t.bodyTextIndentSqueezeStepPx,
-    t.bodyTextIndentRem,
-    t.bodyTextIndentExtraPx,
     t.bodyPaddingRightRem,
     t.bodyLetterSpacingEm,
   ]);
@@ -231,7 +225,6 @@ export const MasterDialogueBody = forwardRef<
       />
       <div
         style={{
-          minHeight: `${t.bodyMinHeightRem}rem`,
           paddingRight: `${t.bodyPaddingRightRem}rem`,
           paddingBottom: `${t.bodyPaddingBottomRem}rem`,
         }}

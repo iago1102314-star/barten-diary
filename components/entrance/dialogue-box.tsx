@@ -61,6 +61,7 @@ export function DialogueBox({
         style={{
           color: t.labelColor,
           fontSize: t.labelFontSize,
+          lineHeight: t.labelLineHeight,
           letterSpacing: `${t.labelLetterSpacingEm}em`,
           paddingLeft: horizontalPadding,
           paddingRight: horizontalPadding,

@@ -2,10 +2,13 @@
 
 import { motion } from "motion/react";
 import { barAudioEngine } from "@/lib/entrance/bar-audio-engine";
-import { PAST_BOTTLE_LINK_TUNING } from "@/lib/entrance/past-bottle-link-tuning";
 import { MOOD_VIGNETTE_TUNING } from "@/lib/entrance/mood-vignette-tuning";
 import { MoodConfirmButtonExit } from "@/components/entrance/mood-confirm-button-exit";
-import { MOOD_SELECT_LAYOUT_TUNING } from "@/lib/entrance/mood-select-layout-tuning";
+import {
+  resolveMoodSelectLayoutTuning,
+  resolvePastBottleLinkTuning,
+} from "@/lib/entrance/compact-height-viewport";
+import { useCompactHeightViewport } from "@/hooks/use-compact-height-viewport";
 import { MOOD_SELECT_EXIT_SCALED } from "@/lib/entrance/mood-select-exit-timing";
 import {
   forwardRef,
@@ -486,6 +489,8 @@ export function BarSeatMoodPicker({
   header,
   footer,
 }: BarSeatMoodPickerProps) {
+  const compactHeight = useCompactHeightViewport();
+  const moodLayoutTuning = resolveMoodSelectLayoutTuning(compactHeight);
   const [picked, setPicked] = useState<MoodOption | null>(null);
   const [isExiting, setIsExiting] = useState(false);
   const [poured, setPoured] = useState(false);
@@ -692,7 +697,9 @@ export function BarSeatMoodPicker({
             {header && (
               <div
                 className="pointer-events-none absolute inset-x-0 top-0 z-20 overflow-visible px-7"
-                style={{ paddingTop: `${PAST_BOTTLE_LINK_TUNING.headerTopPercent}%` }}
+                style={{
+                  paddingTop: `${resolvePastBottleLinkTuning(compactHeight).headerTopPercent}%`,
+                }}
               >
                 <div className="pointer-events-auto overflow-visible">{header}</div>
               </div>
@@ -706,11 +713,12 @@ export function BarSeatMoodPicker({
               )}
 
               <div
-                className="pointer-events-auto absolute inset-x-0 flex flex-col gap-3"
+                className="pointer-events-auto absolute inset-x-0 flex flex-col"
                 style={{
-                  bottom: MOOD_SELECT_LAYOUT_TUNING.optionBlockBottomPx,
-                  paddingLeft: MOOD_SELECT_LAYOUT_TUNING.horizontalPaddingPx,
-                  paddingRight: MOOD_SELECT_LAYOUT_TUNING.horizontalPaddingPx,
+                  bottom: moodLayoutTuning.optionBlockBottomPx,
+                  gap: moodLayoutTuning.optionStackGapPx,
+                  paddingLeft: moodLayoutTuning.horizontalPaddingPx,
+                  paddingRight: moodLayoutTuning.horizontalPaddingPx,
                 }}
               >
                 {options.map((option, i) => {
@@ -756,9 +764,9 @@ export function BarSeatMoodPicker({
                       : "pointer-events-auto"
                   }`}
                   style={{
-                    bottom: MOOD_SELECT_LAYOUT_TUNING.footerBottomPx,
-                    paddingLeft: MOOD_SELECT_LAYOUT_TUNING.horizontalPaddingPx,
-                    paddingRight: MOOD_SELECT_LAYOUT_TUNING.horizontalPaddingPx,
+                    bottom: moodLayoutTuning.footerBottomPx,
+                    paddingLeft: moodLayoutTuning.horizontalPaddingPx,
+                    paddingRight: moodLayoutTuning.horizontalPaddingPx,
                   }}
                   initial={false}
                   animate={

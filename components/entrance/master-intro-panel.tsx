@@ -121,7 +121,7 @@ export function MasterIntroPanel({
       type="button"
       onPointerDown={handlePointerDown}
       onClick={handleTap}
-      className="flex h-full w-full flex-col items-stretch justify-end text-left [-webkit-tap-highlight-color:transparent]"
+      className="relative flex h-full w-full flex-col items-stretch text-left [-webkit-tap-highlight-color:transparent]"
     >
       {bubbleVisible && (
         <div className="w-full self-stretch" style={masterDialoguePanelWrapperStyle()}>

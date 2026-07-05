@@ -123,6 +123,8 @@ import { getDrinkImagePath } from "@/lib/entrance/drink-image-path";
 import { pickPastBottleMasterLine } from "@/lib/entrance/past-bottle-master-line";
 import { MoodVignetteOverlay } from "@/components/entrance/mood-vignette-overlay";
 import { PAST_BOTTLE_LINK_TUNING } from "@/lib/entrance/past-bottle-link-tuning";
+import { resolvePastBottleLinkTuning } from "@/lib/entrance/compact-height-viewport";
+import { useCompactHeightViewport } from "@/hooks/use-compact-height-viewport";
 import { PAST_BOTTLE_PANEL_TUNING } from "@/lib/entrance/past-bottle-panel-tuning";
 import {
   MOOD_SELECT_ENTRANCE_DURATION_SCALE,
@@ -265,6 +267,8 @@ type EntranceFlowProps = {
 
 export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   perfRenderCount("EntranceFlow");
+  const compactHeight = useCompactHeightViewport();
+  const pastBottleLinkTuning = resolvePastBottleLinkTuning(compactHeight);
   const router = useRouter();
   const audio = useBarAudio();
   const [audioUnlocked, setAudioUnlocked] = useState(false);
@@ -2033,7 +2037,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
                 <div
                   className="pointer-events-none absolute inset-x-0 top-0 overflow-visible px-7"
                   style={{
-                    paddingTop: `${PAST_BOTTLE_LINK_TUNING.headerTopPercent}%`,
+                    paddingTop: `${pastBottleLinkTuning.headerTopPercent}%`,
                     zIndex: MOOD_VIGNETTE_TUNING.pastBottleLinkZIndex,
                   }}
                 >

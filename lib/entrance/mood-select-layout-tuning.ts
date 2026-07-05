@@ -3,6 +3,8 @@
  *
  * 感情選択ボタン（少し濃いめで等）は optionBlockBottomPx だけで決まる。
  * フッター（線・また今度にする）の変更では動かない。
+ *
+ * 高さ 699px 以下 — compact-height-viewport.ts の COMPACT_MOOD_SELECT_LAYOUT_OVERRIDES
  */
 export const MOOD_SELECT_LAYOUT_TUNING = {
   /** 画面下端から感情選択ボタン列の下端まで（px） */

@@ -1,6 +1,8 @@
 /**
  * 気分選択 —「過去のボトルから」リンクの見た目・位置。
  * 調整はこのファイルだけ触ればよい。
+ *
+ * 高さ 699px 以下 — compact-height-viewport.ts の COMPACT_PAST_BOTTLE_LINK_OVERRIDES
  */
 
 export const PAST_BOTTLE_LINK_TUNING = {

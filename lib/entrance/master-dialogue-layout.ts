@@ -1,19 +1,17 @@
 /**
- * マスター吹き出し — 1行目インデントを詰めてから2行目へ折り返す。
+ * マスター吹き出し — 1行目は固定インデント、溢れた分は2行目以降へ折り返す。
  */
 
 export type MasterDialogueLayoutOptions = {
   /** 本文が使える横幅（右 padding を除いた値） */
   textAreaWidthPx: number;
   maxIndentPx: number;
-  minIndentPx: number;
-  indentStepPx: number;
   measure: (text: string) => number;
 };
 
 export type MasterDialogueLayout = {
   lines: string[];
-  /** 1行目の padding-left（px） */
+  /** 1行目の padding-left（px）— 常に maxIndentPx */
   firstLineIndentPx: number;
   /** 2行目以降の padding-left（px） */
   bodyIndentPx: number;
@@ -77,31 +75,24 @@ function wrapWithIndent(
 }
 
 /**
- * 通常インデントで始め、1行に収まらないときだけ左へ詰め、
- * 縦線手前まで来たら2行目（通常インデント）へ。
+ * 1行目は maxIndentPx 固定。収まらない分は2行目以降へ（1行目の位置は動かさない）。
  */
 export function layoutMasterDialogueText(
   text: string,
   options: MasterDialogueLayoutOptions,
 ): MasterDialogueLayout {
-  const {
-    textAreaWidthPx,
-    maxIndentPx,
-    minIndentPx,
-    indentStepPx,
-    measure,
-  } = options;
-
+  const { textAreaWidthPx, maxIndentPx, measure } = options;
+  const firstLineIndentPx = maxIndentPx;
   const bodyIndentPx = maxIndentPx;
 
   if (!text) {
-    return { lines: [], firstLineIndentPx: maxIndentPx, bodyIndentPx };
+    return { lines: [], firstLineIndentPx, bodyIndentPx };
   }
 
   if (textAreaWidthPx <= 0 || measure("あ") <= 0) {
     return {
       lines: [text],
-      firstLineIndentPx: maxIndentPx,
+      firstLineIndentPx,
       bodyIndentPx,
     };
   }
@@ -109,33 +100,18 @@ export function layoutMasterDialogueText(
   if (fitsLine(text, textAreaWidthPx, maxIndentPx, measure)) {
     return {
       lines: [text],
-      firstLineIndentPx: maxIndentPx,
+      firstLineIndentPx,
       bodyIndentPx,
     };
   }
 
-  let line1 = "";
-  let indentPx = maxIndentPx;
-  let index = 0;
-
-  while (index < text.length) {
-    const next = line1 + text[index];
-
-    if (fitsLine(next, textAreaWidthPx, indentPx, measure)) {
-      line1 = next;
-      index += 1;
-      continue;
-    }
-
-    if (indentPx > minIndentPx) {
-      indentPx = Math.max(minIndentPx, indentPx - indentStepPx);
-      continue;
-    }
-
-    break;
-  }
-
-  const rest = text.slice(index);
+  const line1 = takeFirstLineChunk(
+    text,
+    textAreaWidthPx,
+    maxIndentPx,
+    measure,
+  );
+  const rest = text.slice(line1.length);
   const lines = line1 ? [line1] : [];
 
   if (rest) {
@@ -144,7 +120,7 @@ export function layoutMasterDialogueText(
 
   return {
     lines: lines.length > 0 ? lines : [text],
-    firstLineIndentPx: line1 ? indentPx : maxIndentPx,
+    firstLineIndentPx,
     bodyIndentPx,
   };
 }
@@ -158,38 +134,37 @@ export function layoutMasterDialogueShown(
   options: MasterDialogueLayoutOptions,
 ): MasterDialogueLayout {
   const { maxIndentPx } = options;
+  const firstLineIndentPx = maxIndentPx;
   const bodyIndentPx = maxIndentPx;
 
   if (!shown) {
-    return { lines: [], firstLineIndentPx: maxIndentPx, bodyIndentPx };
+    return { lines: [], firstLineIndentPx, bodyIndentPx };
   }
 
   const fullLayout = layoutMasterDialogueText(fullText, options);
 
   if (fullLayout.lines.length === 1) {
-    const shownLayout = layoutMasterDialogueText(shown, options);
     return {
       lines: [shown],
-      firstLineIndentPx: shownLayout.firstLineIndentPx,
-      bodyIndentPx: fullLayout.bodyIndentPx,
+      firstLineIndentPx,
+      bodyIndentPx,
     };
   }
 
   const breakAt = fullLayout.lines[0].length;
   const line1Shown = shown.slice(0, Math.min(shown.length, breakAt));
-  const line1Layout = layoutMasterDialogueText(line1Shown, options);
 
   if (shown.length <= breakAt) {
     return {
       lines: [line1Shown],
-      firstLineIndentPx: line1Layout.firstLineIndentPx,
-      bodyIndentPx: fullLayout.bodyIndentPx,
+      firstLineIndentPx,
+      bodyIndentPx,
     };
   }
 
   return {
     lines: [line1Shown, shown.slice(breakAt)],
-    firstLineIndentPx: line1Layout.firstLineIndentPx,
-    bodyIndentPx: fullLayout.bodyIndentPx,
+    firstLineIndentPx,
+    bodyIndentPx,
   };
 }
