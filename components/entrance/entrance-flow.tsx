@@ -105,6 +105,14 @@ import {
 import { logBehaviorEvent } from "@/lib/analytics/behavior-log";
 import { buildBehaviorEventMetadata } from "@/lib/analytics/behavior-event-metadata";
 import {
+  isPerfDebugEnabled,
+  perfLog,
+  perfMark,
+  perfMeasure,
+  perfMeasurePair,
+  perfRenderCount,
+} from "@/lib/entrance/perf-debug";
+import {
   hasSeenRecordingTutorial,
   markRecordingTutorialSeen,
 } from "@/lib/entrance/recording-tutorial-seen";
@@ -228,6 +236,7 @@ type EntranceFlowProps = {
 };
 
 export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
+  perfRenderCount("EntranceFlow");
   const router = useRouter();
   const audio = useBarAudio();
   const [audioUnlocked, setAudioUnlocked] = useState(false);
@@ -499,8 +508,29 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
 
   useEffect(() => {
     if (entranceState !== "masterOnBlack") return;
+    perfMark("master_black_mount");
     counterEntryPreloadRef.current = startCounterEntryScenePreload();
   }, [entranceState]);
+
+  useEffect(() => {
+    if (entranceState !== "moodSelect") return;
+    perfMark("mood_select_start");
+  }, [entranceState]);
+
+  useEffect(() => {
+    if (entranceState !== "drinkServed") return;
+    perfLog("mount context: drinkServed");
+  }, [entranceState]);
+
+  useEffect(() => {
+    if (entranceState !== "postRecordBlackout") return;
+    perfMark("post_record_blackout");
+  }, [entranceState]);
+
+  useEffect(() => {
+    if (!isPerfDebugEnabled()) return;
+    perfLog(`state: ${entranceState}`, { entryTransition, moodSelectExitActive });
+  }, [entranceState, entryTransition, moodSelectExitActive]);
 
   useEffect(() => {
     if (!lampGlowHomeEditing) return;
@@ -1039,11 +1069,18 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       resetNightRefs();
       resetEntryOutsideStarted();
       audio.stopOutside(false, BAR_AUDIO_TIMING.doorExitOutsideFadeMs);
+      perfMark("enter_counter_click");
+      perfMark("door_exit_start");
       setEntryTransition("doorExit");
     })();
   };
 
   const handleDoorExitComplete = () => {
+    perfMeasurePair(
+      "door_exit_to_master_black",
+      "door_exit_start",
+      "door_exit_complete",
+    );
     setEntryTransition("idle");
     setEntranceState("masterOnBlack");
     fadeTimerRef.current = setTimeout(() => {
@@ -1117,6 +1154,11 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const beginCounterReveal = useCallback(async () => {
     await waitForSceneRevealPreload(counterEntryPreloadRef.current);
     setEntranceState("counterReveal");
+    perfMeasurePair(
+      "master_black_to_counter_reveal",
+      "master_black_mount",
+      "counter_reveal_mount",
+    );
     void logBehaviorEvent("counter_enter");
   }, []);
 
@@ -1164,6 +1206,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   };
 
   const handleMoodSelect = (categoryId: DrinkCategoryId, drink: Drink) => {
+    perfMark("mood_selected");
     void logBehaviorEvent(
       "drink_selected",
       buildBehaviorEventMetadata({
@@ -1184,6 +1227,12 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
       setDrinkIntroFromGrass(true);
       setEntranceState("drinkServed");
       setDrinkEnteringReveal(true);
+      perfMark("drink_served_mount");
+      perfMeasure(
+        "mood_exit_to_drink_served",
+        "mood_exit_start",
+        "drink_served_mount",
+      );
     };
 
     const fallbackMs = MOOD_SELECT_EXIT_SCALED.grassFallbackDurationSec * 1000;
@@ -1670,6 +1719,25 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     !showRecordCounterScene &&
     entranceState !== "postRecordBlackout";
 
+  useEffect(() => {
+    if (!isPerfDebugEnabled()) return;
+    perfLog("mount layers", {
+      entranceState,
+      showCounter,
+      showLegacyCounterScene,
+      showRecordCounterScene,
+      hideCounterDuringMoodExit,
+      reduceCounterGpuLoad,
+    });
+  }, [
+    entranceState,
+    showCounter,
+    showLegacyCounterScene,
+    showRecordCounterScene,
+    hideCounterDuringMoodExit,
+    reduceCounterGpuLoad,
+  ]);
+
   return (
     <AnimatePresence mode="wait">
       <motion.div key={getSceneMotionKey(entranceState)} {...sceneExit}>
@@ -1925,6 +1993,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
                 <MoodSelectScene
                   skipPastBottleEntrance={moodSelectVisitedRef.current}
                   onSelectionStart={(option) => {
+                    perfMark("mood_exit_start");
                     setMoodSelectExitActive(true);
                     setMoodAwaitingGrass(true);
                     recordCounterPreloadRef.current = startRecordCounterScenePreload(

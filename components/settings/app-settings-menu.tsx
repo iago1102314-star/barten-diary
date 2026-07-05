@@ -34,6 +34,7 @@ import {
   SETTINGS_MENU_ITEMS_TUNING,
 } from "@/lib/settings/app-settings-menu-tuning";
 import { applyPerfMenuBlurCssOverrides } from "@/lib/layout/perf-feature-flags";
+import { perfRenderCount } from "@/lib/entrance/perf-debug";
 import { useSettingsMenuVisibility } from "@/lib/settings/settings-menu-visibility";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
@@ -98,6 +99,7 @@ function SettingsSubPanel({
 }
 
 export function AppSettingsMenu() {
+  perfRenderCount("AppSettingsMenu");
   const { visible } = useSettingsMenuVisibility();
   const { isLoggedIn } = useAuthUser();
   const [open, setOpen] = useState(false);

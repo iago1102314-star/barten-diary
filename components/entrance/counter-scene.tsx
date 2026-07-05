@@ -23,6 +23,7 @@ import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
 import { motion } from "motion/react";
 import Image from "next/image";
 import type { ReactNode } from "react";
+import { perfRenderCount } from "@/lib/entrance/perf-debug";
 
 type CounterSceneProps = {
   drinkImageSrc?: string | null;
@@ -265,6 +266,7 @@ export function CounterScene({
   hideMaster = false,
   backgroundOnly = false,
 }: CounterSceneProps) {
+  perfRenderCount("CounterScene");
   const accent = moodAccent(moodCategoryId ?? null);
   const masterAnim =
     masterMode === "talking" ? "master-breathe" : "master-breathe";

@@ -1,11 +1,16 @@
 -- β版運営ダッシュボード — View（SQL Editor で一度実行）
 --
 -- 毎朝: select * from public.daily_dashboard;
--- 日別推移: select * from public.daily_metrics_trend order by report_date desc;
+-- 日別推移: select * from public.daily_metrics_trend order by "日付" desc;
 --
 -- 対象は is_admin = false のみ。日付は Asia/Tokyo。
+--
+-- 列名変更時は create or replace 不可のため、先に drop する。
 
-create or replace view public.daily_dashboard as
+drop view if exists public.daily_metrics_trend;
+drop view if exists public.daily_dashboard;
+
+create view public.daily_dashboard as
 with today as (
   select (timezone('Asia/Tokyo', now()))::date as report_date
 ),
@@ -47,31 +52,31 @@ feedbacks as (
     and (f.created_at at time zone 'Asia/Tokyo')::date = t.report_date
 )
 select
-  t.report_date,
-  a.access_count,
-  e.record_start_count,
-  e.record_finish_count,
-  e.generate_success_count,
-  e.generate_failed_count,
-  e.login_success_count,
-  e.save_diary_count,
-  f.feedback_count,
-  round(e.avg_record_duration_sec::numeric, 1) as avg_record_duration_sec,
+  t.report_date as "日付",
+  a.access_count as "アクセス数",
+  e.record_start_count as "録音開始",
+  e.record_finish_count as "録音終了",
+  e.generate_success_count as "日記生成成功",
+  e.generate_failed_count as "日記生成失敗",
+  e.login_success_count as "Googleログイン",
+  e.save_diary_count as "保存数",
+  f.feedback_count as "フィードバック数",
+  round(e.avg_record_duration_sec::numeric, 1) as "平均録音時間（秒）",
   round(
   100.0 * e.generate_success_count
     / nullif(e.generate_success_count + e.generate_failed_count, 0),
   1
-  ) as generate_success_rate_pct,
+  ) as "生成成功率（%）",
   round(
   100.0 * e.save_diary_count / nullif(e.generate_success_count, 0),
   1
-  ) as save_rate_pct
+  ) as "保存率（%）"
 from today t
 cross join access a
 cross join events e
 cross join feedbacks f;
 
-create or replace view public.daily_metrics_trend as
+create view public.daily_metrics_trend as
 with day_series as (
   select series_day::date as report_date
   from generate_series(
@@ -120,17 +125,17 @@ feedbacks as (
   group by 1
 )
 select
-  d.report_date,
-  coalesce(a.access_count, 0) as access_count,
-  coalesce(e.record_start_count, 0) as record_start_count,
-  coalesce(e.record_finish_count, 0) as record_finish_count,
-  coalesce(e.generate_success_count, 0) as generate_success_count,
-  coalesce(e.generate_failed_count, 0) as generate_failed_count,
-  coalesce(e.login_success_count, 0) as login_success_count,
-  coalesce(e.save_diary_count, 0) as save_diary_count,
-  coalesce(f.feedback_count, 0) as feedback_count,
+  d.report_date as "日付",
+  coalesce(a.access_count, 0) as "アクセス数",
+  coalesce(e.record_start_count, 0) as "録音開始",
+  coalesce(e.record_finish_count, 0) as "録音終了",
+  coalesce(e.generate_success_count, 0) as "日記生成成功",
+  coalesce(e.generate_failed_count, 0) as "日記生成失敗",
+  coalesce(e.login_success_count, 0) as "Googleログイン",
+  coalesce(e.save_diary_count, 0) as "保存数",
+  coalesce(f.feedback_count, 0) as "フィードバック数",
   round(coalesce(e.avg_record_duration_sec, 0)::numeric, 1)
-    as avg_record_duration_sec,
+    as "平均録音時間（秒）",
   round(
     100.0 * coalesce(e.generate_success_count, 0)
       / nullif(
@@ -139,12 +144,12 @@ select
         0
       ),
     1
-  ) as generate_success_rate_pct,
+  ) as "生成成功率（%）",
   round(
     100.0 * coalesce(e.save_diary_count, 0)
       / nullif(coalesce(e.generate_success_count, 0), 0),
     1
-  ) as save_rate_pct
+  ) as "保存率（%）"
 from day_series d
 left join access a using (report_date)
 left join events e using (report_date)

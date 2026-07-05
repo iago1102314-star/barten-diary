@@ -170,11 +170,11 @@ from counts;
 -- 日別推移（View 利用・直近90日）
 -- ─────────────────────────────────────────────────────────────
 -- select
---   report_date,
---   access_count,
---   generate_success_count,
---   save_diary_count,
---   generate_success_rate_pct,
---   save_rate_pct
+--   "日付",
+--   "アクセス数",
+--   "日記生成成功",
+--   "保存数",
+--   "生成成功率（%）",
+--   "保存率（%）"
 -- from public.daily_metrics_trend
--- order by report_date desc;
+-- order by "日付" desc;

@@ -43,6 +43,7 @@ import {
 import { motion } from "motion/react";
 import Image from "next/image";
 import { useMemo, type ReactNode } from "react";
+import { perfRenderCount } from "@/lib/entrance/perf-debug";
 
 function GroupLightEnvelope({
   appear,
@@ -270,6 +271,7 @@ export function StartEntryAlleyLayer({
   showAtmosphere = true,
   syncGroupLightAppear = false,
 }: StartEntryAlleyLayerProps) {
+  perfRenderCount("StartEntryAlleyLayer");
   const showMarkers = SHOW_START_LAMP_GLOW_DEBUG_MARKERS;
   const showBokehOnlyMarkers = SHOW_START_BOKEH_ONLY_POSITION_MARKERS;
   const showGlow = SHOW_START_LAMP_GLOW_LIGHT || showMarkers;

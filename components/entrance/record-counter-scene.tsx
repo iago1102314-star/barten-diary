@@ -18,6 +18,7 @@ import {
 import type { DrinkId } from "@/lib/drinks/drink-catalog";
 import Image from "next/image";
 import type { ReactNode } from "react";
+import { perfRenderCount } from "@/lib/entrance/perf-debug";
 
 type RecordCounterSceneProps = {
   drinkId?: DrinkId | null;
@@ -90,6 +91,7 @@ export function RecordCounterScene({
   showDrink = true,
   showNoteScrim = false,
 }: RecordCounterSceneProps) {
+  perfRenderCount("RecordCounterScene");
   const key = placementKey ?? resolveRecordDrinkPlacementKey(drinkId);
   const drinkPlacement = getRecordDrinkPlacement(key);
   const drinkSrc = getRecordDrinkImagePath(drinkId);

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { isPerfGrainEnabled } from "@/lib/layout/perf-feature-flags";
+import { perfRenderCount } from "@/lib/entrance/perf-debug";
 
 type SceneFrameProps = {
   children: ReactNode;
@@ -21,6 +22,7 @@ export function SceneFrame({
   grain,
   onPointerDown,
 }: SceneFrameProps) {
+  perfRenderCount("SceneFrame");
   const grainOn = grain !== false && atmosphere && isPerfGrainEnabled();
   const atmosphereLayers = [
     grainOn ? "grain" : "",

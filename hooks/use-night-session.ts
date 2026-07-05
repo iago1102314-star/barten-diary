@@ -2,6 +2,11 @@
 
 import { logBehaviorEvent } from "@/lib/analytics/behavior-log";
 import { buildBehaviorEventMetadata } from "@/lib/analytics/behavior-event-metadata";
+import {
+  perfMark,
+  perfMeasure,
+  perfMeasurePair,
+} from "@/lib/entrance/perf-debug";
 import { checkGenerationReadiness } from "@/lib/ai/check-generation-readiness";
 import { useGenerateDiary } from "@/hooks/use-generate-diary";
 import { useRecorder } from "@/hooks/use-recorder";
@@ -338,6 +343,7 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
         drinkId: selectedDrinkId,
       }),
     );
+    perfMark("recording_start");
     return true;
   }, [
     recorder,
@@ -361,6 +367,8 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
           duration: durationSec,
         }),
       );
+      perfMark("recording_end");
+      perfMeasure("recording_duration", "recording_start", "recording_end");
       recorder.stop();
       return;
     }
@@ -540,6 +548,8 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
         mimeType,
       });
 
+      perfMark("diary_generation_start");
+
       const result = await runNightGenerationPipeline({
         blob,
         mimeType,
@@ -568,6 +578,12 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
       });
 
       if (!result.ok) {
+        perfMark("diary_generation_end");
+        perfMeasure(
+          "diary_generation",
+          "diary_generation_start",
+          "diary_generation_end",
+        );
         if (result.dailyLimitReached) {
           logGenerateFailed(result.reason);
           registerDailyGenerationLimit();
@@ -600,6 +616,12 @@ export function useNightSession(options: UseNightSessionOptions = {}) {
           categoryId: selectedCategoryId,
           drinkId: selectedDrinkId,
         }),
+      );
+      perfMark("diary_generation_end");
+      perfMeasure(
+        "diary_generation",
+        "diary_generation_start",
+        "diary_generation_end",
       );
 
       logRecordingPipeline("night pipeline: complete", {
