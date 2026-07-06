@@ -145,7 +145,10 @@ import { parseBottleTag } from "@/lib/bottle-tag/parse-bottle-tag";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import type { DrinkCategoryId } from "@/lib/drinks/drink-catalog";
 import { POST_RECORD_EXIT_TUNING } from "@/lib/entrance/post-record-exit-tuning";
-import { RECORD_COUNTER_BOTTOM_TUNING } from "@/lib/entrance/drink-name-reveal-tuning";
+import {
+  DRINK_NAME_REVEAL_TIMING,
+  RECORD_COUNTER_BOTTOM_TUNING,
+} from "@/lib/entrance/drink-name-reveal-tuning";
 import { RECORD_COUNTER_SHOW_DRINK } from "@/lib/entrance/record-counter-scene-tuning";
 import {
   resolveMoodOptionDrinkId,
@@ -321,6 +324,9 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
   const [drinkIntroFromGrass, setDrinkIntroFromGrass] = useState(false);
   const [recordDrinkIntroPhase, setRecordDrinkIntroPhase] =
     useState<RecordDrinkIntroPhase>("note");
+  const recordDrinkNoteAutoAdvanceTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const [recordBottomTextPhase, setRecordBottomTextPhase] =
     useState<RecordBottomTextPhase>("sip");
   const [showRecordingTutorial, setShowRecordingTutorial] = useState<
@@ -669,6 +675,10 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
         ref.current = null;
       }
     }
+    if (recordDrinkNoteAutoAdvanceTimerRef.current !== null) {
+      clearTimeout(recordDrinkNoteAutoAdvanceTimerRef.current);
+      recordDrinkNoteAutoAdvanceTimerRef.current = null;
+    }
   }, []);
 
   const resetNightRefs = useCallback(() => {
@@ -904,13 +914,42 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     setRecordDrinkIntroPhase("note-exit");
   }, [drinkEnteringReveal, drinkIntroSkipToSip, entranceState]);
 
-  const handleRecordDrinkNoteExitComplete = useCallback(() => {
-    setRecordDrinkIntroPhase("sip-button");
+  const clearRecordDrinkNoteAutoAdvanceTimer = useCallback(() => {
+    if (recordDrinkNoteAutoAdvanceTimerRef.current !== null) {
+      clearTimeout(recordDrinkNoteAutoAdvanceTimerRef.current);
+      recordDrinkNoteAutoAdvanceTimerRef.current = null;
+    }
   }, []);
 
+  const handleRecordDrinkNoteExitComplete = useCallback(() => {
+    clearRecordDrinkNoteAutoAdvanceTimer();
+    setRecordDrinkIntroPhase("sip-button");
+  }, [clearRecordDrinkNoteAutoAdvanceTimer]);
+
   const handleRequestSipButton = useCallback(() => {
+    clearRecordDrinkNoteAutoAdvanceTimer();
     setRecordDrinkIntroPhase("note-exit");
-  }, []);
+  }, [clearRecordDrinkNoteAutoAdvanceTimer]);
+
+  const handleRecordDrinkNoteEnterComplete = useCallback(() => {
+    clearRecordDrinkNoteAutoAdvanceTimer();
+    recordDrinkNoteAutoAdvanceTimerRef.current = setTimeout(() => {
+      recordDrinkNoteAutoAdvanceTimerRef.current = null;
+      setRecordDrinkIntroPhase((phase) =>
+        phase === "note" ? "note-exit" : phase,
+      );
+    }, DRINK_NAME_REVEAL_TIMING.autoAdvanceAfterEnterMs);
+  }, [clearRecordDrinkNoteAutoAdvanceTimer]);
+
+  useEffect(() => {
+    if (entranceState !== "drinkServed" || recordDrinkIntroPhase !== "note") {
+      clearRecordDrinkNoteAutoAdvanceTimer();
+    }
+  }, [
+    clearRecordDrinkNoteAutoAdvanceTimer,
+    entranceState,
+    recordDrinkIntroPhase,
+  ]);
 
   useEffect(() => () => clearTimers(), [clearTimers]);
 
@@ -1808,7 +1847,8 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
     RECORD_COUNTER_SHOW_DRINK &&
     Boolean(pickedDrink) &&
     ((entranceState === "drinkServed" &&
-      recordDrinkIntroPhase === "sip-button" &&
+      (recordDrinkIntroPhase === "sip-button" ||
+        recordDrinkIntroPhase === "note-exit") &&
       !drinkEnteringReveal) ||
       (entranceState === "recording" && !session.listenFailureVisible));
 
@@ -1902,6 +1942,7 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
               <DrinkRecordNote
                 drink={pickedDrink}
                 phase={recordDrinkIntroPhase === "note-exit" ? "exit" : "enter"}
+                onEnterComplete={handleRecordDrinkNoteEnterComplete}
                 onExitComplete={handleRecordDrinkNoteExitComplete}
                 timelineOrigin={drinkRevealTimelineOrigin}
                 skipped={drinkRevealSkipped}
@@ -1934,7 +1975,9 @@ export function EntranceFlow({ gateSnapshot }: EntranceFlowProps) {
                   }
                   reveal={
                     entranceState === "drinkServed" &&
-                    recordBottomTextPhase === "sip"
+                    recordBottomTextPhase === "sip" &&
+                    (recordDrinkIntroPhase === "note-exit" ||
+                      recordDrinkIntroPhase === "sip-button")
                   }
                 />
               </>

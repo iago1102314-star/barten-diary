@@ -1,13 +1,14 @@
 "use client";
 
+import { useCompactHeightViewport } from "@/hooks/use-compact-height-viewport";
 import styles from "@/components/entrance/drink-record-note.module.css";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import {
   DRINK_NAME_REVEAL_COLOR,
   DRINK_NAME_REVEAL_EASE,
   DRINK_NAME_REVEAL_TIMING,
-  DRINK_NOTE_REVEAL_LAYOUT,
-  RECORD_COUNTER_BOTTOM_TUNING,
+  resolveDrinkNoteRevealLayout,
+  resolveRecordCounterBottomTuning,
   drinkNameRevealEnterDelaySec,
   drinkNameRevealEnterDurationSec,
   drinkNameRevealNoteDelayMs,
@@ -21,6 +22,7 @@ export type DrinkRecordNotePhase = "enter" | "exit";
 type DrinkRecordNoteProps = {
   drink: Pick<Drink, "note">;
   phase?: DrinkRecordNotePhase;
+  onEnterComplete?: () => void;
   onExitComplete?: () => void;
   timelineOrigin?: DrinkNameRevealTimelineOrigin;
   skipped?: boolean;
@@ -30,30 +32,35 @@ type DrinkRecordNoteProps = {
 export function DrinkRecordNote({
   drink,
   phase = "enter",
+  onEnterComplete,
   onExitComplete,
   timelineOrigin = "reveal-complete",
   skipped = false,
 }: DrinkRecordNoteProps) {
   const prefersReducedMotion = useReducedMotion();
+  const compactHeight = useCompactHeightViewport();
+  const noteLayout = resolveDrinkNoteRevealLayout(compactHeight);
+  const bottomTuning = resolveRecordCounterBottomTuning(compactHeight);
   const noteText = drink.note?.trim() ?? "";
   const instant = prefersReducedMotion === true || skipped;
   const exiting = phase === "exit";
+  const enterReportedRef = useRef(false);
   const exitReportedRef = useRef(false);
 
   const contentStyle = {
-    bottom: `${RECORD_COUNTER_BOTTOM_TUNING.bottomPaddingPercent}%`,
-    transform: `translateY(${DRINK_NOTE_REVEAL_LAYOUT.offsetYRem}rem)`,
-    paddingInline: `${DRINK_NOTE_REVEAL_LAYOUT.horizontalPaddingRem}rem`,
+    bottom: `${bottomTuning.bottomPaddingPercent}%`,
+    transform: `translateY(${noteLayout.offsetYRem}rem)`,
+    paddingInline: `${noteLayout.horizontalPaddingRem}rem`,
   } as CSSProperties;
 
   const textStyle = {
     color: DRINK_NAME_REVEAL_COLOR.note,
-    opacity: DRINK_NOTE_REVEAL_LAYOUT.noteOpacity,
-    fontSize: `${DRINK_NOTE_REVEAL_LAYOUT.sizeRem}rem`,
-    lineHeight: DRINK_NOTE_REVEAL_LAYOUT.lineHeight,
-    letterSpacing: `${DRINK_NOTE_REVEAL_LAYOUT.letterSpacingEm}em`,
-    maxWidth: `${DRINK_NOTE_REVEAL_LAYOUT.maxWidthRem}rem`,
-    textShadow: DRINK_NOTE_REVEAL_LAYOUT.textShadow,
+    opacity: noteLayout.noteOpacity,
+    fontSize: `${noteLayout.sizeRem}rem`,
+    lineHeight: noteLayout.lineHeight,
+    letterSpacing: `${noteLayout.letterSpacingEm}em`,
+    maxWidth: `${noteLayout.maxWidthRem}rem`,
+    textShadow: noteLayout.textShadow,
   } as CSSProperties;
 
   const noteDelaySec = instant
@@ -86,8 +93,15 @@ export function DrinkRecordNote({
       };
 
   useEffect(() => {
+    enterReportedRef.current = false;
     exitReportedRef.current = false;
   }, [phase, noteText]);
+
+  useEffect(() => {
+    if (!instant || exiting || !noteText || enterReportedRef.current) return;
+    enterReportedRef.current = true;
+    onEnterComplete?.();
+  }, [exiting, instant, noteText, onEnterComplete]);
 
   useEffect(() => {
     if (!exiting || instant) {
@@ -118,9 +132,16 @@ export function DrinkRecordNote({
           animate={{ opacity: exiting ? 0 : 1 }}
           transition={exiting ? exitTransition : enterTransition}
           onAnimationComplete={() => {
-            if (!exiting || exitReportedRef.current) return;
-            exitReportedRef.current = true;
-            onExitComplete?.();
+            if (exiting) {
+              if (exitReportedRef.current) return;
+              exitReportedRef.current = true;
+              onExitComplete?.();
+              return;
+            }
+
+            if (enterReportedRef.current) return;
+            enterReportedRef.current = true;
+            onEnterComplete?.();
           }}
         >
           {noteText}

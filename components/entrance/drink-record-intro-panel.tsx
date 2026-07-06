@@ -10,7 +10,7 @@ type DrinkRecordIntroPanelProps = {
 };
 
 /**
- * 明転後 — 画面タップで note 退場（下部アクションは RecordBottomAction）
+ * 明転後 — 画面タップで note 退場。表示完了から一定時間後も自動退場。
  */
 export function DrinkRecordIntroPanel({
   introPhase,

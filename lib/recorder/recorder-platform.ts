@@ -1,3 +1,8 @@
+import {
+  logMicStreamDiagnostic,
+  logMicStreamState,
+} from "@/lib/recorder/mic-stream-diagnostic";
+
 /** iOS / iPadOS — モバイル WebKit */
 export function isAppleMediaRecorder(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -132,10 +137,26 @@ async function requestMicStream(): Promise<MediaStream> {
   };
 
   try {
-    return await navigator.mediaDevices.getUserMedia(withProcessing);
+    logMicStreamDiagnostic("getUserMedia: requesting", {
+      constraints: withProcessing,
+    });
+    const stream = await navigator.mediaDevices.getUserMedia(withProcessing);
+    logMicStreamState("getUserMedia: acquired (with processing)", stream, null, {
+      constraintsUsed: withProcessing,
+    });
+    return stream;
   } catch (error) {
     if (error instanceof DOMException && error.name === "OverconstrainedError") {
-      return await navigator.mediaDevices.getUserMedia({ audio: true });
+      const fallbackConstraints: MediaStreamConstraints = { audio: true };
+      logMicStreamDiagnostic("getUserMedia: OverconstrainedError, retry plain audio", {
+        firstError: error.message,
+        fallbackConstraints,
+      });
+      const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+      logMicStreamState("getUserMedia: acquired (plain audio fallback)", stream, null, {
+        constraintsUsed: fallbackConstraints,
+      });
+      return stream;
     }
     throw error;
   }

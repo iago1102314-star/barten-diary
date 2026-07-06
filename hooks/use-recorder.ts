@@ -18,6 +18,14 @@ import {
   resolveRecordedMimeType,
 } from "@/lib/recorder/recorder-platform";
 import { captureDebugRecordingBlob } from "@/lib/recorder/debug-recording-blob";
+import {
+  attachMicTrackDiagnosticListeners,
+  clearMicStreamDebugHook,
+  isDesktopSafariUserAgent,
+  logMicStreamState,
+  registerMicStreamDebugHook,
+  schedulePostStartMicStreamDiagnostics,
+} from "@/lib/recorder/mic-stream-diagnostic";
 import { logRecordingPipeline, logRecordingPipelineError } from "@/lib/recorder/recording-pipeline-log";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -109,6 +117,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
   const finalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fallbackMimeTypeRef = useRef<string | undefined>(undefined);
   const stopRecordingRef = useRef<() => void>(() => {});
+  const loggedFirstChunkRef = useRef(false);
 
   const getActiveElapsedMs = useCallback(() => {
     return Math.min(
@@ -201,6 +210,8 @@ export function useRecorder(options: UseRecorderOptions = {}) {
     pauseStartedAtRef.current = null;
     remainingMaxDurationMsRef.current = MAX_DURATION_MS;
     fallbackMimeTypeRef.current = undefined;
+    loggedFirstChunkRef.current = false;
+    clearMicStreamDebugHook();
 
     setState({
       status: "idle",
@@ -318,22 +329,18 @@ export function useRecorder(options: UseRecorderOptions = {}) {
         audio: getBarAudioDiagnostics(),
         isApple: isAppleMediaRecorder(),
         isSafariMediaRecorder: isSafariMediaRecorder(),
+        isDesktopSafari: isDesktopSafariUserAgent(),
         supportedMimeType: getSupportedRecorderMimeType(),
         timesliceMs,
         finalizeDelayMs: getRecorderFinalizeDelayMs(),
       });
       const stream = await acquireMicStream();
       mediaStreamRef.current = stream;
+      attachMicTrackDiagnosticListeners(stream);
+      registerMicStreamDebugHook(() => mediaStreamRef.current);
 
-      logRecordingPipeline("recorder.start: after getUserMedia", {
+      logMicStreamState("after acquireMicStream", stream, null, {
         audio: getBarAudioDiagnostics(),
-        tracks: stream.getAudioTracks().map((track) => ({
-          label: track.label,
-          enabled: track.enabled,
-          muted: track.muted,
-          readyState: track.readyState,
-          settings: track.getSettings?.() ?? null,
-        })),
       });
 
       updateRecordingPipelineDiagnostic({
@@ -350,11 +357,17 @@ export function useRecorder(options: UseRecorderOptions = {}) {
       chunksRef.current = [];
       stopRequestedRef.current = false;
       finalizeStartedRef.current = false;
+      loggedFirstChunkRef.current = false;
       totalPausedMsRef.current = 0;
       pauseStartedAtRef.current = null;
       remainingMaxDurationMsRef.current = MAX_DURATION_MS;
 
       const supportsPause = canPauseRecorder(recorder);
+
+      logMicStreamState("MediaRecorder constructed", stream, recorder, {
+        selectedMimeType: mimeType ?? null,
+        supportedMimeType: getSupportedRecorderMimeType() ?? null,
+      });
 
       const finalizeRecording = () => {
         if (finalizeStartedRef.current) return;
@@ -496,6 +509,16 @@ export function useRecorder(options: UseRecorderOptions = {}) {
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
         }
+
+        if (!loggedFirstChunkRef.current) {
+          loggedFirstChunkRef.current = true;
+          logMicStreamState("first ondataavailable", stream, recorder, {
+            chunkSize: event.data.size,
+            chunkType: event.data.type,
+            chunkCount: chunksRef.current.length,
+          });
+        }
+
         logRecordingPipeline("recorder.ondataavailable", {
           chunkSize: event.data.size,
           chunkType: event.data.type,
@@ -602,6 +625,8 @@ export function useRecorder(options: UseRecorderOptions = {}) {
 
         stopRequestedRef.current = true;
 
+        logMicStreamState("before MediaRecorder.stop", mediaStreamRef.current, activeRecorder);
+
         if (
           isSafariMediaRecorder() &&
           typeof activeRecorder.requestData === "function"
@@ -618,7 +643,18 @@ export function useRecorder(options: UseRecorderOptions = {}) {
 
       startTimeRef.current = Date.now();
       recorder.start(timesliceMs);
+
+      logMicStreamState("MediaRecorder.start immediate", stream, recorder);
+
       onRecordingStartedRef.current?.();
+
+      logMicStreamState("after onRecordingStarted (BGM/SE silenced)", stream, recorder, {
+        audio: getBarAudioDiagnostics(),
+      });
+
+      schedulePostStartMicStreamDiagnostics(stream, recorder, () =>
+        mediaStreamRef.current === stream,
+      );
 
       logRecordingPipeline("recorder.start: MediaRecorder started", {
         state: recorder.state,

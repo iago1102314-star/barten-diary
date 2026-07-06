@@ -1,5 +1,9 @@
 import type { DrinkId } from "@/lib/drinks/drink-catalog";
 import { resolveVisualDrinkId } from "@/lib/drinks/legacy-drink-map";
+import {
+  COMPACT_RECORD_DRINK_PLACEMENT_OVERRIDES,
+  COMPACT_RECORD_DRINK_SHARED_OVERRIDES,
+} from "@/lib/entrance/compact-height-viewport";
 
 /**
  * 録音シーン — 見た目調整（このファイルだけ触れば OK）
@@ -134,10 +138,16 @@ export const RECORD_DRINK_PLACEMENT_BY_KEY = {
   },
 } as const satisfies Record<RecordDrinkPlacementKey, RecordDrinkPlacementOverride>;
 
+type RecordDrinkSharedTuning = Pick<
+  RecordSceneDrinkTuning,
+  "zoom" | "aspectRatio" | "objectFit" | "objectPosition"
+>;
+
 function buildRecordDrinkTuning(
   override: RecordDrinkPlacementOverride,
+  shared: RecordDrinkSharedTuning = RECORD_DRINK_SHARED,
 ): RecordSceneDrinkTuning {
-  return { ...RECORD_DRINK_SHARED, ...override };
+  return { ...shared, ...override };
 }
 
 const DRINK_BY_KEY: Record<RecordDrinkPlacementKey, RecordSceneDrinkTuning> = {
@@ -241,4 +251,32 @@ export function getRecordDrinkPlacement(
   key: RecordDrinkPlacementKey,
 ): RecordSceneDrinkTuning {
   return DRINK_BY_KEY[key];
+}
+
+export function resolveRecordDrinkPlacement(
+  key: RecordDrinkPlacementKey,
+  compact = false,
+): RecordSceneDrinkTuning {
+  if (!compact) {
+    return getRecordDrinkPlacement(key);
+  }
+
+  const shared: RecordDrinkSharedTuning = {
+    ...RECORD_DRINK_SHARED,
+    ...COMPACT_RECORD_DRINK_SHARED_OVERRIDES,
+  };
+  const compactPlacement =
+    key in COMPACT_RECORD_DRINK_PLACEMENT_OVERRIDES
+      ? COMPACT_RECORD_DRINK_PLACEMENT_OVERRIDES[
+          key as keyof typeof COMPACT_RECORD_DRINK_PLACEMENT_OVERRIDES
+        ]
+      : undefined;
+
+  return buildRecordDrinkTuning(
+    {
+      ...RECORD_DRINK_PLACEMENT_BY_KEY[key],
+      ...compactPlacement,
+    },
+    shared,
+  );
 }

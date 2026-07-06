@@ -3,14 +3,15 @@
 import { CounterBackDarkenOverlay } from "@/components/entrance/counter-back-darken-overlay";
 import { RecordDrinkNoteScrim } from "@/components/entrance/record-drink-note-scrim";
 import { DrinkOnRecordCounter } from "@/components/entrance/drink-on-record-counter";
+import { useCompactHeightViewport } from "@/hooks/use-compact-height-viewport";
 import { ENTRANCE_ASSETS } from "@/lib/entrance/asset-paths";
 import { getRecordDrinkImagePath } from "@/lib/entrance/record-drink-image";
 import {
-  getRecordDrinkPlacement,
   RECORD_COUNTER_SCENE_TUNING,
   RECORD_COUNTER_SHOW_DRINK,
   recordSceneImagePanStyle,
   recordSceneImageZoomFrameStyle,
+  resolveRecordDrinkPlacement,
   resolveRecordDrinkPlacementKey,
   type RecordDrinkPlacementKey,
   type RecordSceneImageTuning,
@@ -92,8 +93,9 @@ export function RecordCounterScene({
   showNoteScrim = false,
 }: RecordCounterSceneProps) {
   perfRenderCount("RecordCounterScene");
+  const compactHeight = useCompactHeightViewport();
   const key = placementKey ?? resolveRecordDrinkPlacementKey(drinkId);
-  const drinkPlacement = getRecordDrinkPlacement(key);
+  const drinkPlacement = resolveRecordDrinkPlacement(key, compactHeight);
   const drinkSrc = getRecordDrinkImagePath(drinkId);
 
   return (

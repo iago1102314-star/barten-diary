@@ -1,5 +1,10 @@
 import type { BetaDrinkId } from "@/lib/drinks/drink-catalog";
 import { resolveVisualDrinkId } from "@/lib/drinks/legacy-drink-map";
+import {
+  COMPACT_DRINK_NAME_REVEAL_OVERRIDES,
+  COMPACT_DRINK_NOTE_REVEAL_OVERRIDES,
+  COMPACT_RECORD_COUNTER_BOTTOM_OVERRIDES,
+} from "@/lib/entrance/compact-height-viewport";
 import { BAR_AUDIO_TIMING } from "@/lib/entrance/audio-levels";
 
 /**
@@ -71,8 +76,10 @@ export const DRINK_NAME_REVEAL_TIMING = {
   underlineDurationMs: 450,
   noteDelayMs: 180,
   noteDurationMs: 400,
-  /** タップ後の note 退場（入場より短く） */
-  noteExitDurationMs: 220,
+  /** note 退場 — 口をつける入場と同長でクロスフェード */
+  noteExitDurationMs: 600,
+  /** note 表示完了後 — 自動で「口をつける」へ（ms）。タップで即進行 */
+  autoAdvanceAfterEnterMs: 2000,
 } as const;
 
 /**
@@ -230,9 +237,9 @@ export const RECORD_BOTTOM_ACTION_TUNING = {
   finishEnterDelayMs: 560,
   /** 「今夜はここまで」フェードイン */
   finishEnterMs: 800,
-  /** 初回出現 — note 退場直後 */
+  /** 初回出現 — note 退場と同時にクロスフェード */
   revealDelaySec: 0,
-  revealDurationSec: 0.2,
+  revealDurationSec: 0.6,
   /** 上下ライン — 同一形状 */
   line: {
     maxWidthRem: 18,
@@ -334,12 +341,40 @@ export function getDrinkNameRevealDividerMetrics() {
   };
 }
 
-export function resolveDrinkNameRevealLayout(drinkId: string | null | undefined) {
+export function resolveDrinkNameRevealLayout(
+  drinkId: string | null | undefined,
+  compact = false,
+) {
   const visualId = resolveVisualDrinkId(drinkId);
-  const override =
+  const drinkOverride =
     visualId != null && visualId in DRINK_NAME_REVEAL_BY_DRINK
       ? DRINK_NAME_REVEAL_BY_DRINK[visualId as BetaDrinkId]
       : {};
 
-  return { ...DRINK_NAME_REVEAL_LAYOUT, ...override };
+  const base = { ...DRINK_NAME_REVEAL_LAYOUT, ...drinkOverride };
+
+  if (!compact) return base;
+
+  return {
+    ...base,
+    ...COMPACT_DRINK_NAME_REVEAL_OVERRIDES,
+  };
+}
+
+export function resolveDrinkNoteRevealLayout(compact = false) {
+  if (!compact) return DRINK_NOTE_REVEAL_LAYOUT;
+
+  return {
+    ...DRINK_NOTE_REVEAL_LAYOUT,
+    ...COMPACT_DRINK_NOTE_REVEAL_OVERRIDES,
+  };
+}
+
+export function resolveRecordCounterBottomTuning(compact = false) {
+  if (!compact) return RECORD_COUNTER_BOTTOM_TUNING;
+
+  return {
+    ...RECORD_COUNTER_BOTTOM_TUNING,
+    ...COMPACT_RECORD_COUNTER_BOTTOM_OVERRIDES,
+  };
 }

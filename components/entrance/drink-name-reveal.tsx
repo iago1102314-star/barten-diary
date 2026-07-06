@@ -1,6 +1,7 @@
 "use client";
 
 import { DrinkNameRevealDivider } from "@/components/entrance/drink-name-reveal-divider";
+import { useCompactHeightViewport } from "@/hooks/use-compact-height-viewport";
 import styles from "@/components/entrance/drink-name-reveal.module.css";
 import type { Drink } from "@/lib/drinks/drink-catalog";
 import { resolveDrinkNameRevealCopy } from "@/lib/drinks/drink-name-reveal-copy";
@@ -38,10 +39,11 @@ export function DrinkNameReveal({
   skipped = false,
 }: DrinkNameRevealProps) {
   const prefersReducedMotion = useReducedMotion();
+  const compactHeight = useCompactHeightViewport();
   const copy = useMemo(() => resolveDrinkNameRevealCopy(drink), [drink]);
   const layout = useMemo(
-    () => resolveDrinkNameRevealLayout(drink.id),
-    [drink.id],
+    () => resolveDrinkNameRevealLayout(drink.id, compactHeight),
+    [drink.id, compactHeight],
   );
   const instant = prefersReducedMotion === true || skipped;
   const showKatakanaBlock = Boolean(copy.katakanaName);

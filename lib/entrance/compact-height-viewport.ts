@@ -29,6 +29,67 @@ export const COMPACT_PAST_BOTTLE_LINK_OVERRIDES = {
   },
 } as const;
 
+/**
+ * 録音前お酒シーン — 酒名タイトル（compact height のみ）。
+ * 通常値は DRINK_NAME_REVEAL_LAYOUT。
+ */
+export const COMPACT_DRINK_NAME_REVEAL_OVERRIDES = {
+  topPercent: 11,
+  englishSizeClamp: "clamp(2.45rem, 6.2vw, 2.05rem)",
+  englishToLineGapRem: 0.3,
+  lineToKatakanaGapRem: 0.26,
+  katakanaSizeRem: 0.88,
+  katakanaLineHeight: 1.35,
+} as const;
+
+/**
+ * 録音前お酒シーン — 説明 note（compact height のみ）。
+ * 通常値は DRINK_NOTE_REVEAL_LAYOUT。
+ */
+export const COMPACT_DRINK_NOTE_REVEAL_OVERRIDES = {
+  sizeRem: 1.26,
+  lineHeight: 1.42,
+  letterSpacingEm: 0.05,
+  offsetYRem: 0.4,
+  maxWidthRem: 36,
+} as const;
+
+/**
+ * 録音前お酒シーン — note 下端（compact height のみ）。
+ * 通常値は RECORD_COUNTER_BOTTOM_TUNING。
+ */
+export const COMPACT_RECORD_COUNTER_BOTTOM_OVERRIDES = {
+  bottomPaddingPercent: 7,
+} as const;
+
+/**
+ * 録音前お酒シーン — グラス共通 zoom（compact height のみ）。
+ * 通常値は RECORD_DRINK_SHARED。
+ */
+export const COMPACT_RECORD_DRINK_SHARED_OVERRIDES = {
+  zoom: 3,
+} as const;
+
+/**
+ * 録音前お酒シーン — グラス配置（compact height のみ・必要な酒だけ）。
+ * 通常値は RECORD_DRINK_PLACEMENT_BY_KEY。
+ */
+export const COMPACT_RECORD_DRINK_PLACEMENT_OVERRIDES = {
+  bellini: {
+    sizePercent: 27,
+    yPercent: 33,
+  },
+  "old-fashioned": {
+    sizePercent: 15,
+    yPercent: 51,
+  },
+} as const satisfies Partial<
+  Record<
+    "bellini" | "old-fashioned" | "koshu" | "hot-cocoa",
+    { sizePercent?: number; yPercent?: number }
+  >
+>;
+
 export type ResolvedMoodSelectLayoutTuning = {
   optionBlockBottomPx: number;
   footerBottomPx: number;

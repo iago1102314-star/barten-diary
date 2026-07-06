@@ -60,13 +60,28 @@ function readSnapshot(): RecordingPipelineDiagnosticSnapshot {
   return window.__RECORDING_PIPELINE_DIAGNOSTIC__;
 }
 
+function notifyDiagnosticListeners(): void {
+  if (!isRecordingDiagnosticEnabled()) return;
+
+  const notify = () => {
+    for (const listener of getListenerSet()) {
+      listener();
+    }
+  };
+
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(notify);
+    return;
+  }
+
+  setTimeout(notify, 0);
+}
+
 function writeSnapshot(next: RecordingPipelineDiagnosticSnapshot): void {
   if (typeof window !== "undefined") {
     window.__RECORDING_PIPELINE_DIAGNOSTIC__ = next;
   }
-  for (const listener of getListenerSet()) {
-    listener();
-  }
+  notifyDiagnosticListeners();
 }
 
 export function getRecordingPipelineDiagnostic(): RecordingPipelineDiagnosticSnapshot {
@@ -87,10 +102,6 @@ export function resetRecordingPipelineDiagnostic(): void {
 export function updateRecordingPipelineDiagnostic(
   patch: Partial<Omit<RecordingPipelineDiagnosticSnapshot, "updatedAt">>,
 ): void {
-  if (typeof window !== "undefined") {
-    writeSnapshot({ ...readSnapshot(), ...patch, updatedAt: Date.now() });
-    return;
-  }
   if (!isRecordingDiagnosticEnabled()) return;
   writeSnapshot({ ...readSnapshot(), ...patch, updatedAt: Date.now() });
 }
