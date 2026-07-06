@@ -14,9 +14,9 @@ function rgba(rgb: string, opacity: number): string {
  *  borderWidthPx         … 枠線の太さ
  *  borderRadiusPx        … 枠の角丸
  *  inset*Rem             … 画面端から枠までの余白（safe-area 込み）
- *  backdropBlurPx        … 枠内シーン背景へのぼかし強度（px）
- *                          panelBackdrop に filter: blur を直接適用
- *  backdropScale         … ぼかし時の拡大率。端のにじみを隠す（1.06〜1.12）
+ *  backdropBlurPx        … 枠内シーン背景の blur（px）。0 = blur なし
+ *  backdropBrightness    … blur なし時も filter: brightness に使用
+ *  backdropScale         … blur 時の拡大。blur なしなら 1.0
  *  surfaceTintOpacity    … ぼかし背景の上に載せる暗いトーン（0〜1）
  *                          小さいほど背景が透ける / 1 だと真っ黒に近い
  *  surfaceTintRgb        … トーンの色（RGB カンマ区切り）
@@ -47,7 +47,7 @@ function rgba(rgb: string, opacity: number): string {
  *  paddingBottomRem        … カード内余白 下（records 下）
  *  borderRadiusPx        … 角丸
  *  borderRgb / borderOpacity / borderHoverOpacity … 枠線（通常 / hover）
- *  backdropBlurPx        … カード自身の backdrop-blur（px）
+ *  backdropBlurPx        … カードの backdrop-blur（px）。0 = なし（gradient のみ）
  *  gradientTop/Mid/Bottom … 半透明グラデ（小さいほど背景が透ける）
  *  shadowOuter / shadowHover … 浮き感
  *  stackGapRem           … アバターと文字列の縦間隔
@@ -117,7 +117,26 @@ function rgba(rgb: string, opacity: number): string {
  *  bodyFontSizePx / bodyLineHeight / bodyColor … 説明文
  *  sliderAccentColor     … レンジスライダーのアクセント色
  *  sliderLabelFontSizePx / sliderValueFontSizePx … BGM/SE ラベル
+ *
+ * ═══════════════════════════════════════════════════════════
+ *  SETTINGS_MENU_SHEET_TUNING — ボトムシート（サウンド / 設定）
+ * ═══════════════════════════════════════════════════════════
+ *  backdropBlurPx        … sheetRoot の backdrop-blur（px）。0 = なし
  */
+
+function buildMenuPanelBackdropFilter(
+  blurPx: number,
+  brightness: number,
+): string {
+  if (blurPx <= 0) {
+    return `brightness(${brightness})`;
+  }
+  return `blur(${blurPx}px) brightness(${brightness})`;
+}
+
+function buildMenuBackdropBlur(blurPx: number): string {
+  return blurPx > 0 ? `blur(${blurPx}px)` : "none";
+}
 
 /** メニュー画面 — 外側マスク・枠・枠内ぼかし */
 export const SETTINGS_MENU_FRAME_TUNING = {
@@ -141,20 +160,17 @@ export const SETTINGS_MENU_FRAME_TUNING = {
   insetBottomRem: 1.1,
   /** 画面左端から枠まで（rem） */
   insetLeftRem: 1.15,
-  /**
-   * 枠内シーン背景 — blur + brightness（背景だけ暗く、UIはそのまま）
-   */
-  backdropBlurPx: 4,
-  backdropBrightness: 0.78,
-  /**
-   * ぼかし時の拡大 — 端が切れてにじむのを防ぐ（1.06〜1.12）
-   */
-  backdropScale: 1.08,
+  /** 枠内シーン背景 — blur（0 = なし。SE3 向けに OFF） */
+  backdropBlurPx: 0,
+  /** blur なし時 — 背景 img を少し暗くする */
+  backdropBrightness: 0.74,
+  /** blur なし — 拡大不要 */
+  backdropScale: 1,
   /**
    * ぼかし背景の上に載せる暗いトーン 0〜1
-   * 0 に近いほどシーンが透ける。1 だとほぼ見えない
+   * blur OFF 時は少し上げてコントラストを維持
    */
-  surfaceTintOpacity: 0.06,
+  surfaceTintOpacity: 0.22,
   /** 枠内トーンのベース色（RGB カンマ区切り） */
   surfaceTintRgb: "18, 14, 11",
   /** 枠内パディング 横（rem） */
@@ -210,7 +226,7 @@ export const SETTINGS_MENU_PROFILE_TUNING = {
   borderRgb: "245, 245, 244",
   borderOpacity: 0.12,
   borderHoverOpacity: 0.2,
-  backdropBlurPx: 10,
+  backdropBlurPx: 0,
   gradientTop: "rgba(10, 10, 10, 0.58)",
   gradientMid: "rgba(10, 10, 10, 0.54)",
   gradientBottom: "rgba(10, 10, 10, 0.5)",
@@ -347,6 +363,12 @@ export const SETTINGS_MENU_LOGOUT_TUNING = {
   fontSizePx: 12.8,
 } as const;
 
+/** ボトムシート — サウンド / 設定 */
+export const SETTINGS_MENU_SHEET_TUNING = {
+  /** sheetRoot backdrop-blur（0 = なし。gradient + scrim で代替） */
+  backdropBlurPx: 0,
+} as const;
+
 /** サブパネル — サウンド / 設定 / 利用規約 / このアプリについて */
 export const SETTINGS_MENU_SUBPANEL_TUNING = {
   titleFontSizePx: 16.8,
@@ -373,6 +395,7 @@ export function buildSettingsMenuCssVars(): Record<string, string> {
   const layout = SETTINGS_MENU_LAYOUT_TUNING;
   const logout = SETTINGS_MENU_LOGOUT_TUNING;
   const sub = SETTINGS_MENU_SUBPANEL_TUNING;
+  const sheet = SETTINGS_MENU_SHEET_TUNING;
 
   return {
     "--menu-outer-bg": frame.outerBackground,
@@ -380,7 +403,10 @@ export function buildSettingsMenuCssVars(): Record<string, string> {
     "--menu-frame-border": rgba(frame.borderRgb, frame.borderOpacity),
     "--menu-frame-radius": `${frame.borderRadiusPx}px`,
     "--menu-frame-border-width": `${frame.borderWidthPx}px`,
-    "--menu-backdrop-filter": `blur(${frame.backdropBlurPx}px) brightness(${frame.backdropBrightness})`,
+    "--menu-backdrop-filter": buildMenuPanelBackdropFilter(
+      frame.backdropBlurPx,
+      frame.backdropBrightness,
+    ),
     "--menu-backdrop-scale": String(frame.backdropScale),
     "--menu-surface-bg": rgba(frame.surfaceTintRgb, frame.surfaceTintOpacity),
     "--menu-surface-px": `${frame.surfacePaddingXRem}rem`,
@@ -420,7 +446,7 @@ export function buildSettingsMenuCssVars(): Record<string, string> {
       profile.borderRgb,
       profile.borderHoverOpacity,
     ),
-    "--menu-profile-blur": `blur(${profile.backdropBlurPx}px)`,
+    "--menu-profile-blur": buildMenuBackdropBlur(profile.backdropBlurPx),
     "--menu-profile-gradient-top": profile.gradientTop,
     "--menu-profile-gradient-mid": profile.gradientMid,
     "--menu-profile-gradient-bottom": profile.gradientBottom,
@@ -524,5 +550,6 @@ export function buildSettingsMenuCssVars(): Record<string, string> {
     "--menu-sub-slider-accent": sub.sliderAccentColor,
     "--menu-sub-slider-label-size": `${sub.sliderLabelFontSizePx}px`,
     "--menu-sub-slider-value-size": `${sub.sliderValueFontSizePx}px`,
+    "--menu-sheet-blur": buildMenuBackdropBlur(sheet.backdropBlurPx),
   };
 }

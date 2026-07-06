@@ -1,9 +1,9 @@
 import { barAudioEngine } from "@/lib/entrance/bar-audio-engine";
 
-/** タップ操作と同じ同期コンテキストで unlock + SE プール */
+/** メニュー内タップ — menu-click.mp4 */
 export function playMenuTapSound(): void {
   primeMenuAudioForGesture();
-  barAudioEngine.playClick();
+  barAudioEngine.playMenuClick();
 }
 
 export function playMenuOpenSound(): void {

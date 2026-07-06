@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, PointerEvent } from "react";
+import type { CSSProperties } from "react";
 import styles from "@/components/settings/app-settings-menu.module.css";
 import { SettingsBottomSheet } from "@/components/settings/settings-bottom-sheet";
 import { SettingsLanguageSheetContent } from "@/components/settings/settings-language-sheet-content";
@@ -129,24 +129,18 @@ export function AppSettingsMenu() {
       closeSheet();
       return;
     }
-    playMenuTapSound();
     if (panel === "main") {
+      playMenuOpenSound();
       closeAll();
       return;
     }
+    playMenuTapSound();
     setPanel("main");
   }, [closeAll, closeSheet, panel, sheet]);
 
-  const handleMenuItemPointerDown = (
-    item: MenuItem,
-    event: PointerEvent<HTMLButtonElement>,
-  ) => {
-    if (event.button !== 0 || !item.sheet) return;
-    playMenuOpenSound();
-  };
-
   const handleMenuItemClick = (item: MenuItem) => {
     if (item.sheet) {
+      playMenuOpenSound();
       setSheet(item.sheet);
       return;
     }
@@ -189,11 +183,12 @@ export function AppSettingsMenu() {
           type="button"
           className={styles.fab}
           aria-label="メニューを開く"
-          onPointerDown={() => {
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
             primeMenuAudioForGesture();
           }}
           onClick={() => {
-            playMenuTapSound();
+            playMenuOpenSound();
             requestAnimationFrame(() => {
               setOpen(true);
             });
@@ -216,7 +211,10 @@ export function AppSettingsMenu() {
               type="button"
               className={styles.backdrop}
               aria-label="メニューを閉じる"
-              onClick={closeAll}
+              onClick={() => {
+                playMenuOpenSound();
+                closeAll();
+              }}
             />
 
             <motion.div
@@ -283,9 +281,6 @@ export function AppSettingsMenu() {
                                       duration: 0.38,
                                       ease: EASE_SOFT,
                                     }}
-                                    onPointerDown={(event) =>
-                                      handleMenuItemPointerDown(item, event)
-                                    }
                                     onClick={() => handleMenuItemClick(item)}
                                   >
                                     <Icon className={styles.menuItemIcon} />
