@@ -1,6 +1,13 @@
 "use client";
 
 import {
+  DEBUG_RECORDING_FILENAME,
+  downloadDebugRecordingBlob,
+  formatFfprobeInspectCommands,
+  getDebugRecordingBlob,
+  logFfprobeInspectHints,
+} from "@/lib/recorder/debug-recording-blob";
+import {
   formatRecordingPipelineDiagnostic,
   getRecordingPipelineDiagnostic,
   subscribeRecordingPipelineDiagnostic,
@@ -26,6 +33,8 @@ export function RecordingPipelineDiagnosticPanel() {
   );
 
   const logText = formatRecordingPipelineDiagnostic(snapshot);
+  const debugBlob = getDebugRecordingBlob();
+  const ffprobeCommands = formatFfprobeInspectCommands().join("\n");
 
   const handleCopy = useCallback(async () => {
     try {
@@ -35,6 +44,13 @@ export function RecordingPipelineDiagnosticPanel() {
       setCopyState("failed");
     }
   }, [logText]);
+
+  const handleDownloadRecording = useCallback(() => {
+    const entry = getDebugRecordingBlob();
+    if (!entry) return;
+    downloadDebugRecordingBlob(entry.blob);
+    logFfprobeInspectHints();
+  }, []);
 
   if (!enabled || typeof document === "undefined") {
     return null;
@@ -96,6 +112,14 @@ export function RecordingPipelineDiagnosticPanel() {
               <button
                 type="button"
                 className="recording-pipeline-diagnostic-copy"
+                disabled={!debugBlob}
+                onClick={handleDownloadRecording}
+              >
+                録音DL ({DEBUG_RECORDING_FILENAME})
+              </button>
+              <button
+                type="button"
+                className="recording-pipeline-diagnostic-copy"
                 onClick={() => void handleCopy()}
               >
                 コピー
@@ -110,6 +134,26 @@ export function RecordingPipelineDiagnosticPanel() {
                   コピーに失敗しました（長押しで選択してください）
                 </span>
               ) : null}
+            </div>
+
+            <div className="recording-pipeline-diagnostic-ffprobe">
+              <p className="recording-pipeline-diagnostic-ffprobe-title">
+                Mac 確認用（DL 後）
+              </p>
+              {debugBlob ? (
+                <p className="recording-pipeline-diagnostic-ffprobe-meta">
+                  直近 Blob: {debugBlob.blob.size} bytes / type=
+                  {debugBlob.blob.type || "(empty)"} / mime=
+                  {debugBlob.mimeType}
+                </p>
+              ) : (
+                <p className="recording-pipeline-diagnostic-ffprobe-meta">
+                  録音完了後に DL できます
+                </p>
+              )}
+              <pre className="recording-pipeline-diagnostic-ffprobe-pre">
+                {`open ~/Downloads/${DEBUG_RECORDING_FILENAME}\n${ffprobeCommands}`}
+              </pre>
             </div>
           </div>
         </div>

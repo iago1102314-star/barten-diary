@@ -12,10 +12,12 @@ import {
   getRecorderTimesliceMs,
   getSupportedRecorderMimeType,
   isAppleMediaRecorder,
+  isSafariMediaRecorder,
   isRecordingLikelyTooQuiet,
   MIN_RECORDING_BYTES,
   resolveRecordedMimeType,
 } from "@/lib/recorder/recorder-platform";
+import { captureDebugRecordingBlob } from "@/lib/recorder/debug-recording-blob";
 import { logRecordingPipeline, logRecordingPipelineError } from "@/lib/recorder/recording-pipeline-log";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -315,6 +317,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
       logRecordingPipeline("recorder.start: before getUserMedia", {
         audio: getBarAudioDiagnostics(),
         isApple: isAppleMediaRecorder(),
+        isSafariMediaRecorder: isSafariMediaRecorder(),
         supportedMimeType: getSupportedRecorderMimeType(),
         timesliceMs,
         finalizeDelayMs: getRecorderFinalizeDelayMs(),
@@ -422,7 +425,9 @@ export function useRecorder(options: UseRecorderOptions = {}) {
           return;
         }
 
-        if (isRecordingLikelyTooQuiet(blob.size, durationSec)) {
+        if (
+          isRecordingLikelyTooQuiet(blob.size, durationSec, recordedMimeType)
+        ) {
           revokeAudioUrl();
           setState({
             status: "error",
@@ -440,6 +445,8 @@ export function useRecorder(options: UseRecorderOptions = {}) {
           );
           return;
         }
+
+        captureDebugRecordingBlob(blob, recordedMimeType);
 
         revokeAudioUrl();
         const audioUrl = URL.createObjectURL(blob);
@@ -596,7 +603,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
         stopRequestedRef.current = true;
 
         if (
-          isAppleMediaRecorder() &&
+          isSafariMediaRecorder() &&
           typeof activeRecorder.requestData === "function"
         ) {
           try {

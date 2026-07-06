@@ -48,7 +48,7 @@ export function validateRecordingForTranscribe(params: {
   }
 
   const durationSec = Math.max(1, Math.round(elapsedMs / 1000));
-  if (isRecordingLikelyTooQuiet(blob.size, durationSec)) {
+  if (isRecordingLikelyTooQuiet(blob.size, durationSec, mimeType || blob.type)) {
     return {
       ok: false,
       reason: `recording check: too quiet (${blob.size} bytes / ${durationSec}s)`,

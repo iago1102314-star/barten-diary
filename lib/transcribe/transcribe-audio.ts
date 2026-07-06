@@ -1,5 +1,6 @@
 import { FetchTimeoutError, fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { getAudioExtension } from "@/lib/transcribe/get-audio-extension";
+import { logDebugRecordingBlob } from "@/lib/recorder/debug-recording-blob";
 import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
 
 export type TranscribeAudioResult = {
@@ -22,13 +23,23 @@ export async function transcribeAudio(
   const extension = getAudioExtension(mimeType);
   const formData = new FormData();
   formData.append("file", blob, `recording.${extension}`);
+  formData.append("mimeType", mimeType);
+
+  const formFileName = `recording.${extension}`;
+
+  logDebugRecordingBlob("transcribe: pre-whisper blob", blob, mimeType, {
+    extension,
+    formFileName,
+    formMimeTypeField: mimeType,
+  });
 
   logRecordingPipeline("transcribe API: request", {
     blobSize: blob.size,
     blobType: blob.type,
     mimeType,
     extension,
-    fileName: `recording.${extension}`,
+    formFileName,
+    formMimeTypeField: mimeType,
   });
 
   let response: Response;

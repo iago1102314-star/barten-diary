@@ -1,4 +1,4 @@
-/** iOS / iPadOS Safari — MediaRecorder の挙動が Chrome と異なる */
+/** iOS / iPadOS — モバイル WebKit */
 export function isAppleMediaRecorder(): boolean {
   if (typeof navigator === "undefined") return false;
 
@@ -7,6 +7,21 @@ export function isAppleMediaRecorder(): boolean {
     /iPad|iPhone|iPod/.test(ua) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
   );
+}
+
+/** Safari（iOS + PC）— MediaRecorder の timeslice / finalize / requestData */
+function isSafariUserAgent(): boolean {
+  if (typeof navigator === "undefined") return false;
+
+  const ua = navigator.userAgent;
+  return (
+    /Safari/i.test(ua) &&
+    !/Chrome|Chromium|CriOS|Edg|OPR|FxiOS/i.test(ua)
+  );
+}
+
+export function isSafariMediaRecorder(): boolean {
+  return isAppleMediaRecorder() || isSafariUserAgent();
 }
 
 const MIME_CANDIDATES_APPLE = [
@@ -43,17 +58,17 @@ export const DEFAULT_RECORDER_TIMESLICE_MS = 250;
 export const APPLE_RECORDER_FINALIZE_DELAY_MS = 300;
 
 /**
- * 録音中の timeslice。Apple は >= 1s、それ以外は 250ms。
+ * 録音中の timeslice。Safari（iOS / PC）は >= 1s、Chrome 等は 250ms。
  */
 export function getRecorderTimesliceMs(): number {
-  return isAppleMediaRecorder()
+  return isSafariMediaRecorder()
     ? APPLE_RECORDER_TIMESLICE_MS
     : DEFAULT_RECORDER_TIMESLICE_MS;
 }
 
 /** stop 後 Blob 組み立てまでの待ち */
 export function getRecorderFinalizeDelayMs(): number {
-  return isAppleMediaRecorder() ? APPLE_RECORDER_FINALIZE_DELAY_MS : 0;
+  return isSafariMediaRecorder() ? APPLE_RECORDER_FINALIZE_DELAY_MS : 0;
 }
 
 export function resolveRecordedMimeType(
@@ -67,14 +82,22 @@ export function resolveRecordedMimeType(
 
 export const MIN_RECORDING_BYTES = 2048;
 
-/** 正常な音声なら概ね 2KB/s 以上（46s で ~34KB は無音に近い） */
+/** 正常な音声なら概ね 2KB/s 以上（46s で ~34KB は無音に近い）— WebM/Opus 向け */
 export const MIN_RECORDING_BYTES_PER_SEC = 2000;
+
+/** Safari MediaRecorder の AAC/mp4 — bytes/sec では音量を判定できない */
+export function isSafariAudioMp4(mimeType: string): boolean {
+  if (!/audio\/(mp4|x-m4a)/i.test(mimeType)) return false;
+  return isSafariUserAgent() || isAppleMediaRecorder();
+}
 
 export function isRecordingLikelyTooQuiet(
   blobSize: number,
   durationSec: number,
+  mimeType?: string,
 ): boolean {
   if (durationSec <= 0) return true;
+  if (mimeType && isSafariAudioMp4(mimeType)) return false;
   return blobSize / durationSec < MIN_RECORDING_BYTES_PER_SEC;
 }
 

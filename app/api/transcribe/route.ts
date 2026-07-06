@@ -9,6 +9,39 @@ import { NextResponse } from "next/server";
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
+function readFormMimeType(formData: FormData): string | null {
+  const value = formData.get("mimeType");
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function isUsableAudioBlobType(type: string): boolean {
+  const trimmed = type.trim();
+  return trimmed.length > 0 && trimmed !== "application/octet-stream";
+}
+
+function mimeTypeFromFileName(fileName: string): string | null {
+  if (/\.(m4a|mp4|caf)$/i.test(fileName)) return "audio/mp4";
+  if (/\.webm$/i.test(fileName)) return "audio/webm";
+  if (/\.ogg$/i.test(fileName)) return "audio/ogg";
+  return null;
+}
+
+function resolveReceivedAudioMime(
+  formMimeType: string | null,
+  fileType: string,
+  fileName: string,
+): string {
+  if (formMimeType && isUsableAudioBlobType(formMimeType)) {
+    return formMimeType;
+  }
+  if (isUsableAudioBlobType(fileType)) {
+    return fileType.trim();
+  }
+  return mimeTypeFromFileName(fileName) ?? "audio/webm";
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -53,17 +86,33 @@ export async function POST(request: Request) {
     );
   }
 
-  const mimeType = file.type || "audio/webm";
-  const extension = getAudioExtension(mimeType);
+  const fileName = file instanceof File ? file.name : "";
+  const rawFileType = file.type || "";
+  const receivedMimeTypeField = readFormMimeType(formData);
+  const resolvedMimeType = resolveReceivedAudioMime(
+    receivedMimeTypeField,
+    rawFileType,
+    fileName,
+  );
+  const resolvedExtension = getAudioExtension(resolvedMimeType);
   const buffer = Buffer.from(await file.arrayBuffer());
-  const uploadFile = new File([buffer], `recording.${extension}`, {
-    type: mimeType,
+  const uploadFile = new File([buffer], `recording.${resolvedExtension}`, {
+    type: resolvedMimeType,
   });
 
   logRecordingPipelineServer("transcribe API: received file", {
-    fileSize: file.size,
-    mimeType,
-    extension,
+    receivedFileSize: file.size,
+    receivedFileName: fileName,
+    receivedFileType: rawFileType,
+    receivedMimeTypeField,
+    resolvedMimeType,
+    resolvedExtension,
+    uploadFileSize: uploadFile.size,
+    uploadFileName: uploadFile.name,
+    uploadFileType: uploadFile.type,
+    bufferLength: buffer.length,
+    sizeReceivedVsBuffer: file.size === buffer.length,
+    sizeUploadVsBuffer: uploadFile.size === buffer.length,
     minRecordingBytes: MIN_RECORDING_BYTES,
   });
 

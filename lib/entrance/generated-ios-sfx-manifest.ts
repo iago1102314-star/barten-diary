@@ -3,7 +3,7 @@
  * Do not edit manually.
  */
 /** Safari / HTMLAudioElement pool — ios 音源再生成時に bump する */
-export const IOS_SFX_CACHE_REVISION = 13;
+export const IOS_SFX_CACHE_REVISION = 14;
 
 export const IOS_SFX_FILE_AVAILABLE = {
   click: true,
@@ -30,12 +30,12 @@ export const IOS_SFX_FILE_BYTE_LENGTH = {
 
 /** ビルド時の mtime（ISO） — Last-Modified 照合用 */
 export const IOS_SFX_FILE_LAST_MODIFIED = {
-  click: "2026-07-05T15:54:55.812Z",
-  door: "2026-07-05T15:29:43.512Z",
-  glassSlide: "2026-07-05T15:29:44.309Z",
-  send: "2026-07-05T15:29:44.790Z",
-  menuOpen: "2026-07-05T15:29:45.379Z",
-  menuClick: "2026-07-05T15:29:45.697Z",
-  page: "2026-07-05T15:29:46.086Z",
-  think: "2026-07-05T15:29:46.996Z",
+  click: "2026-07-05T16:34:40.404Z",
+  door: "2026-07-05T16:34:40.406Z",
+  glassSlide: "2026-07-05T16:34:40.407Z",
+  send: "2026-07-05T16:34:40.410Z",
+  menuOpen: "2026-07-05T16:34:40.409Z",
+  menuClick: "2026-07-05T16:34:40.408Z",
+  page: "2026-07-05T16:34:40.409Z",
+  think: "2026-07-05T16:34:40.410Z",
 } as const satisfies Record<"click" | "door" | "glassSlide" | "send" | "menuOpen" | "menuClick" | "page" | "think", string | null>;
