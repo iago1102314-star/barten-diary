@@ -15,7 +15,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "check:generation": "node scripts/check-generation-readiness.mjs"
+    "check:generation": "node scripts/check-generation-readiness.mjs",
+    "optimize-images": "node scripts/optimize-images.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
