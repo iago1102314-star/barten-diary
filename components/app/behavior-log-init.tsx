@@ -24,7 +24,7 @@ function BehaviorLogInitInner() {
     captureBehaviorRefFromUrl(navigationSearch);
 
     void (async () => {
-      await bootstrapBehaviorVisit();
+      await bootstrapBehaviorVisit(navigationSearch);
       await logBehaviorAccessOnce(navigationSearch);
     })();
 

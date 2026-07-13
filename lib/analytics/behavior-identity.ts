@@ -1,3 +1,5 @@
+import { shouldRotateVisitForRefChange } from "@/lib/analytics/behavior-ref";
+
 /** visitor_id / visit_id の生成・解決（localStorage + sessionStorage） */
 
 const LEGACY_SESSION_ID_KEY = "barten-behavior-session-id";
@@ -17,11 +19,12 @@ export type BehaviorIdentity = {
   visitId: string;
   visitStartedAt: number;
   isNewVisit: boolean;
-  /** 非同期 timeout 切替で旧 visit を終了する必要がある */
+  /** timeout / ref 変更で旧 visit を終了する必要がある */
   previousVisit?: {
     visitorId: string;
     visitId: string;
     visitStartedAt: number;
+    endReason: "inactivity_timeout" | "ref_change";
   };
 };
 
@@ -139,10 +142,13 @@ export function touchBehaviorActivity(at = Date.now()): void {
 /**
  * 現在の visit を解決する。
  * - visit_id は sessionStorage（タブ単位）
- * - 30分超の無操作、または初回タブ表示で新 visit
+ * - 30分超の無操作、初回タブ表示、または URL ref 変更で新 visit
  * - SPA 内の画面遷移では visit_id を再発行しない
  */
-export function resolveBehaviorIdentity(now = Date.now()): BehaviorIdentity {
+export function resolveBehaviorIdentity(
+  now = Date.now(),
+  navigationSearch?: string,
+): BehaviorIdentity {
   const visitorId = getOrCreateVisitorId();
   if (!visitorId) {
     return {
@@ -168,13 +174,16 @@ export function resolveBehaviorIdentity(now = Date.now()): BehaviorIdentity {
     ? Number(existingStartedRaw)
     : null;
   const lastActivityAt = readLastActivityAt();
+  const refChangeRequiresNewVisit =
+    shouldRotateVisitForRefChange(navigationSearch);
 
   const hasActiveVisit =
     existingVisitId !== null
     && existingStartedAt !== null
     && Number.isFinite(existingStartedAt)
     && lastActivityAt !== null
-    && now - lastActivityAt < VISIT_INACTIVITY_TIMEOUT_MS;
+    && now - lastActivityAt < VISIT_INACTIVITY_TIMEOUT_MS
+    && !refChangeRequiresNewVisit;
 
   if (hasActiveVisit && existingVisitId && existingStartedAt !== null) {
     writeLastActivityAt(now);
@@ -192,6 +201,9 @@ export function resolveBehaviorIdentity(now = Date.now()): BehaviorIdentity {
           visitorId,
           visitId: existingVisitId,
           visitStartedAt: existingStartedAt,
+          endReason: refChangeRequiresNewVisit
+            ? ("ref_change" as const)
+            : ("inactivity_timeout" as const),
         }
       : undefined;
 

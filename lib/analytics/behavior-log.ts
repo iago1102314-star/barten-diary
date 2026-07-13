@@ -1,4 +1,13 @@
 import {
+  bindVisitRefForNewVisit,
+  captureBehaviorAdminRefFromUrl,
+  getBoundVisitRef,
+  getLegacyBehaviorRefForAdminCheck,
+  getStoredAcquisitionRef,
+  maybeRecordAcquisitionRef,
+  readUrlRef,
+} from "@/lib/analytics/behavior-ref";
+import {
   finalizePreviousVisitIfNeeded,
   sendVisitEndForTarget,
 } from "@/lib/analytics/visit-lifecycle";
@@ -15,7 +24,6 @@ import {
 } from "@/lib/analytics/behavior-identity";
 import { createClient } from "@/lib/supabase/client";
 
-const REF_KEY = "barten-behavior-ref";
 const IS_ADMIN_KEY = "barten-is-admin";
 
 export const BEHAVIOR_EVENTS = [
@@ -51,11 +59,35 @@ type BehaviorLogIds = {
   sessionId: string;
 };
 
+type BehaviorLogContext = {
+  ref: string | null;
+  acquisition_ref: string | null;
+  is_admin: boolean;
+  userId: string | null;
+};
+
 let adminUserCache: AdminUserCache | null = null;
 let visitBootstrapPromise: Promise<void> | null = null;
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";
+}
+
+function readCurrentNavigationSearch(): string {
+  if (!isBrowser()) return "";
+  return window.location.search;
+}
+
+/** @deprecated URL ref は captureBehaviorAdminRefFromUrl + resolveBehaviorLogContext を使用 */
+export function captureBehaviorRefFromUrl(search?: string): void {
+  captureBehaviorAdminRefFromUrl(search);
+}
+
+/** @deprecated 今回 visit ref は getBoundVisitRef / resolveBehaviorLogContext を使用 */
+export function resolveBehaviorRef(search?: string): string | null {
+  const urlRef = readUrlRef(search);
+  if (urlRef) return urlRef;
+  return getBoundVisitRef();
 }
 
 function setStoredBehaviorAdminFlag(): void {
@@ -73,69 +105,8 @@ function isStoredBehaviorAdminFlag(): boolean {
   return localStorage.getItem(IS_ADMIN_KEY) === "true";
 }
 
-function readUrlBehaviorRef(search?: string): string | null {
-  if (!isBrowser()) return null;
-
-  const ref = new URLSearchParams(search ?? window.location.search)
-    .get("ref")
-    ?.trim();
-  return ref || null;
-}
-
-function readCurrentNavigationSearch(): string {
-  if (!isBrowser()) return "";
-  return window.location.search;
-}
-
-/** URL の ?ref= を localStorage に同期（admin フラグ処理込み） */
-export function captureBehaviorRefFromUrl(search?: string): void {
-  if (!isBrowser()) return;
-
-  const params = new URLSearchParams(
-    search ?? window.location.search,
-  );
-  const adminParam = params.get("admin")?.trim().toLowerCase();
-  const ref = params.get("ref")?.trim();
-
-  if (adminParam === "off" || ref === "clear-admin") {
-    clearStoredBehaviorAdminFlag();
-    if (ref === "clear-admin") {
-      return;
-    }
-  }
-
-  if (ref === "admin") {
-    setStoredBehaviorAdminFlag();
-    localStorage.setItem(REF_KEY, ref);
-    return;
-  }
-
-  if (ref) {
-    localStorage.setItem(REF_KEY, ref);
-  }
-}
-
-/**
- * ログ記録用 ref — URL に ?ref= があれば常にそれを優先。
- * なければ localStorage の保存済み ref。
- */
-export function resolveBehaviorRef(search?: string): string | null {
-  const urlRef = readUrlBehaviorRef(search);
-  if (urlRef) return urlRef;
-  return getStoredBehaviorRef();
-}
-
 export function clearBehaviorAdminCache(): void {
   adminUserCache = null;
-}
-
-function getStoredBehaviorRef(): string | null {
-  if (!isBrowser()) return null;
-  return localStorage.getItem(REF_KEY);
-}
-
-function isAdminBehaviorRef(ref: string | null): boolean {
-  return ref === "admin";
 }
 
 async function resolveAuthUser(): Promise<AuthUserSnapshot | null> {
@@ -184,7 +155,7 @@ export async function resolveIsAdmin(): Promise<boolean> {
     return true;
   }
 
-  if (isAdminBehaviorRef(getStoredBehaviorRef())) {
+  if (getLegacyBehaviorRefForAdminCheck() === "admin") {
     return true;
   }
 
@@ -196,19 +167,29 @@ export async function resolveIsAdmin(): Promise<boolean> {
   return resolveRegisteredAdminUser(authUser);
 }
 
+async function initializeNewVisitAttribution(
+  search: string,
+): Promise<void> {
+  bindVisitRefForNewVisit(search);
+  const isAdmin = await resolveIsAdmin();
+  maybeRecordAcquisitionRef(readUrlRef(search), isAdmin);
+}
+
 export async function resolveBehaviorLogContext(
   search?: string,
-): Promise<{
-  ref: string | null;
-  is_admin: boolean;
-  userId: string | null;
-}> {
+): Promise<BehaviorLogContext> {
   const navigationSearch = search ?? readCurrentNavigationSearch();
-  captureBehaviorRefFromUrl(navigationSearch);
-  const ref = resolveBehaviorRef(navigationSearch);
+  captureBehaviorAdminRefFromUrl(navigationSearch);
+
   const is_admin = await resolveIsAdmin();
   const authUser = await resolveAuthUser();
-  return { ref, is_admin, userId: authUser?.id ?? null };
+
+  return {
+    ref: getBoundVisitRef(),
+    acquisition_ref: getStoredAcquisitionRef(),
+    is_admin,
+    userId: authUser?.id ?? null,
+  };
 }
 
 function toBehaviorLogIds(identity: BehaviorIdentity): BehaviorLogIds {
@@ -219,27 +200,32 @@ function toBehaviorLogIds(identity: BehaviorIdentity): BehaviorLogIds {
   };
 }
 
-async function ensureVisitReady(): Promise<{
+async function ensureVisitReady(
+  navigationSearch?: string,
+): Promise<{
   identity: BehaviorIdentity;
   ids: BehaviorLogIds;
 }> {
-  const identity = resolveBehaviorIdentity();
+  const search = navigationSearch ?? readCurrentNavigationSearch();
+  const identity = resolveBehaviorIdentity(Date.now(), search);
   if (!identity.visitorId || !identity.visitId) {
     return { identity, ids: toBehaviorLogIds(identity) };
   }
 
   if (identity.previousVisit) {
-    const context = await resolveBehaviorLogContext(readCurrentNavigationSearch());
+    const context = await resolveBehaviorLogContext(search);
     await sendVisitEndForTarget(identity.previousVisit, {
       ref: context.ref,
+      acquisition_ref: context.acquisition_ref,
       is_admin: context.is_admin,
       userId: context.userId,
-      reason: "inactivity_timeout",
+      reason: identity.previousVisit.endReason,
     });
   }
 
   if (identity.isNewVisit) {
-    await logVisitStartForIdentity(identity);
+    await initializeNewVisitAttribution(search);
+    await logVisitStartForIdentity(identity, search);
   }
 
   touchBehaviorActivity();
@@ -248,10 +234,11 @@ async function ensureVisitReady(): Promise<{
 
 async function logVisitStartForIdentity(
   identity: BehaviorIdentity,
+  search: string,
 ): Promise<void> {
   if (!identity.visitorId || !identity.visitId) return;
 
-  const context = await resolveBehaviorLogContext(readCurrentNavigationSearch());
+  const context = await resolveBehaviorLogContext(search);
   try {
     const supabase = createClient();
     await supabase.from("event_logs").insert({
@@ -261,6 +248,7 @@ async function logVisitStartForIdentity(
       user_id: context.userId,
       event_name: "visit_start",
       ref: context.ref,
+      acquisition_ref: context.acquisition_ref,
       is_admin: context.is_admin,
       metadata: null,
     });
@@ -271,20 +259,27 @@ async function logVisitStartForIdentity(
 }
 
 /** アプリ起動時に visit を初期化（visit_start / 旧 visit の visit_end） */
-export async function bootstrapBehaviorVisit(): Promise<void> {
+export async function bootstrapBehaviorVisit(
+  navigationSearch?: string,
+): Promise<void> {
   if (visitBootstrapPromise) {
     await visitBootstrapPromise;
     return;
   }
 
+  const search = navigationSearch ?? readCurrentNavigationSearch();
+
   visitBootstrapPromise = (async () => {
-    const identity = resolveBehaviorIdentity();
+    const identity = resolveBehaviorIdentity(Date.now(), search);
     if (!identity.visitorId || !identity.visitId) return;
 
-    await finalizePreviousVisitIfNeeded(identity, resolveBehaviorLogContext);
+    await finalizePreviousVisitIfNeeded(identity, () =>
+      resolveBehaviorLogContext(search),
+    );
 
     if (identity.isNewVisit) {
-      await logVisitStartForIdentity(identity);
+      await initializeNewVisitAttribution(search);
+      await logVisitStartForIdentity(identity, search);
     }
 
     touchBehaviorActivity();
@@ -314,9 +309,9 @@ export async function logBehaviorAccessOnce(
   if (!isBrowser()) return;
 
   const search = navigationSearch ?? readCurrentNavigationSearch();
-  captureBehaviorRefFromUrl(search);
+  captureBehaviorAdminRefFromUrl(search);
 
-  const { ids } = await ensureVisitReady();
+  const { ids } = await ensureVisitReady(search);
   if (!ids.visitorId || !ids.visitId) return;
 
   const pageLoadMarker = getPageLoadMarker();
@@ -324,7 +319,8 @@ export async function logBehaviorAccessOnce(
     return;
   }
 
-  const { ref, is_admin, userId } = await resolveBehaviorLogContext(search);
+  const { ref, acquisition_ref, is_admin, userId } =
+    await resolveBehaviorLogContext(search);
   const { width, height } = readScreenSize();
 
   try {
@@ -335,6 +331,7 @@ export async function logBehaviorAccessOnce(
       visit_id: ids.visitId,
       user_id: userId,
       ref,
+      acquisition_ref,
       is_admin,
       path: window.location.pathname,
       screen_width: width,
@@ -357,12 +354,12 @@ export async function logBehaviorEvent(
   if (!isBrowser()) return;
   if (eventName === "visit_start" || eventName === "visit_end") return;
 
-  const { ids } = await ensureVisitReady();
+  const search = readCurrentNavigationSearch();
+  const { ids } = await ensureVisitReady(search);
   if (!ids.visitorId || !ids.visitId) return;
 
-  const { ref, is_admin, userId } = await resolveBehaviorLogContext(
-    readCurrentNavigationSearch(),
-  );
+  const { ref, acquisition_ref, is_admin, userId } =
+    await resolveBehaviorLogContext(search);
 
   try {
     const supabase = createClient();
@@ -373,6 +370,7 @@ export async function logBehaviorEvent(
       user_id: userId,
       event_name: eventName,
       ref,
+      acquisition_ref,
       is_admin,
       metadata: metadata ?? null,
     });

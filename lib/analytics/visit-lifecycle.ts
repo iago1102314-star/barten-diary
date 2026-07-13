@@ -13,6 +13,7 @@ export type VisitEndPayload = {
   user_id: string | null;
   event_name: "visit_end";
   ref: string | null;
+  acquisition_ref: string | null;
   is_admin: boolean;
   metadata: {
     durationSec: number;
@@ -43,6 +44,7 @@ function buildVisitEndPayload(
   target: VisitEndTarget,
   context: {
     ref: string | null;
+    acquisition_ref: string | null;
     is_admin: boolean;
     userId: string | null;
     reason?: string;
@@ -56,6 +58,7 @@ function buildVisitEndPayload(
     user_id: context.userId,
     event_name: "visit_end",
     ref: context.ref,
+    acquisition_ref: context.acquisition_ref,
     is_admin: context.is_admin,
     metadata: {
       durationSec: computeVisitDurationSec(target.visitStartedAt, endedAt),
@@ -92,6 +95,7 @@ export async function sendVisitEndForTarget(
   target: VisitEndTarget,
   context: {
     ref: string | null;
+    acquisition_ref: string | null;
     is_admin: boolean;
     userId: string | null;
     reason?: string;
@@ -125,6 +129,7 @@ export async function sendVisitEnd(options?: {
   preferKeepalive?: boolean;
   resolveContext: () => Promise<{
     ref: string | null;
+    acquisition_ref: string | null;
     is_admin: boolean;
     userId: string | null;
   }>;
@@ -146,6 +151,7 @@ export async function finalizePreviousVisitIfNeeded(
   identity: BehaviorIdentity,
   resolveContext: () => Promise<{
     ref: string | null;
+    acquisition_ref: string | null;
     is_admin: boolean;
     userId: string | null;
   }>,
@@ -155,13 +161,14 @@ export async function finalizePreviousVisitIfNeeded(
   const context = await resolveContext();
   await sendVisitEndForTarget(identity.previousVisit, {
     ...context,
-    reason: "inactivity_timeout",
+    reason: identity.previousVisit.endReason,
   });
 }
 
 type LifecycleOptions = {
   resolveContext: () => Promise<{
     ref: string | null;
+    acquisition_ref: string | null;
     is_admin: boolean;
     userId: string | null;
   }>;
