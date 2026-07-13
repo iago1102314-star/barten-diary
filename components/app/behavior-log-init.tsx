@@ -1,19 +1,36 @@
 "use client";
 
 import {
+  bootstrapBehaviorVisit,
   captureBehaviorRefFromUrl,
   clearBehaviorAdminCache,
   logBehaviorAccessOnce,
   logBehaviorEvent,
+  resolveBehaviorLogContext,
 } from "@/lib/analytics/behavior-log";
+import { setupVisitLifecycle } from "@/lib/analytics/visit-lifecycle";
 import { createClient } from "@/lib/supabase/client";
-import { useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
 
-/** UI なし — session/ref 初期化・アクセスログ・ログインイベント */
-export function BehaviorLogInit() {
+function BehaviorLogInitInner() {
+  const searchParams = useSearchParams();
+  const searchKey = searchParams.toString();
+
   useEffect(() => {
-    captureBehaviorRefFromUrl();
-    void logBehaviorAccessOnce();
+    const navigationSearch =
+      typeof window !== "undefined" ? window.location.search : "";
+
+    captureBehaviorRefFromUrl(navigationSearch);
+
+    void (async () => {
+      await bootstrapBehaviorVisit();
+      await logBehaviorAccessOnce(navigationSearch);
+    })();
+
+    const cleanupLifecycle = setupVisitLifecycle({
+      resolveContext: resolveBehaviorLogContext,
+    });
 
     const supabase = createClient();
     const {
@@ -28,8 +45,20 @@ export function BehaviorLogInit() {
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      cleanupLifecycle();
+      subscription.unsubscribe();
+    };
+  }, [searchKey]);
 
   return null;
+}
+
+/** UI なし — visitor/visit 初期化・アクセスログ・離脱計測・ログインイベント */
+export function BehaviorLogInit() {
+  return (
+    <Suspense fallback={null}>
+      <BehaviorLogInitInner />
+    </Suspense>
+  );
 }
