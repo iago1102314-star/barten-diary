@@ -7,8 +7,21 @@ import type { NextConfig } from "next";
  */
 const lanIp = process.env.LOCAL_LAN_IP;
 
+/**
+ * 最小限のセキュリティヘッダ。
+ * CSP / Permissions-Policy は演出・録音への影響が大きいため入れていない。
+ */
+const SECURITY_HEADERS = [
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+];
+
 const nextConfig: NextConfig = {
   ...(lanIp ? { allowedDevOrigins: [lanIp] } : {}),
+  async headers() {
+    return [{ source: "/:path*", headers: SECURITY_HEADERS }];
+  },
 };
 
 export default nextConfig;

@@ -2,6 +2,7 @@ import {
   buildDiaryGenerationSystemPrompt,
   buildDiaryGenerationUserPrompt,
 } from "@/lib/ai/prompts/index";
+import { DIARY_GENERATION_MAX_TOKENS } from "@/lib/ai/limits";
 import { parseGeneratedDiaryContent } from "@/lib/ai/parse-generated-diary";
 import {
   postProcessGeneratedContent,
@@ -34,6 +35,7 @@ export async function runDiaryGeneration(
       },
     ],
     temperature,
+    max_completion_tokens: DIARY_GENERATION_MAX_TOKENS,
   });
 
   const content = completion.choices[0]?.message?.content;

@@ -9,6 +9,7 @@ import {
   readPlatformAudioVolumeDebugInfo,
 } from "@/lib/entrance/audio-volume-platform";
 import { isIosSfxFileActive } from "@/lib/entrance/ios-sfx-assets";
+import { isProd } from "@/lib/env/app-env";
 
 /**
  * 音量最終調整 — このファイルの mix / peakDbfs / sceneScale を編集してください。
@@ -435,6 +436,8 @@ type AudioVolumeDevApi = {
 
 /** 開発コンソール — window.__bartenAudioVol */
 export function installAudioVolumeDevApi(applyTuning: () => void): void {
+  // 本番では window.__bartenAudioVol を作らない
+  if (isProd) return;
   if (typeof window === "undefined") return;
 
   const api: AudioVolumeDevApi = {
@@ -478,6 +481,8 @@ export function installAudioVolumeDevApi(applyTuning: () => void): void {
 }
 
 export function isAudioVolumeTunePanelEnabled(): boolean {
+  // 本番では env が誤って true でも URL に ?audioTune があっても出さない
+  if (isProd) return false;
   if (process.env.NEXT_PUBLIC_AUDIO_VOLUME_TUNING_PANEL === "true") {
     return true;
   }

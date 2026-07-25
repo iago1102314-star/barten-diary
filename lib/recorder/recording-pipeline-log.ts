@@ -1,4 +1,7 @@
-import { isRecordingDiagnosticEnabled } from "@/lib/env/recording-diagnostic-env";
+import {
+  isRecordingConsoleLogEnabled,
+  isRecordingDiagnosticEnabled,
+} from "@/lib/env/recording-diagnostic-env";
 import { bumpRecordingPipelineDiagnostic } from "@/lib/recorder/recording-pipeline-diagnostic";
 
 const MAX_EVENTS = 40;
@@ -23,10 +26,12 @@ export function logRecordingPipeline(
   message: string,
   detail?: Record<string, unknown>,
 ) {
-  if (detail) {
-    console.info(`[RecordingPipeline] ${message}`, detail);
-  } else {
-    console.info(`[RecordingPipeline] ${message}`);
+  if (isRecordingConsoleLogEnabled()) {
+    if (detail) {
+      console.info(`[RecordingPipeline] ${message}`, detail);
+    } else {
+      console.info(`[RecordingPipeline] ${message}`);
+    }
   }
 
   if (!isRecordingDiagnosticEnabled()) return;

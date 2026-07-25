@@ -1,3 +1,7 @@
+import {
+  MAX_TRANSCRIPT_CHARS,
+  TRANSCRIPT_REFINE_MAX_TOKENS,
+} from "@/lib/ai/limits";
 import OpenAI from "openai";
 
 const REFINE_SYSTEM_PROMPT = `あなたはWhisperの文字起こしを「誤認識だけ」直す編集者です。
@@ -22,9 +26,13 @@ export async function refineTranscript(
   const trimmed = rawTranscript.trim();
   if (!trimmed) return trimmed;
 
+  // 想定外に長い入力は整形せず素通しする（文字起こし自体は成功として扱う）
+  if (trimmed.length > MAX_TRANSCRIPT_CHARS) return trimmed;
+
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     temperature: 0.15,
+    max_completion_tokens: TRANSCRIPT_REFINE_MAX_TOKENS,
     messages: [
       { role: "system", content: REFINE_SYSTEM_PROMPT },
       {

@@ -1,4 +1,7 @@
-import { isRecordingDiagnosticEnabled } from "@/lib/env/recording-diagnostic-env";
+import {
+  isRecordingConsoleLogEnabled,
+  isRecordingDiagnosticEnabled,
+} from "@/lib/env/recording-diagnostic-env";
 import { bumpRecordingPipelineDiagnostic } from "@/lib/recorder/recording-pipeline-diagnostic";
 import { logRecordingPipeline } from "@/lib/recorder/recording-pipeline-log";
 
@@ -39,12 +42,14 @@ export function logFfprobeInspectHints(
   filePath = `~/Downloads/${DEBUG_RECORDING_FILENAME}`,
 ): void {
   const commands = formatFfprobeInspectCommands(filePath);
-  console.info("[RecordingDebug] ダウンロード後に Mac で再生し、次で解析してください:", {
-    play: `open "${filePath}"`,
-    commands,
-  });
-  for (const command of commands) {
-    console.info(`[RecordingDebug] ${command}`);
+  if (isRecordingConsoleLogEnabled()) {
+    console.info("[RecordingDebug] ダウンロード後に Mac で再生し、次で解析してください:", {
+      play: `open "${filePath}"`,
+      commands,
+    });
+    for (const command of commands) {
+      console.info(`[RecordingDebug] ${command}`);
+    }
   }
   logRecordingPipeline("debug: ffprobe / volumedetect commands", {
     filePath,
@@ -68,7 +73,9 @@ export function logDebugRecordingBlob(
       !blob.type || blob.type === mimeType || blob.type === "",
     ...extra,
   };
-  console.info(`[RecordingDebug] ${label}`, detail);
+  if (isRecordingConsoleLogEnabled()) {
+    console.info(`[RecordingDebug] ${label}`, detail);
+  }
   logRecordingPipeline(`debug: ${label}`, detail);
 }
 

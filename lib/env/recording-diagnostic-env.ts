@@ -1,4 +1,4 @@
-import { APP_ENV } from "@/lib/env/app-env";
+import { APP_ENV, isNonProd } from "@/lib/env/app-env";
 
 /**
  * 録音パイプライン診断 UI / debug API / 診断データ収集。
@@ -6,6 +6,15 @@ import { APP_ENV } from "@/lib/env/app-env";
  */
 export function isRecordingDiagnosticEnabled(): boolean {
   return process.env.NEXT_PUBLIC_RECORDING_DIAGNOSTIC === "true";
+}
+
+/**
+ * 録音パイプラインの console.info を出すか。
+ * 本番の実機計測を汚さないため、非 production か診断 ON のときだけ出力する。
+ * console.error は本番でも常に出す（logRecordingPipelineError 側）。
+ */
+export function isRecordingConsoleLogEnabled(): boolean {
+  return isNonProd || isRecordingDiagnosticEnabled();
 }
 
 export function recordingDiagnosticEnvLabel(): string {

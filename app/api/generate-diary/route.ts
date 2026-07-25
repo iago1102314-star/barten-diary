@@ -3,6 +3,7 @@ import {
   LAB_MAX_VARIANTS,
   LAB_TEMPERATURES,
 } from "@/lib/ai/prompts/index";
+import { MAX_TRANSCRIPT_CHARS } from "@/lib/ai/limits";
 import { runDiaryGeneration } from "@/lib/ai/run-generation";
 import type {
   GeneratedDiary,
@@ -23,6 +24,7 @@ import {
   isValidDrinkCategoryId,
   type DrinkCategoryId,
 } from "@/lib/drinks/drink-catalog";
+import { isProd } from "@/lib/env/app-env";
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -92,11 +94,13 @@ export async function POST(request: Request) {
       ? (body as { timeZone: string }).timeZone
       : DEFAULT_TIME_ZONE;
 
-  const variantCount =
-    typeof body === "object" &&
-    body !== null &&
-    "variantCount" in body &&
-    typeof (body as { variantCount: unknown }).variantCount === "number"
+  // 本番はクライアント指定の複数生成を受け付けない（/lab は非本番のみ）
+  const variantCount = isProd
+    ? 1
+    : typeof body === "object" &&
+        body !== null &&
+        "variantCount" in body &&
+        typeof (body as { variantCount: unknown }).variantCount === "number"
       ? Math.min(
           LAB_MAX_VARIANTS,
           Math.max(1, (body as { variantCount: number }).variantCount),
@@ -106,6 +110,13 @@ export async function POST(request: Request) {
   if (!transcript) {
     return NextResponse.json(
       { error: "音声が届きませんでした。" },
+      { status: 400 },
+    );
+  }
+
+  if (transcript.trim().length > MAX_TRANSCRIPT_CHARS) {
+    return NextResponse.json(
+      { error: "音声が長すぎました。もう少し短くお試しください。" },
       { status: 400 },
     );
   }
